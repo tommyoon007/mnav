@@ -9,14 +9,16 @@ on:
 
 permissions:
   contents: write
-
+  actions: write
+  
 jobs:
   update-data:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+  uses: actions/checkout@v4
+  with: persist-credentials: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
