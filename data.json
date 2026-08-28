@@ -1,0 +1,11 @@
+{
+  "updatedAt": null,
+  "source": "Strategy",
+  "btcHoldings": 840447,
+  "assumedShares": 427.308,
+  "fullyDilutedShares": 401.697,
+  "otmDebt": 0,
+  "preferred": 0,
+  "usdReserve": 3.75,
+  "notes": "Initial fallback values. GitHub Actions updates this file from Strategy pages."
+}
