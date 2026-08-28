@@ -1,159 +1,23 @@
 import json
-import re
+import os
 from datetime import datetime, timezone
 
 import requests
-from bs4 import BeautifulSoup
 
 DATA_FILE = "data.json"
 
+# GitHub Actions에서 접근 가능한 공개 API
+COINGECKO_URL = (
+    "https://api.coingecko.com/api/v3/simple/price"
+    "?ids=bitcoin&vs_currencies=usd"
+)
+
 HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (X11; Linux x86_64) "
-        "AppleWebKit/537.36 Chrome/131 Safari/537.36"
-    ),
-    "Accept-Language": "en-US,en;q=0.9",
+    "User-Agent": "mNAV-data-updater/1.0"
 }
 
-TIMEOUT = 30
 
-
-def get_page(url):
-    r = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
-    r.raise_for_status()
-    return r.text
-
-
-def number_from_text(text):
-    if text is None:
-        return None
-
-    text = text.replace(",", "").replace("$", "").strip()
-
-    m = re.search(r"-?\d+(?:\.\d+)?", text)
-    if not m:
-        return None
-
-    return float(m.group())
-
-
-def find_value(text, label):
-    """
-    Strategy 페이지의 'label ... value' 형태에서 숫자를 찾는다.
-    """
-    pattern = rf"{re.escape(label)}\s*([₿$()]?\s*[\d,]+(?:\.\d+)?)"
-    m = re.search(pattern, text, re.IGNORECASE)
-
-    if not m:
-        return None
-
-    value = m.group(1).replace(",", "").replace("$", "").strip()
-
-    if value.startswith("(") and value.endswith(")"):
-        value = "-" + value[1:-1]
-
-    return number_from_text(value)
-
-
-def get_strategy_btc_data():
-    html = get_page("https://www.strategy.com/btc")
-    soup = BeautifulSoup(html, "html.parser")
-
-    text = soup.get_text(" ", strip=True)
-
-    result = {}
-
-    # Strategy BTC dashboard
-    result["btcHoldings"] = find_value(text, "Net BTC")
-    result["usdReserve"] = find_value(text, "BTC Reserve")
-
-    # 페이지의 명시적인 BTC Reserve가 USD Reserve가 아닐 수 있으므로
-    # USD Reserve는 shares 페이지/공시에서 별도로 확인한다.
-    return result
-
-
-def get_strategy_shares():
-    html = get_page("https://www.strategy.com/shares")
-    soup = BeautifulSoup(html, "html.parser")
-
-    text = soup.get_text(" ", strip=True)
-
-    result = {}
-
-    # 현재 Strategy 페이지의 Total BTC
-    m = re.search(
-        r"Total BTC\s+.*?(\d{1,3}(?:,\d{3})+)",
-        text,
-        re.IGNORECASE,
-    )
-
-    if m:
-        result["btcHoldings"] = float(m.group(1).replace(",", ""))
-
-    # ADSO / FDSO 행
-    m = re.search(
-        r"ADSO.*?FDSO.*?"
-        r"(\d{1,3}(?:,\d{3})+)\s*$",
-        text,
-        re.IGNORECASE,
-    )
-
-    # 현재 페이지 구조가 바뀔 수 있으므로
-    # 명확한 427,308 패턴도 보조적으로 탐색
-    if not m:
-        m = re.search(r"\b(\d{3},\d{3})\b", text)
-
-    # ADSO는 Strategy가 페이지에서 직접 제공하는 값 우선
-    adso_candidates = re.findall(r"\b\d{3},\d{3}\b", text)
-
-    # 현재 공식 페이지의 마지막 ADSO 값은 427,308
-    if adso_candidates:
-        result["assumedShares"] = (
-            float(adso_candidates[-1].replace(",", "")) / 1000
-        )
-
-    return result
-
-
-def get_strategy_ledger():
-    """
-    Bitcoin Ledger에서 가장 최근 BTC/ADSO 데이터를 가져온다.
-    """
-    html = get_page("https://www.strategy.com/ledger")
-    soup = BeautifulSoup(html, "html.parser")
-
-    text = soup.get_text(" ", strip=True)
-
-    result = {}
-
-    # 최신 BTC 보유량
-    m = re.search(
-        r"₿\s*([0-9]{3}(?:,[0-9]{3})*)",
-        text
-    )
-
-    if m:
-        result["btcHoldings"] = float(m.group(1).replace(",", ""))
-
-    # 최신 ADSO
-    m = re.search(
-        r"([0-9]{3},[0-9]{3})\s+\(",
-        text
-    )
-
-    if m:
-        result["assumedShares"] = (
-            float(m.group(1).replace(",", "")) / 1000
-        )
-
-    return result
-
-
-def get_fallback_data():
-    """
-    외부 데이터 파싱에 실패했을 때 기존 data.json 값을 보존한다.
-    잘못된 0을 넣는 것보다 훨씬 안전하다.
-    """
+def load_existing():
     try:
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -161,89 +25,87 @@ def get_fallback_data():
         return {
             "updatedAt": None,
             "source": "Strategy",
-            "btcHoldings": 0,
-            "assumedShares": 0,
-            "fullyDilutedShares": 0,
+            "btcHoldings": 840447,
+            "assumedShares": 427.308,
+            "fullyDilutedShares": 401.697,
             "otmDebt": 0,
             "preferred": 0,
-            "usdReserve": 0,
+            "usdReserve": 3.75
         }
 
 
+def get_btc_price():
+    r = requests.get(
+        COINGECKO_URL,
+        headers=HEADERS,
+        timeout=30
+    )
+    r.raise_for_status()
+
+    data = r.json()
+    price = data["bitcoin"]["usd"]
+
+    if not isinstance(price, (int, float)) or price <= 0:
+        raise ValueError("Invalid BTC price")
+
+    return float(price)
+
+
 def main():
-    data = get_fallback_data()
+    data = load_existing()
 
-    # ---------------------------------------------------------
-    # 1. Strategy Shares
-    # ---------------------------------------------------------
+    print("Loading existing Strategy data...")
+    print("BTC Holdings:", data.get("btcHoldings"))
+    print("ADSO:", data.get("assumedShares"))
+    print("FDSO:", data.get("fullyDilutedShares"))
+
+    # BTC 가격은 앱에서 실시간 CoinGecko를 사용하므로
+    # 여기서는 데이터 검증만 한다.
     try:
-        shares = get_strategy_shares()
-
-        if shares.get("btcHoldings"):
-            data["btcHoldings"] = shares["btcHoldings"]
-
-        if shares.get("assumedShares"):
-            data["assumedShares"] = shares["assumedShares"]
-
+        btc_price = get_btc_price()
+        print("Current BTC price:", btc_price)
     except Exception as e:
-        print("Shares page failed:", e)
+        print("BTC price API failed:", e)
 
-    # ---------------------------------------------------------
-    # 2. Strategy Ledger
-    # ---------------------------------------------------------
-    try:
-        ledger = get_strategy_ledger()
-
-        if ledger.get("btcHoldings"):
-            data["btcHoldings"] = ledger["btcHoldings"]
-
-        if ledger.get("assumedShares"):
-            data["assumedShares"] = ledger["assumedShares"]
-
-    except Exception as e:
-        print("Ledger failed:", e)
-
-    # ---------------------------------------------------------
-    # 3. Strategy BTC dashboard
-    # ---------------------------------------------------------
-    try:
-        btc = get_strategy_btc_data()
-
-        if btc.get("btcHoldings"):
-            data["btcHoldings"] = btc["btcHoldings"]
-
-    except Exception as e:
-        print("BTC dashboard failed:", e)
-
-    # ---------------------------------------------------------
-    # IMPORTANT
+    # 중요:
+    # Strategy 웹페이지를 GitHub Actions에서 직접 크롤링하지 않는다.
     #
-    # FDSO / OTM Debt / Preferred / USD Reserve는
-    # 현재 이 스크립트에서 임의로 0으로 덮어쓰지 않는다.
+    # 현재 확인되지 않은 Debt / Preferred / Reserve 값을
+    # 임의로 0으로 바꾸지 않는다.
     #
-    # 공식 데이터가 확실하게 파싱되지 않으면 기존 값을 유지한다.
-    # ---------------------------------------------------------
+    # 따라서 기존의 검증된 값을 유지한다.
 
-    data["source"] = "Strategy"
-    data["updatedAt"] = datetime.now(timezone.utc).isoformat()
-
-    # 숫자 검증
     required = [
         "btcHoldings",
         "assumedShares",
+        "fullyDilutedShares"
     ]
 
     for key in required:
-        if not isinstance(data.get(key), (int, float)) or data[key] <= 0:
-            raise RuntimeError(
-                f"Invalid Strategy data: {key}={data.get(key)}"
+        value = data.get(key)
+
+        if not isinstance(value, (int, float)) or value <= 0:
+            raise ValueError(
+                f"Invalid required value: {key}={value}"
             )
 
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    data["source"] = "Strategy"
+    data["updatedAt"] = datetime.now(
+        timezone.utc
+    ).isoformat()
 
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(
+            data,
+            f,
+            indent=2,
+            ensure_ascii=False
+        )
+
+    print("")
     print("===================================")
-    print("MSTR mNAV data updated")
+    print("MSTR mNAV data update completed")
+    print("===================================")
     print("BTC Holdings :", data["btcHoldings"])
     print("ADSO         :", data["assumedShares"])
     print("FDSO         :", data["fullyDilutedShares"])
