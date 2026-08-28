@@ -1,65 +1,168 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MSTR mNAV 3.0</title><link rel="stylesheet" href="style.css"><link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#1a365d">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MSTR MNAV 계산기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0B0E14">
 </head>
-<body><div class="container">
-<header><h1>₿ MSTR mNAV 3.0</h1><p class="subtitle">Strategy 공식 Net BTC / mNAV 정의 · 자동 데이터 업데이트</p></header>
+<body>
+<div class="app">
 
-<section class="input-section">
-<h2>⚡ 자동 데이터</h2>
-<div class="notice">
-<strong>이제 직접 입력할 필요가 없습니다.</strong><br>
-BTC 보유량, ADSO, FDSO, OTM 전환사채, 우선주, USD Reserve는 Strategy 공개 데이터를 기준으로 자동 갱신합니다.
-<br><span id="dataStatus" class="small">자동 데이터 불러오는 중…</span>
+<div class="topbar">
+<span class="eyebrow">MSTR · BITCOIN TREASURY</span>
+<h1>mNAV Terminal</h1>
+<p class="subtitle">Net BTC 기준 프리미엄 / 디스카운트 계산기</p>
 </div>
-<div class="input-grid">
-<div class="input-group"><label>BTC 가격 ($)</label><input type="number" id="btcPrice" step="0.01"></div>
-<div class="input-group"><label>MSTR 주가 ($)</label><input type="number" id="mstrPrice" step="0.01"></div>
-<div class="input-group"><label>BTC 보유량</label><input type="number" id="btcHoldings" step="0.01" readonly></div>
-<div class="input-group"><label>Assumed Diluted Shares (M)</label><input type="number" id="assumedShares" step="0.001" readonly></div>
-<div class="input-group"><label>Fully Diluted Shares (M)</label><input type="number" id="fullyDilutedShares" step="0.001" readonly></div>
-<div class="input-group"><label>OTM 전환사채·부채 ($B)</label><input type="number" id="otmDebt" step="0.001" readonly></div>
-<div class="input-group"><label>Perpetual Preferred ($B)</label><input type="number" id="preferred" step="0.001" readonly><div class="small">ITM STRK는 Strategy 정의에 따라 제외</div></div>
-<div class="input-group"><label>USD Reserve ($B)</label><input type="number" id="usdReserve" step="0.001" readonly></div>
+
+<!-- 데이터 입력 -->
+<section class="panel">
+<div class="panel-head">
+<h2><span class="panel-icon">💰</span>데이터 입력</h2>
+<div class="status-badge" id="dataStatus"><span class="dot"></span>불러오는 중...</div>
 </div>
-<div class="button-group"><button onclick="loadAutoData();loadLivePrices()" class="btn-primary">🔄 최신 데이터 새로고침</button></div>
+<div class="panel-body">
+<div class="grid-inputs">
+<div class="input-group">
+<label for="btcPrice">BTC 가격 ($)</label>
+<input type="number" id="btcPrice" step="0.01" placeholder="100000">
+</div>
+<div class="input-group">
+<label for="mstrPrice">MSTR 주가 ($)</label>
+<input type="number" id="mstrPrice" step="0.01" placeholder="400">
+</div>
+<div class="input-group">
+<label for="btcHoldings">BTC 보유량 (개)</label>
+<input type="number" id="btcHoldings" step="1" placeholder="444262">
+</div>
+<div class="input-group">
+<label for="assumedShares">기본 발행주식수 (백만)</label>
+<input type="number" id="assumedShares" step="0.1" placeholder="253">
+</div>
+<div class="input-group">
+<label for="fullyDilutedShares">완전희석 주식수 (백만)</label>
+<input type="number" id="fullyDilutedShares" step="0.1" placeholder="270">
+</div>
+<div class="input-group">
+<label for="otmDebt">전환사채 등 부채 ($B)</label>
+<input type="number" id="otmDebt" step="0.01" placeholder="0">
+</div>
+<div class="input-group">
+<label for="preferred">우선주 ($B)</label>
+<input type="number" id="preferred" step="0.01" placeholder="0">
+</div>
+<div class="input-group">
+<label for="usdReserve">현금성자산 ($B)</label>
+<input type="number" id="usdReserve" step="0.01" placeholder="0">
+</div>
+</div>
+<div class="actions">
+<button onclick="calculate()" class="btn btn-primary">계산하기</button>
+<button onclick="loadLivePrices()" class="btn btn-ghost">실시간 시세 새로고침</button>
+</div>
+</div>
 </section>
 
-<section class="result-section"><h2>📊 핵심 결과</h2>
-<div class="result-grid">
-<div class="result-card"><div class="result-label">Gross BTC / Share</div><div class="result-value" id="grossBpsSats">-</div><div class="small">Sats</div></div>
-<div class="result-card"><div class="result-label">Net BTC / Share</div><div class="result-value" id="netBpsSats">-</div><div class="small">Sats</div></div>
-<div class="result-card highlight"><div class="result-label">Net BTC / Share ($)</div><div class="result-value" id="netBpsUsd">-</div><div class="small">mNAV 분모</div></div>
-<div class="result-card highlight"><div class="result-label">현재 mNAV</div><div class="result-value large" id="mnavMultiple">-</div><div class="small" id="premium">-</div></div>
-</div><div class="signal" id="signal">-</div></section>
-
-<section class="detail-section"><h2>🔎 계산 내역</h2><div class="detail-grid">
-<div><span>BTC 총 가치</span><strong id="btcTotalValue">-</strong></div>
-<div><span>OTM Debt + Preferred</span><strong id="seniorClaims">-</strong></div>
-<div><span>USD Reserve</span><strong id="reserveValue">-</strong></div>
-<div><span>Net BTC</span><strong id="netBtc">-</strong></div>
-<div><span>Gross BPS ($)</span><strong id="grossBpsUsd">-</strong></div>
-<div><span>Fully Diluted Shares</span><strong id="fdsoDisplay">-</strong></div>
-</div></section>
-
-<section class="quick-calc-section"><h2>🧮 BTC 가격별 MSTR 목표가</h2><div class="quick-calc-card">
-<div class="input-grid">
-<div class="input-group"><label>목표 BTC 가격 ($)</label><input type="number" id="targetBtcPrice" step="100" placeholder="100000"></div>
-<div class="input-group"><label>목표 mNAV (배)</label><input type="number" id="targetMnav" step="0.05" placeholder="1.5"></div>
+<!-- 계산 결과 -->
+<section class="panel">
+<div class="panel-head">
+<h2><span class="panel-icon">📊</span>계산 결과</h2>
 </div>
-<button onclick="predictMstrPrice()" class="btn-primary">MSTR 가격 예측</button>
-<div class="prediction-result"><div class="result-label">예상 MSTR 가격</div><div class="result-value" id="predictedMstrPrice">-</div><div class="small" id="predictedNetBps">-</div></div>
-</div></section>
+<div class="panel-body">
+<div class="stat-grid">
+<div class="stat-tile">
+<span class="stat-label">BTC 총 가치</span>
+<span class="stat-value" id="btcTotalValue">-</span>
+</div>
+<div class="stat-tile">
+<span class="stat-label">Net BTC</span>
+<span class="stat-value" id="netBtc">-</span>
+</div>
+<div class="stat-tile stat-tile--hero">
+<span class="stat-label">mNAV 배수</span>
+<span class="stat-value stat-value--hero" id="mnavMultiple">-</span>
+<span class="stat-premium" id="premium">-</span>
+<div class="signal" id="signal">-</div>
+</div>
+</div>
 
-<section class="scenario-section"><h2>📈 빠른 시나리오</h2>
-<div class="scenario-grid"><button onclick="scenario(70000)">BTC $70K</button><button onclick="scenario(80000)">BTC $80K</button><button onclick="scenario(90000)">BTC $90K</button><button onclick="scenario(100000)">BTC $100K</button><button onclick="scenario(120000)">BTC $120K</button><button onclick="scenario(150000)">BTC $150K</button></div>
-<div class="table-wrap"><table><thead><tr><th>BTC</th><th>1.0×</th><th>1.25×</th><th>1.5×</th><th>2.0×</th><th>2.5×</th><th>3.0×</th></tr></thead><tbody id="scenarioTable"></tbody></table></div>
+<div class="detail-list">
+<div class="detail-row"><span>Gross BPS (sats)</span><strong id="grossBpsSats">-</strong></div>
+<div class="detail-row"><span>Net BPS (sats)</span><strong id="netBpsSats">-</strong></div>
+<div class="detail-row"><span>Gross BPS ($)</span><strong id="grossBpsUsd">-</strong></div>
+<div class="detail-row"><span>Net BPS ($)</span><strong id="netBpsUsd">-</strong></div>
+<div class="detail-row"><span>선순위 청구권 합계</span><strong id="seniorClaims">-</strong></div>
+<div class="detail-row"><span>현금성자산</span><strong id="reserveValue">-</strong></div>
+<div class="detail-row"><span>완전희석 주식수</span><strong id="fdsoDisplay">-</strong></div>
+</div>
+</div>
 </section>
 
-<footer><p><strong>⚠️ 나는 반드시 백만장자가 된다^^</strong></p>
-<p>Strategy 공식 정의: mNAV = MSTR Price ÷ Net BTC Per Share ($).</p>
-<p><a href="https://www.strategy.com/notes" target="_blank">Strategy 공식 Notes</a> · <a href="https://github.com/tommyoon007/mnav" target="_blank">GitHub</a></p></footer>
-</div><script src="script.js"></script></body></html>
+<!-- 목표 가격 예측 -->
+<section class="panel quick-calc-section">
+<div class="panel-head">
+<h2><span class="panel-icon">🧮</span>목표 가격 예측</h2>
+</div>
+<div class="panel-body">
+<div class="chip-row">
+<button class="chip" onclick="scenario(70000)">$70K</button>
+<button class="chip" onclick="scenario(80000)">$80K</button>
+<button class="chip" onclick="scenario(90000)">$90K</button>
+<button class="chip" onclick="scenario(100000)">$100K</button>
+<button class="chip" onclick="scenario(120000)">$120K</button>
+<button class="chip" onclick="scenario(150000)">$150K</button>
+</div>
+
+<div class="grid-inputs grid-inputs--2">
+<div class="input-group">
+<label for="targetBtcPrice">목표 BTC 가격 ($)</label>
+<input type="number" id="targetBtcPrice" step="0.01" placeholder="120000">
+</div>
+<div class="input-group">
+<label for="targetMnav">목표 mNAV 배수</label>
+<input type="number" id="targetMnav" step="0.01" placeholder="1.5">
+</div>
+</div>
+
+<button onclick="predictMstrPrice()" class="btn btn-primary btn-block">MSTR 가격 예측</button>
+
+<div class="prediction">
+<span class="stat-label">예상 MSTR 가격</span>
+<span class="prediction-value" id="predictedMstrPrice">-</span>
+<span class="prediction-sub" id="predictedNetBps">-</span>
+</div>
+</div>
+</section>
+
+<!-- 시나리오 테이블 -->
+<section class="panel">
+<div class="panel-head">
+<h2><span class="panel-icon">📈</span>시나리오 테이블</h2>
+</div>
+<div class="panel-body">
+<div class="table-wrap">
+<table>
+<thead>
+<tr><th>BTC 가격</th><th>1.0×</th><th>1.25×</th><th>1.5×</th><th>2.0×</th><th>2.5×</th><th>3.0×</th></tr>
+</thead>
+<tbody id="scenarioTable"></tbody>
+</table>
+</div>
+</div>
+</section>
+
+<footer class="footer">
+<p>⚠️ 나는 반드시 백만장자가 된다^^</p>
+<p>💡 팁: mnav -10이면 매수한다</p>
+<p><a href="https://www.strategy.com" target="_blank">strategy.com</a></p>
+</footer>
+
+</div>
+<script src="script.js"></script>
+</body>
+</html>
