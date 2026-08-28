@@ -18,9 +18,14 @@
     <section class="input-section">
         <h2>💰 현재 데이터 입력</h2>
         <div class="notice">
-            <strong>핵심:</strong> 현재 mNAV = MSTR 주가 ÷ Net BTC Per Share ($).
-            Net BTC는 <strong>BTC 보유량 − OTM 전환사채/부채 − 영구우선주 + USD Reserve</strong>로 계산합니다.
-        </div>
+    <strong>핵심:</strong> 현재 mNAV = MSTR 주가 ÷ Net BTC Per Share ($).
+    Net BTC는
+    <strong>BTC 보유량 − OTM 전환사채/부채 − OTM 우선주 + USD Reserve</strong>로 계산합니다.
+    <br>
+    <span class="small">
+        ※ ITM 전환사채와 ITM STRK는 Net BTC에서 차감하지 않고 Fully Diluted Shares에 반영합니다.
+    </span>
+</div>
 
         <div class="input-grid">
             <div class="input-group">
@@ -48,8 +53,8 @@
                 <input type="number" id="otmDebt" step="0.001" placeholder="0">
             </div>
             <div class="input-group">
-                <label for="preferred">영구우선주 ($B)</label>
-                <input type="number" id="preferred" step="0.001" placeholder="0">
+              <label for="preferred">OTM 우선주 ($B)</label>
+              <input type="number" id="preferred" step="0.001" placeholder="0">
             </div>
             <div class="input-group">
                 <label for="usdReserve">USD Reserve ($B)</label>
