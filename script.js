@@ -12,7 +12,7 @@ const DEFAULTS = {
     assumedShares: 445,
     fullyDilutedShares: 532,
     otmDebt: 0,
-    preferred: 0,
+    preferred: 0, // 입력값은 OTM 우선주만
     usdReserve: 0
 };
 
@@ -53,14 +53,14 @@ function getData() {
     const assumedShares = val('assumedShares');
     const fullyDilutedShares = val('fullyDilutedShares');
     const otmDebt = val('otmDebt') * 1e9;
-    const preferred = val('preferred') * 1e9;
+    const otmPreferred = val('preferred') * 1e9;
     const usdReserve = val('usdReserve') * 1e9;
 
     if ([btcPrice, btcHoldings, assumedShares, fullyDilutedShares].some(x => !Number.isFinite(x) || x <= 0)) {
         throw new Error('BTC 가격, BTC 보유량, 주식수는 0보다 커야 합니다.');
     }
-    if ([otmDebt, preferred, usdReserve].some(x => !Number.isFinite(x) || x < 0)) {
-        throw new Error('부채·우선주·USD Reserve는 0 이상이어야 합니다.');
+    if ([otmDebt, otmPreferred, usdReserve].some(x => !Number.isFinite(x) || x < 0)) {
+    throw new Error('OTM 부채·OTM 우선주·USD Reserve는 0 이상이어야 합니다.'); 
     }
 
     const btcTotalValue = btcPrice * btcHoldings;
@@ -68,9 +68,9 @@ function getData() {
     // Strategy 정의: OTM debt/preferred는 BTC로 환산하여 차감,
     // USD Reserve는 BTC로 환산하여 가산.
     const netBtc = btcHoldings
-        - (otmDebt / btcPrice)
-        - (preferred / btcPrice)
-        + (usdReserve / btcPrice);
+    - (otmDebt / btcPrice)
+    - (otmPreferred / btcPrice)
+    + (usdReserve / btcPrice);
 
     const grossBpsSats = (btcHoldings * 1e8) / (assumedShares * 1e6);
     const netBpsSats = (netBtc * 1e8) / (fullyDilutedShares * 1e6);
@@ -84,7 +84,7 @@ function getData() {
 
     return {
         btcPrice, mstrPrice, btcHoldings, assumedShares, fullyDilutedShares,
-        otmDebt, preferred, usdReserve, btcTotalValue, netBtc,
+        otmDebt, otmPreferred, usdReserve, btcTotalValue, netBtc,
         grossBpsSats, netBpsSats, grossBpsUsd, netBpsUsd, mnav, premium
     };
 }
@@ -97,14 +97,14 @@ function calculate(showAlert = true) {
         document.getElementById('netBpsSats').textContent = satsFmt(d.netBpsSats);
         document.getElementById('netBpsUsd').textContent = money(d.netBpsUsd);
         document.getElementById('mnavMultiple').textContent =
-            Number.isFinite(d.mnav) ? d.mnav.toFixed(2) + '×' : '-';
+          Number.isFinite(d.mnav) ? d.mnav.toFixed(2) + '×' : '-';
         document.getElementById('premium').textContent =
             Number.isFinite(d.premium)
                 ? `${d.premium >= 0 ? '+' : ''}${d.premium.toFixed(1)}% ${d.premium >= 0 ? '프리미엄' : '디스카운트'}`
                 : 'MSTR 주가 입력 필요';
 
         document.getElementById('btcTotalValue').textContent = moneyB(d.btcTotalValue / 1e9);
-        document.getElementById('seniorClaims').textContent = moneyB((d.otmDebt + d.preferred) / 1e9);
+        document.getElementById('seniorClaims').textContent = moneyB((d.otmDebt + d.otmPreferred) / 1e9);
         document.getElementById('reserveValue').textContent = moneyB(d.usdReserve / 1e9);
         document.getElementById('netBtc').textContent = btcFmt(d.netBtc);
 
@@ -157,10 +157,10 @@ function predictMstrPrice() {
         }
 
         const targetNetBtc =
-            d.btcHoldings
-            - (d.otmDebt / targetBtcPrice)
-            - (d.preferred / targetBtcPrice)
-            + (d.usdReserve / targetBtcPrice);
+    d.btcHoldings
+    - (d.otmDebt / targetBtcPrice)
+    - (d.otmPreferred / targetBtcPrice)
+    + (d.usdReserve / targetBtcPrice);
 
         const targetNetBpsUsd =
             (targetNetBtc * targetBtcPrice) / (d.fullyDilutedShares * 1e6);
@@ -198,7 +198,7 @@ function buildScenarioTable() {
         const targetNetBtc =
             d.btcHoldings
             - (d.otmDebt / p)
-            - (d.preferred / p)
+            - (d.otmPreferred / p)
             + (d.usdReserve / p);
         const netBpsUsd =
             (targetNetBtc * p) / (d.fullyDilutedShares * 1e6);
