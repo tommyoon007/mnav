@@ -1,1 +1,9 @@
-
+{
+  "name": "MSTR mNAV",
+  "short_name": "MSTR mNAV",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1a365d",
+  "icons": []
+}
