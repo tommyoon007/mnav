@@ -1,1 +1,244 @@
 
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>MSTR mNAV</title>
+
+<link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.json">
+
+<meta name="theme-color" content="#1a365d">
+</head>
+
+<body>
+
+<div class="container">
+
+<header>
+<h1>₿ MSTR mNAV</h1>
+<p>Strategy 공식 Net Reserve 기반</p>
+</header>
+
+<section class="input-section">
+
+<h2>⚡ 자동 데이터</h2>
+
+<div class="notice">
+<strong>자동 업데이트</strong><br>
+Strategy / SEC 기준 데이터를 사용합니다.
+<br>
+<span id="dataStatus">데이터 불러오는 중...</span>
+</div>
+
+<div class="input-grid">
+
+<div class="input-group">
+<label>BTC 가격 ($)</label>
+<input id="btcPrice" type="number">
+</div>
+
+<div class="input-group">
+<label>MSTR 주가 ($)</label>
+<input id="mstrPrice" type="number">
+</div>
+
+<div class="input-group">
+<label>BTC 보유량</label>
+<input id="btcHoldings" type="number" readonly>
+</div>
+
+<div class="input-group">
+<label>ADSO (M)</label>
+<input id="assumedShares" type="number" readonly>
+</div>
+
+<div class="input-group">
+<label>FDSO (M)</label>
+<input id="fullyDilutedShares" type="number" readonly>
+</div>
+
+</div>
+
+</section>
+
+<section class="result-section">
+
+<h2>📊 핵심 결과</h2>
+
+<div class="result-grid">
+
+<div class="result-card">
+<div class="result-label">Gross BTC / Share</div>
+<div class="result-value" id="grossBpsSats">-</div>
+<div class="small">Sats</div>
+</div>
+
+<div class="result-card">
+<div class="result-label">Net BTC / Share</div>
+<div class="result-value" id="netBpsSats">-</div>
+<div class="small">Sats</div>
+</div>
+
+<div class="result-card highlight">
+<div class="result-label">Net BTC / Share</div>
+<div class="result-value" id="netBpsUsd">-</div>
+<div class="small">mNAV 분모</div>
+</div>
+
+<div class="result-card highlight">
+<div class="result-label">현재 mNAV</div>
+<div class="result-value large" id="mnavMultiple">-</div>
+<div class="small" id="premium">-</div>
+</div>
+
+</div>
+
+<div class="signal" id="signal">-</div>
+
+</section>
+
+<section class="detail-section">
+
+<h2>🔎 계산 내역</h2>
+
+<div class="detail-grid">
+
+<div>
+<span>BTC 총 가치</span>
+<strong id="btcTotalValue">-</strong>
+</div>
+
+<div>
+<span>Debt + Preferred</span>
+<strong id="seniorClaims">-</strong>
+</div>
+
+<div>
+<span>USD Reserve</span>
+<strong id="reserveValue">-</strong>
+</div>
+
+<div>
+<span>Net BTC</span>
+<strong id="netBtc">-</strong>
+</div>
+
+<div>
+<span>Gross BPS ($)</span>
+<strong id="grossBpsUsd">-</strong>
+</div>
+
+<div>
+<span>FDSO</span>
+<strong id="fdsoDisplay">-</strong>
+</div>
+
+</div>
+
+</section>
+
+<section class="quick-calc-section">
+
+<h2>🧮 BTC 가격별 MSTR 목표가</h2>
+
+<div class="quick-calc-card">
+
+<div class="input-grid">
+
+<div class="input-group">
+<label>목표 BTC 가격</label>
+<input id="targetBtcPrice" type="number" value="100000">
+</div>
+
+<div class="input-group">
+<label>목표 mNAV</label>
+<input id="targetMnav" type="number" value="1.5" step="0.05">
+</div>
+
+</div>
+
+<button onclick="targetPrice()" class="btn-primary">
+MSTR 가격 예측
+</button>
+
+<div class="prediction-result">
+
+<div class="result-label">
+예상 MSTR 가격
+</div>
+
+<div class="result-value" id="predictedMstrPrice">
+-
+</div>
+
+<div class="small" id="predictedNetBps">
+-
+</div>
+
+</div>
+
+</div>
+
+</section>
+
+<section class="scenario-section">
+
+<h2>📈 빠른 시나리오</h2>
+
+<div class="table-wrap">
+
+<table>
+
+<thead>
+
+<tr>
+<th>BTC</th>
+<th>1×</th>
+<th>1.25×</th>
+<th>1.5×</th>
+<th>2×</th>
+<th>2.5×</th>
+<th>3×</th>
+</tr>
+
+</thead>
+
+<tbody id="scenarioTable"></tbody>
+
+</table>
+
+</div>
+
+</section>
+
+<footer>
+
+<p>
+<strong>⚠️ 나는 반드시 백만장자가 된다^^</strong>
+</p>
+
+<p>
+Strategy 공식 자료 기반 mNAV 보조 계산기
+</p>
+
+<a href="https://www.strategy.com/notes" target="_blank">
+Strategy Notes
+</a>
+
+·
+
+<a href="https://github.com/tommyoon007/mnav" target="_blank">
+GitHub
+</a>
+
+</footer>
+
+</div>
+
+<script src="script.js"></script>
+
+</body>
+</html>
