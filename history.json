@@ -1,13 +1,19 @@
 [
   {
     "date": "2026-08-29",
-    "timestamp": "2026-08-29T18:32:51.757082+00:00",
-    "btc": 78023.0,
+    "timestamp": "2026-08-29T19:02:53.398297+00:00",
+    "btc": 78157.0,
     "mstr": 127.31,
-    "mnav": 1.0576,
-    "netBpsUsd": 120.37,
-    "oiBtc": null,
-    "oiUsd": null,
-    "fundingRate": null
+    "mnav": 1.0553,
+    "netBpsUsd": 120.64,
+    "oiBtc": 28628.32,
+    "oiUsd": 2237503911.93,
+    "fundingRate": 0.00225,
+    "oiSources": [
+      "OKX"
+    ],
+    "fundingSources": [
+      "OKX"
+    ]
   }
 ]
