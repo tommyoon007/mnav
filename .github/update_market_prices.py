@@ -78,8 +78,7 @@ def get_mstr_price():
 
     data = response.json()
 
-    result =
-        data["chart"]["result"][0]
+    result = data["chart"]["result"][0]
 
     price = result[
         "meta"
