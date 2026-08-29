@@ -33,17 +33,29 @@ jobs:
         run: |
           python .github/update_market_history.py
 
-      - name: Commit history
+      - name: Update live market data
+        run: |
+          python .github/update_market_prices.py
+
+      - name: Show generated data
+        run: |
+          echo "===== live.json ====="
+          cat live.json
+
+          echo "===== history.json ====="
+          cat history.json
+
+      - name: Commit history and live data
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add history.json
+          git add history.json live.json
 
           if git diff --cached --quiet; then
-            echo "No history changes."
+            echo "No changes."
             exit 0
           fi
 
-          git commit -m "Update MSTR historical data"
+          git commit -m "Update MSTR history and live data"
           git push
