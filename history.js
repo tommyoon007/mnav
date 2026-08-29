@@ -1,5 +1,6 @@
 /* =========================================
    MSTR / BTC / mNAV / OI / Funding History
+   + BTC Derivatives Risk Warning
 ========================================= */
 
 (function () {
@@ -128,7 +129,7 @@
         display: none;
         pointer-events: none;
         z-index: 9999;
-        min-width: 180px;
+        min-width: 190px;
         padding: 11px 13px;
         border-radius: 9px;
         border:
@@ -140,6 +141,7 @@
           rgba(0,0,0,.4);
         color: #e8edf3;
         font-size: 12px;
+        line-height: 1.6;
       }
 
       .history-subtitle {
@@ -179,6 +181,82 @@
         font-weight: 800;
       }
 
+
+      /* -----------------------------------
+         Risk Warning
+      ----------------------------------- */
+
+      .risk-warning {
+        margin:
+          0 24px 24px;
+        padding: 18px;
+        border-radius: 14px;
+        background: #101620;
+        border:
+          1px solid
+          rgba(255,255,255,.08);
+      }
+
+      .risk-title {
+        font-size: 14px;
+        font-weight: 800;
+        color: #dce3eb;
+        margin-bottom: 14px;
+      }
+
+      .risk-main {
+        display: flex;
+        align-items: center;
+        gap: 13px;
+      }
+
+      .risk-icon {
+        font-size: 32px;
+        line-height: 1;
+      }
+
+      .risk-level {
+        font-size: 22px;
+        font-weight: 900;
+        letter-spacing: .5px;
+      }
+
+      .risk-data {
+        margin-top: 4px;
+        color: #7f8b9c;
+        font-size: 11px;
+      }
+
+      .risk-message {
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top:
+          1px solid
+          rgba(255,255,255,.06);
+        color: #929eae;
+        font-size: 12px;
+        line-height: 1.65;
+      }
+
+      .risk-bar {
+        display: flex;
+        gap: 5px;
+        margin-top: 15px;
+      }
+
+      .risk-bar-item {
+        height: 5px;
+        flex: 1;
+        border-radius: 5px;
+        background:
+          rgba(255,255,255,.08);
+      }
+
+      .risk-bar-item.active {
+        background: currentColor;
+      }
+
+
       @media (max-width: 700px) {
 
         .history-summary {
@@ -187,6 +265,7 @@
         }
 
       }
+
 
       @media (max-width: 600px) {
 
@@ -215,7 +294,13 @@
           padding-right: 18px;
         }
 
+        .risk-warning {
+          margin-left: 18px;
+          margin-right: 18px;
+        }
+
       }
+
     `;
 
     document.head.appendChild(
@@ -274,6 +359,7 @@
 
       </div>
 
+
       <div class="history-legend">
 
         <span>
@@ -302,6 +388,7 @@
 
       </div>
 
+
       <div class="history-chart-wrap">
 
         <div
@@ -311,10 +398,11 @@
 
       </div>
 
-      <div
-        class="history-subtitle">
+
+      <div class="history-subtitle">
         📊 BTC 선물 레버리지 지표
       </div>
+
 
       <div class="history-legend">
 
@@ -336,6 +424,7 @@
 
       </div>
 
+
       <div class="history-chart-wrap">
 
         <div
@@ -345,12 +434,20 @@
 
       </div>
 
+
+      <div
+        id="riskWarning"
+        class="risk-warning">
+      </div>
+
+
       <div
         id="historySummary"
         class="history-summary">
       </div>
 
     `;
+
 
     const footer =
       document.querySelector(
@@ -369,7 +466,9 @@
       document.body.appendChild(
         section
       );
+
     }
+
 
     section
       .querySelectorAll(
@@ -399,9 +498,12 @@
             draw(
               button.dataset.period
             );
+
           }
         );
+
       });
+
   }
 
 
@@ -427,10 +529,13 @@
           "history.json " +
           response.status
         );
+
       }
+
 
       historyData =
         await response.json();
+
 
       if (
         !Array.isArray(
@@ -441,9 +546,26 @@
         throw new Error(
           "Invalid history data"
         );
+
       }
 
+
+      historyData =
+        historyData
+          .filter(
+            item =>
+              item &&
+              item.date
+          )
+          .sort(
+            (a, b) =>
+              new Date(a.date) -
+              new Date(b.date)
+          );
+
+
       draw("1y");
+
 
     } catch (error) {
 
@@ -452,10 +574,12 @@
         error
       );
 
+
       const chart =
         document.getElementById(
           "historyChart"
         );
+
 
       if (chart) {
 
@@ -469,8 +593,11 @@
             아직 누적된 역사 데이터가 없습니다.
           </div>
           `;
+
       }
+
     }
+
   }
 
 
@@ -484,22 +611,27 @@
       return [];
     }
 
+
     if (period === "all") {
       return historyData;
     }
+
 
     const days =
       period === "1y"
         ? 365
         : 1095;
 
+
     const cutoff =
       new Date();
+
 
     cutoff.setDate(
       cutoff.getDate() -
       days
     );
+
 
     return historyData.filter(
       item =>
@@ -507,6 +639,7 @@
           item.date
         ) >= cutoff
     );
+
   }
 
 
@@ -528,13 +661,16 @@
       return null;
     }
 
+
     if (max === min) {
 
       return (
         outMin +
         outMax
       ) / 2;
+
     }
+
 
     return (
       outMin +
@@ -546,6 +682,7 @@
         outMax - outMin
       )
     );
+
   }
 
 
@@ -563,6 +700,7 @@
       return "—";
     }
 
+
     return Number(value)
       .toLocaleString(
         "en-US",
@@ -570,6 +708,7 @@
           maximumFractionDigits: 2
         }
       );
+
   }
 
 
@@ -587,6 +726,7 @@
     let path = "";
     let started = false;
 
+
     values.forEach(
       (value, index) => {
 
@@ -595,12 +735,16 @@
             Number(value)
           )
         ) {
+
           started = false;
           return;
+
         }
+
 
         const px =
           x(index);
+
 
         const py =
           y(
@@ -608,11 +752,13 @@
             range
           );
 
+
         if (
           !Number.isFinite(py)
         ) {
           return;
         }
+
 
         path +=
           (
@@ -621,11 +767,33 @@
               : `M ${px} ${py}`
           );
 
+
         started = true;
+
       }
     );
 
+
     return path;
+
+  }
+
+
+  /* ---------------------------------------
+     Tooltip 제거
+  --------------------------------------- */
+
+  function removeTooltips() {
+
+    document
+      .querySelectorAll(
+        ".history-tooltip"
+      )
+      .forEach(
+        tooltip =>
+          tooltip.remove()
+      );
+
   }
 
 
@@ -646,8 +814,10 @@
       return;
     }
 
+
     const width = 1000;
     const height = 420;
+
 
     const margin = {
       top: 20,
@@ -656,10 +826,12 @@
       left: 55
     };
 
+
     const chartWidth =
       width -
       margin.left -
       margin.right;
+
 
     const chartHeight =
       height -
@@ -677,7 +849,9 @@
           margin.left +
           chartWidth / 2
         );
+
       }
+
 
       return (
         margin.left +
@@ -687,10 +861,12 @@
         ) *
         chartWidth
       );
+
     }
 
 
     const ranges = {};
+
 
     series.forEach(
       s => {
@@ -706,6 +882,7 @@
             .filter(
               Number.isFinite
             );
+
 
         if (
           values.length
@@ -739,6 +916,7 @@
           chartHeight,
         margin.top
       );
+
     }
 
 
@@ -774,6 +952,7 @@
         ) *
         chartHeight;
 
+
       svg += `
         <line
           class="history-grid"
@@ -783,6 +962,7 @@
           y2="${gy}">
         </line>
       `;
+
     }
 
 
@@ -793,6 +973,7 @@
         7,
         data.length
       );
+
 
     for (
       let i = 0;
@@ -812,10 +993,12 @@
           )
         );
 
+
       const date =
         new Date(
           data[index].date
         );
+
 
       const label =
         date.toLocaleDateString(
@@ -826,6 +1009,7 @@
           }
         );
 
+
       svg += `
         <text
           class="history-axis"
@@ -835,6 +1019,7 @@
           ${label}
         </text>
       `;
+
     }
 
 
@@ -848,6 +1033,7 @@
         ) {
           return;
         }
+
 
         svg += `
           <path
@@ -869,6 +1055,7 @@
               "non-scaling-stroke">
           </path>
         `;
+
       }
     );
 
@@ -884,6 +1071,7 @@
           return;
         }
 
+
         data.forEach(
           (item, index) => {
 
@@ -892,6 +1080,7 @@
                 item[s.key]
               );
 
+
             if (
               !Number.isFinite(
                 value
@@ -899,6 +1088,7 @@
             ) {
               return;
             }
+
 
             svg += `
               <circle
@@ -913,13 +1103,16 @@
                 data-series="${s.key}">
               </circle>
             `;
+
           }
         );
+
       }
     );
 
 
     svg += "</svg>";
+
 
     container.innerHTML =
       svg;
@@ -932,8 +1125,10 @@
         "div"
       );
 
+
     tooltip.className =
       "history-tooltip";
+
 
     document.body.appendChild(
       tooltip
@@ -956,8 +1151,10 @@
                   point.dataset.index
                 );
 
+
               const item =
                 data[index];
+
 
               tooltip.innerHTML =
                 `
@@ -973,6 +1170,7 @@
                         item[s.key]
                       );
 
+
                     if (
                       !Number.isFinite(
                         value
@@ -981,7 +1179,9 @@
                       return "";
                     }
 
+
                     let display;
+
 
                     if (
                       s.key ===
@@ -1015,26 +1215,32 @@
                       display =
                         fmt(
                           value
-                        ) + " BTC";
+                        ) +
+                        " BTC";
 
                     } else {
 
                       display =
                         "$" +
                         fmt(value);
+
                     }
+
 
                     return `
                       <br>
                       ${s.label}:
                       ${display}
                     `;
+
                   }
                 ).join("")}
                 `;
 
+
               tooltip.style.display =
                 "block";
+
             }
           );
 
@@ -1049,11 +1255,13 @@
                   14
                 ) + "px";
 
+
               tooltip.style.top =
                 (
                   event.clientY +
                   14
                 ) + "px";
+
             }
           );
 
@@ -1064,33 +1272,648 @@
 
               tooltip.style.display =
                 "none";
+
             }
           );
+
         }
       );
+
+  }
+
+
+  /* =======================================
+     DERIVATIVES RISK
+  ======================================= */
+
+  function calculateRisk(
+    data
+  ) {
+
+    const valid =
+      data.filter(
+        item => {
+
+          const oi =
+            Number(
+              item.oiBtc
+            );
+
+          const funding =
+            Number(
+              item.fundingRate
+            );
+
+          return (
+            Number.isFinite(oi) &&
+            Number.isFinite(funding)
+          );
+
+        }
+      );
+
+
+    /*
+       데이터 부족
+    */
+
+    if (
+      valid.length < 2
+    ) {
+
+      return {
+
+        level:
+          "DATA BUILDING",
+
+        icon:
+          "⚪",
+
+        color:
+          "#8b95a5",
+
+        score:
+          0,
+
+        message:
+          "OI와 Funding 데이터가 아직 부족합니다. 데이터를 계속 축적하는 중입니다."
+
+      };
+
+    }
+
+
+    const latest =
+      valid[
+        valid.length - 1
+      ];
+
+
+    const latestOI =
+      Number(
+        latest.oiBtc
+      );
+
+
+    const funding =
+      Number(
+        latest.fundingRate
+      );
+
+
+    /* -----------------------------------
+       7일 전 OI
+    ----------------------------------- */
+
+    const latestDate =
+      new Date(
+        latest.date
+      );
+
+
+    const targetDate =
+      new Date(
+        latestDate
+      );
+
+
+    targetDate.setDate(
+      targetDate.getDate() -
+      7
+    );
+
+
+    let previous =
+      null;
+
+
+    let smallestDiff =
+      Infinity;
+
+
+    valid.forEach(
+      item => {
+
+        const date =
+          new Date(
+            item.date
+          );
+
+
+        const diff =
+          Math.abs(
+            date -
+            targetDate
+          );
+
+
+        if (
+          diff < smallestDiff
+        ) {
+
+          smallestDiff =
+            diff;
+
+          previous =
+            item;
+
+        }
+
+      }
+    );
+
+
+    /*
+       7일 데이터가 너무 부족하면
+       가장 오래된 데이터 사용
+    */
+
+    if (
+      !previous
+    ) {
+
+      previous =
+        valid[0];
+
+    }
+
+
+    const previousOI =
+      Number(
+        previous.oiBtc
+      );
+
+
+    let oiChange =
+      0;
+
+
+    if (
+      previousOI > 0
+    ) {
+
+      oiChange =
+        (
+          (
+            latestOI /
+            previousOI
+          ) - 1
+        ) * 100;
+
+    }
+
+
+    /* -----------------------------------
+       최근 BTC 변화
+    ----------------------------------- */
+
+    let btcChange =
+      0;
+
+
+    const btcStart =
+      valid[0];
+
+
+    if (
+      Number(
+        btcStart.btc
+      ) > 0
+    ) {
+
+      btcChange =
+        (
+          (
+            Number(
+              latest.btc
+            ) /
+            Number(
+              btcStart.btc
+            )
+          ) - 1
+        ) * 100;
+
+    }
+
+
+    /* -----------------------------------
+       Risk Score
+    ----------------------------------- */
+
+    let score =
+      0;
+
+
+    /*
+       Funding
+    */
+
+    if (
+      funding >= 0.05
+    ) {
+
+      score += 4;
+
+    } else if (
+      funding >= 0.02
+    ) {
+
+      score += 3;
+
+    } else if (
+      funding >= 0.005
+    ) {
+
+      score += 1;
+
+    }
+
+
+    /*
+       음의 Funding
+       = 숏 포지션 과열
+    */
+
+    if (
+      funding <= -0.05
+    ) {
+
+      score += 3;
+
+    } else if (
+      funding <= -0.02
+    ) {
+
+      score += 2;
+
+    } else if (
+      funding <= -0.005
+    ) {
+
+      score += 1;
+
+    }
+
+
+    /*
+       OI 증가
+    */
+
+    if (
+      oiChange >= 15
+    ) {
+
+      score += 4;
+
+    } else if (
+      oiChange >= 10
+    ) {
+
+      score += 3;
+
+    } else if (
+      oiChange >= 5
+    ) {
+
+      score += 1;
+
+    }
+
+
+    /*
+       BTC 상승 + OI 증가
+    */
+
+    if (
+      btcChange > 5 &&
+      oiChange > 10
+    ) {
+
+      score += 2;
+
+    }
+
+
+    /* -----------------------------------
+       최종 Level
+    ----------------------------------- */
+
+    if (
+      score >= 8
+    ) {
+
+      return {
+
+        level:
+          "EXTREME",
+
+        icon:
+          "🔴",
+
+        color:
+          "#ff4d5a",
+
+        score,
+
+        funding,
+        oiChange,
+        btcChange,
+
+        message:
+          "레버리지와 Funding이 동시에 극단적으로 높습니다. 급격한 청산과 변동성 확대에 특히 주의해야 합니다."
+
+      };
+
+    }
+
+
+    if (
+      score >= 5
+    ) {
+
+      return {
+
+        level:
+          "OVERHEATED",
+
+        icon:
+          "🟠",
+
+        color:
+          "#ff9f43",
+
+        score,
+
+        funding,
+        oiChange,
+        btcChange,
+
+        message:
+          "레버리지와 Funding이 높은 상태입니다. 추격매수 위험이 커지고 있습니다."
+
+      };
+
+    }
+
+
+    if (
+      score >= 2
+    ) {
+
+      return {
+
+        level:
+          "CAUTION",
+
+        icon:
+          "🟡",
+
+        color:
+          "#f3c64e",
+
+        score,
+
+        funding,
+        oiChange,
+        btcChange,
+
+        message:
+          "OI 또는 Funding이 증가하고 있습니다. 시장 레버리지 확대 여부를 관찰하세요."
+
+      };
+
+    }
+
+
+    return {
+
+      level:
+        "SAFE",
+
+      icon:
+        "🟢",
+
+      color:
+        "#5ee6a8",
+
+      score,
+
+      funding,
+      oiChange,
+      btcChange,
+
+      message:
+        "현재 OI와 Funding 기준으로 특별한 과열 신호가 없습니다."
+
+    };
+
   }
 
 
   /* ---------------------------------------
-     메인 draw
+     Risk Warning 표시
   --------------------------------------- */
 
-  function draw(period) {
+  function updateRiskWarning(
+    data
+  ) {
+
+    const box =
+      document.getElementById(
+        "riskWarning"
+      );
+
+
+    if (!box) {
+      return;
+    }
+
+
+    const risk =
+      calculateRisk(
+        data
+      );
+
+
+    let activeBars =
+      0;
+
+
+    if (
+      risk.level ===
+      "CAUTION"
+    ) {
+
+      activeBars = 2;
+
+    } else if (
+      risk.level ===
+      "OVERHEATED"
+    ) {
+
+      activeBars = 3;
+
+    } else if (
+      risk.level ===
+      "EXTREME"
+    ) {
+
+      activeBars = 4;
+
+    } else if (
+      risk.level ===
+      "SAFE"
+    ) {
+
+      activeBars = 1;
+
+    }
+
+
+    box.innerHTML = `
+
+      <div class="risk-title">
+        🚦 BTC 파생시장 위험도
+      </div>
+
+
+      <div class="risk-main">
+
+        <div class="risk-icon">
+          ${risk.icon}
+        </div>
+
+
+        <div>
+
+          <div
+            class="risk-level"
+            style="
+              color:${risk.color};
+            ">
+            ${risk.level}
+          </div>
+
+
+          ${
+            risk.funding !== undefined
+              ? `
+                <div
+                  class="risk-data">
+
+                  Funding:
+                  ${
+                    risk.funding >= 0
+                      ? "+"
+                      : ""
+                  }${risk.funding.toFixed(4)}%
+
+                  ·
+
+                  OI 7일:
+                  ${
+                    risk.oiChange >= 0
+                      ? "+"
+                      : ""
+                  }${risk.oiChange.toFixed(1)}%
+
+                </div>
+              `
+              : ""
+          }
+
+        </div>
+
+      </div>
+
+
+      <div
+        class="risk-bar"
+        style="
+          color:${risk.color};
+        ">
+
+        <div
+          class="risk-bar-item
+          ${activeBars >= 1
+            ? "active"
+            : ""}">
+        </div>
+
+        <div
+          class="risk-bar-item
+          ${activeBars >= 2
+            ? "active"
+            : ""}">
+        </div>
+
+        <div
+          class="risk-bar-item
+          ${activeBars >= 3
+            ? "active"
+            : ""}">
+        </div>
+
+        <div
+          class="risk-bar-item
+          ${activeBars >= 4
+            ? "active"
+            : ""}">
+        </div>
+
+      </div>
+
+
+      <div class="risk-message">
+
+        ${risk.message}
+
+        ${
+          risk.btcChange !== undefined
+            ? `
+              <br><br>
+              최근 BTC 변화:
+              ${
+                risk.btcChange >= 0
+                  ? "+"
+                  : ""
+              }${risk.btcChange.toFixed(1)}%
+            `
+            : ""
+        }
+
+      </div>
+
+    `;
+
+  }
+
+
+  /* ---------------------------------------
+     Main Draw
+  --------------------------------------- */
+
+  function draw(
+    period
+  ) {
 
     const container =
       document.getElementById(
         "historyChart"
       );
 
+
     const derivatives =
       document.getElementById(
         "derivativesChart"
       );
 
+
     const summary =
       document.getElementById(
         "historySummary"
       );
+
 
     if (
       !container ||
@@ -1100,10 +1923,19 @@
       return;
     }
 
-    const data =
-      filterData(period);
 
-    if (!data.length) {
+    const data =
+      filterData(
+        period
+      );
+
+
+    removeTooltips();
+
+
+    if (
+      !data.length
+    ) {
 
       container.innerHTML =
         `<div style="
@@ -1114,62 +1946,114 @@
           데이터가 없습니다.
         </div>`;
 
+
       derivatives.innerHTML =
         "";
 
+
       summary.innerHTML =
         "";
+
+
+      updateRiskWarning(
+        []
+      );
+
 
       return;
     }
 
 
     /* --------------------------------
-       기존 3개
+       MSTR / BTC / mNAV
     -------------------------------- */
 
     drawBaseChart(
       container,
       data,
       [
+
         {
-          key: "mstr",
-          label: "🔴 MSTR",
-          color: "#ff4d5a"
+          key:
+            "mstr",
+
+          label:
+            "🔴 MSTR",
+
+          color:
+            "#ff4d5a"
         },
+
+
         {
-          key: "mnav",
-          label: "🟡 mNAV",
-          color: "#f3c64e"
+          key:
+            "mnav",
+
+          label:
+            "🟡 mNAV",
+
+          color:
+            "#f3c64e"
         },
+
+
         {
-          key: "btc",
-          label: "🔵 BTC",
-          color: "#4d9cff"
+          key:
+            "btc",
+
+          label:
+            "🔵 BTC",
+
+          color:
+            "#4d9cff"
         }
+
       ]
     );
 
 
     /* --------------------------------
-       OI + Funding
+       OI / Funding
     -------------------------------- */
 
     drawBaseChart(
       derivatives,
       data,
       [
+
         {
-          key: "oiBtc",
-          label: "🟣 BTC OI",
-          color: "#b56cff"
+          key:
+            "oiBtc",
+
+          label:
+            "🟣 BTC OI",
+
+          color:
+            "#b56cff"
         },
+
+
         {
-          key: "fundingRate",
-          label: "🟢 Funding",
-          color: "#5ee6a8"
+          key:
+            "fundingRate",
+
+          label:
+            "🟢 Funding",
+
+          color:
+            "#5ee6a8"
         }
+
       ]
+    );
+
+
+    /* --------------------------------
+       Risk Warning
+    -------------------------------- */
+
+    updateRiskWarning(
+      data
     );
 
 
@@ -1178,7 +2062,10 @@
     -------------------------------- */
 
     const latest =
-      data[data.length - 1];
+      data[
+        data.length - 1
+      ];
+
 
     const first =
       data[0];
@@ -1193,38 +2080,55 @@
           first[key]
         );
 
+
       const b =
         Number(
           latest[key]
         );
+
 
       if (
         !Number.isFinite(a) ||
         !Number.isFinite(b) ||
         a === 0
       ) {
+
         return null;
+
       }
+
 
       return (
         (
           b / a
         ) - 1
       ) * 100;
+
     }
 
 
     const mstrChange =
-      change("mstr");
+      change(
+        "mstr"
+      );
+
 
     const btcChange =
-      change("btc");
+      change(
+        "btc"
+      );
+
 
     const mnavChange =
-      change("mnav");
+      change(
+        "mnav"
+      );
+
 
     const oiChange =
-      change("oiBtc");
+      change(
+        "oiBtc"
+      );
 
 
     summary.innerHTML = `
@@ -1239,7 +2143,9 @@
 
         <div
           class="history-summary-value"
-          style="color:#ff4d5a">
+          style="
+            color:#ff4d5a;
+          ">
 
           $${fmt(
             latest.mstr
@@ -1247,14 +2153,20 @@
 
           ${
             mstrChange !== null
-              ? `<span
-                   style="font-size:11px">
-                   ${
-                     mstrChange >= 0
-                       ? "+"
-                       : ""
-                   }${mstrChange.toFixed(1)}%
-                 </span>`
+              ? `
+                <span
+                  style="
+                    font-size:11px;
+                  ">
+
+                  ${
+                    mstrChange >= 0
+                      ? "+"
+                      : ""
+                  }${mstrChange.toFixed(1)}%
+
+                </span>
+              `
               : ""
           }
 
@@ -1273,24 +2185,38 @@
 
         <div
           class="history-summary-value"
-          style="color:#f3c64e">
+          style="
+            color:#f3c64e;
+          ">
 
           ${
-            Number(
-              latest.mnav
-            ).toFixed(2)
-          }×
+            Number.isFinite(
+              Number(
+                latest.mnav
+              )
+            )
+              ? Number(
+                  latest.mnav
+                ).toFixed(2) + "×"
+              : "—"
+          }
 
           ${
             mnavChange !== null
-              ? `<span
-                   style="font-size:11px">
-                   ${
-                     mnavChange >= 0
-                       ? "+"
-                       : ""
-                   }${mnavChange.toFixed(1)}%
-                 </span>`
+              ? `
+                <span
+                  style="
+                    font-size:11px;
+                  ">
+
+                  ${
+                    mnavChange >= 0
+                      ? "+"
+                      : ""
+                  }${mnavChange.toFixed(1)}%
+
+                </span>
+              `
               : ""
           }
 
@@ -1309,7 +2235,9 @@
 
         <div
           class="history-summary-value"
-          style="color:#4d9cff">
+          style="
+            color:#4d9cff;
+          ">
 
           $${fmt(
             latest.btc
@@ -1317,14 +2245,20 @@
 
           ${
             btcChange !== null
-              ? `<span
-                   style="font-size:11px">
-                   ${
-                     btcChange >= 0
-                       ? "+"
-                       : ""
-                   }${btcChange.toFixed(1)}%
-                 </span>`
+              ? `
+                <span
+                  style="
+                    font-size:11px;
+                  ">
+
+                  ${
+                    btcChange >= 0
+                      ? "+"
+                      : ""
+                  }${btcChange.toFixed(1)}%
+
+                </span>
+              `
               : ""
           }
 
@@ -1343,7 +2277,9 @@
 
         <div
           class="history-summary-value"
-          style="color:#b56cff">
+          style="
+            color:#b56cff;
+          ">
 
           ${
             Number.isFinite(
@@ -1353,20 +2289,27 @@
             )
               ? fmt(
                   latest.oiBtc
-                ) + " BTC"
+                ) +
+                " BTC"
               : "—"
           }
 
           ${
             oiChange !== null
-              ? `<span
-                   style="font-size:11px">
-                   ${
-                     oiChange >= 0
-                       ? "+"
-                       : ""
-                   }${oiChange.toFixed(1)}%
-                 </span>`
+              ? `
+                <span
+                  style="
+                    font-size:11px;
+                  ">
+
+                  ${
+                    oiChange >= 0
+                      ? "+"
+                      : ""
+                  }${oiChange.toFixed(1)}%
+
+                </span>
+              `
               : ""
           }
 
@@ -1385,7 +2328,9 @@
 
         <div
           class="history-summary-value"
-          style="color:#5ee6a8">
+          style="
+            color:#5ee6a8;
+          ">
 
           ${
             Number.isFinite(
@@ -1393,7 +2338,14 @@
                 latest.fundingRate
               )
             )
-              ? Number(
+              ? (
+                  Number(
+                    latest.fundingRate
+                  ) >= 0
+                    ? "+"
+                    : ""
+                ) +
+                Number(
                   latest.fundingRate
                 ).toFixed(4) +
                 "%"
@@ -1405,6 +2357,7 @@
       </div>
 
     `;
+
   }
 
 
@@ -1421,6 +2374,7 @@
       createSection();
 
       loadHistory();
+
     }
   );
 
