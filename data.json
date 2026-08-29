@@ -1,14 +1,14 @@
 {
-  "updatedAt": "2026-08-23T00:00:00Z",
+  "updatedAt": "2026-08-29T08:50:07.949592+00:00",
   "source": "Strategy / SEC",
   "btcHoldings": 840447,
   "adso": 427.308,
   "fdso": 419.9,
   "btcReserveUsdB": 64.718,
-  "usdReserveUsdB": 5.10,
+  "usdReserveUsdB": 5.1,
   "usdCashUsdB": 1.59,
   "debtUsdB": 6.754,
   "preferredUsdB": 14.966,
   "netReserveUsdB": 49.683,
-  "notes": "Baseline from Strategy Aug. 23, 2026 investor briefing. FDSO is an implied value from Net BPS and may differ from later updates."
+  "notes": "BTC holdings are refreshed from the latest Strategy SEC 8-K when available. Capital-stack values remain at the last verified Strategy baseline until independently parsed."
 }
