@@ -1,8 +1,16 @@
 const state = {
-  data: null
+  data: null,
+  lastBtcPrice: NaN,
+  lastMstrPrice: NaN,
+  lastPriceUpdate: null
 };
 
 const $ = (id) => document.getElementById(id);
+
+
+/* =========================
+   표시 함수
+========================= */
 
 function money(value) {
   if (!Number.isFinite(value)) return "-";
@@ -85,22 +93,16 @@ async function loadData() {
     );
 
     $("dataStatus").textContent =
-      "자동 회사 데이터 불러오기 실패";
+      "회사 데이터 불러오기 실패";
   }
 }
 
 
 /* =========================
-   실시간 가격
+   BTC 가격
 ========================= */
 
-async function loadPrices() {
-
-  let btcPrice = NaN;
-  let mstrPrice = NaN;
-
-
-  /* BTC */
+async function getBtcPrice() {
 
   try {
 
@@ -112,14 +114,23 @@ async function loadPrices() {
     );
 
     if (!response.ok) {
-      throw new Error("CoinGecko error");
+      throw new Error("CoinGecko HTTP " + response.status);
     }
 
     const data =
       await response.json();
 
-    btcPrice =
+    const price =
       Number(data?.bitcoin?.usd);
+
+    if (
+      !Number.isFinite(price) ||
+      price <= 0
+    ) {
+      throw new Error("Invalid BTC price");
+    }
+
+    return price;
 
   } catch (error) {
 
@@ -127,55 +138,237 @@ async function loadPrices() {
       "BTC price error:",
       error
     );
+
+    return NaN;
   }
+}
 
 
-  /* MSTR */
+/* =========================
+   MSTR 가격
+   1순위: Nasdaq
+   2순위: Yahoo
+========================= */
+
+async function getMstrPrice() {
+
+
+  /* -------------------------
+     1. Nasdaq
+  ------------------------- */
 
   try {
 
-    const response = await fetch(
-      "https://query1.finance.yahoo.com/v8/finance/chart/MSTR?range=1d&interval=1m",
-      {
-        cache: "no-store"
-      }
-    );
+    const url =
+      "https://api.nasdaq.com/api/quote/MSTR/info?assetclass=stocks";
+
+    const response =
+      await fetch(
+        url,
+        {
+          cache: "no-store"
+        }
+      );
 
     if (!response.ok) {
-      throw new Error("Yahoo Finance error");
+      throw new Error(
+        "Nasdaq HTTP " +
+        response.status
+      );
     }
 
-    const data =
+    const json =
       await response.json();
 
-    mstrPrice =
-      Number(
-        data?.chart?.result?.[0]
-          ?.meta?.regularMarketPrice
-      );
+    const raw =
+      json?.data?.primaryData?.lastSalePrice;
+
+    if (raw) {
+
+      const price =
+        Number(
+          String(raw)
+            .replace("$", "")
+            .replace(",", "")
+            .trim()
+        );
+
+      if (
+        Number.isFinite(price) &&
+        price > 0
+      ) {
+
+        console.log(
+          "MSTR price source: Nasdaq"
+        );
+
+        return price;
+      }
+    }
 
   } catch (error) {
 
-    console.error(
-      "MSTR price error:",
+    console.warn(
+      "Nasdaq MSTR price failed:",
       error
     );
   }
 
 
-  if (Number.isFinite(btcPrice)) {
+  /* -------------------------
+     2. Yahoo Finance
+  ------------------------- */
+
+  try {
+
+    const url =
+      "https://query1.finance.yahoo.com/v8/finance/chart/MSTR?range=1d&interval=1m&_=" +
+      Date.now();
+
+    const response =
+      await fetch(
+        url,
+        {
+          cache: "no-store"
+        }
+      );
+
+    if (!response.ok) {
+      throw new Error(
+        "Yahoo HTTP " +
+        response.status
+      );
+    }
+
+    const json =
+      await response.json();
+
+    const price =
+      Number(
+        json?.chart?.result?.[0]
+          ?.meta?.regularMarketPrice
+      );
+
+    if (
+      Number.isFinite(price) &&
+      price > 0
+    ) {
+
+      console.log(
+        "MSTR price source: Yahoo"
+      );
+
+      return price;
+    }
+
+  } catch (error) {
+
+    console.warn(
+      "Yahoo MSTR price failed:",
+      error
+    );
+  }
+
+
+  return NaN;
+}
+
+
+/* =========================
+   실시간 가격 갱신
+========================= */
+
+async function loadPrices() {
+
+  const btcPrice =
+    await getBtcPrice();
+
+  const mstrPrice =
+    await getMstrPrice();
+
+
+  /* -------------------------
+     BTC
+  ------------------------- */
+
+  if (
+    Number.isFinite(btcPrice)
+  ) {
+
+    state.lastBtcPrice =
+      btcPrice;
 
     $("btcPrice").value =
       btcPrice;
   }
 
-  if (Number.isFinite(mstrPrice)) {
+
+  /* -------------------------
+     MSTR
+  ------------------------- */
+
+  if (
+    Number.isFinite(mstrPrice)
+  ) {
+
+    state.lastMstrPrice =
+      mstrPrice;
 
     $("mstrPrice").value =
       mstrPrice;
   }
 
+
+  state.lastPriceUpdate =
+    new Date();
+
+
+  /* -------------------------
+     상태 표시
+  ------------------------- */
+
+  updatePriceStatus();
+
   calculate();
+}
+
+
+function updatePriceStatus() {
+
+  const existing =
+    $("priceStatus");
+
+
+  if (!existing) {
+
+    const element =
+      document.createElement("div");
+
+    element.id =
+      "priceStatus";
+
+    element.className =
+      "small";
+
+    element.style.marginTop =
+      "8px";
+
+    $("mstrPrice")
+      .parentElement
+      .appendChild(element);
+  }
+
+
+  const text =
+    state.lastPriceUpdate
+      ? "가격 자동 업데이트: " +
+        state.lastPriceUpdate.toLocaleTimeString(
+          "ko-KR"
+        )
+      : "가격 업데이트 대기 중";
+
+  $("priceStatus").textContent =
+    text;
 }
 
 
@@ -189,6 +382,7 @@ function calculate() {
     return;
   }
 
+
   const btcPrice =
     parseFloat(
       $("btcPrice").value
@@ -199,29 +393,43 @@ function calculate() {
       $("mstrPrice").value
     );
 
+
   const holdings =
-    Number(state.data.btcHoldings);
+    Number(
+      state.data.btcHoldings
+    );
 
   const adso =
-    Number(state.data.adso);
+    Number(
+      state.data.adso
+    );
 
   const fdso =
-    Number(state.data.fdso);
+    Number(
+      state.data.fdso
+    );
 
   const usdAssetsUsdB =
-    Number(state.data.usdAssetsUsdB);
+    Number(
+      state.data.usdAssetsUsdB
+    );
 
   const debtUsdB =
-    Number(state.data.debtUsdB);
+    Number(
+      state.data.debtUsdB
+    );
 
   const preferredUsdB =
-    Number(state.data.preferredUsdB);
+    Number(
+      state.data.preferredUsdB
+    );
 
 
   if (
     !Number.isFinite(btcPrice) ||
     btcPrice <= 0 ||
     !Number.isFinite(holdings) ||
+    !Number.isFinite(adso) ||
     !Number.isFinite(fdso)
   ) {
 
@@ -248,39 +456,50 @@ function calculate() {
 
 
   /* =========================
-     Senior Claims
+     Debt
   ========================= */
 
   const debt =
     debtUsdB *
     1e9;
 
+
+  /* =========================
+     Preferred
+  ========================= */
+
   const preferred =
     preferredUsdB *
     1e9;
 
 
-  const seniorClaims =
-    debt +
-    preferred;
-
-
   /* =========================
      Net Reserve
      
-     BTC + USD Assets
-     - OTM Debt
-     - OTM Preferred
+     BTC
+     + USD Assets
+     - Debt
+     - Preferred
   ========================= */
 
   const netReserveUsd =
     btcValue +
     usdAssets -
-    seniorClaims;
+    debt -
+    preferred;
 
 
   /* =========================
-     BTC / Share
+     Net BTC
+  ========================= */
+
+  const netBtc =
+    netReserveUsd /
+    btcPrice;
+
+
+  /* =========================
+     Gross BPS
   ========================= */
 
   const grossBpsSats =
@@ -289,10 +508,9 @@ function calculate() {
     (adso * 1e6);
 
 
-  const netBtc =
-    netReserveUsd /
-    btcPrice;
-
+  /* =========================
+     Net BPS
+  ========================= */
 
   const netBpsSats =
     netBtc *
@@ -301,7 +519,7 @@ function calculate() {
 
 
   /* =========================
-     USD / Share
+     USD BPS
   ========================= */
 
   const grossBpsUsd =
@@ -322,7 +540,8 @@ function calculate() {
     Number.isFinite(mstrPrice) &&
     mstrPrice > 0 &&
     netBpsUsd > 0
-      ? mstrPrice / netBpsUsd
+      ? mstrPrice /
+        netBpsUsd
       : NaN;
 
 
@@ -370,7 +589,10 @@ function calculate() {
 
   $("seniorClaims").textContent =
     moneyB(
-      seniorClaims / 1e9
+      (
+        debt +
+        preferred
+      ) / 1e9
     );
 
 
@@ -412,6 +634,7 @@ function updateSignal(mnav) {
   const element =
     $("signal");
 
+
   if (!Number.isFinite(mnav)) {
 
     element.textContent =
@@ -450,7 +673,7 @@ function updateSignal(mnav) {
 
 
 /* =========================
-   목표 BTC 가격 계산
+   목표 BTC 가격
 ========================= */
 
 function calculateNetBpsAtBtcPrice(
@@ -458,21 +681,31 @@ function calculateNetBpsAtBtcPrice(
 ) {
 
   const holdings =
-    Number(state.data.btcHoldings);
+    Number(
+      state.data.btcHoldings
+    );
 
   const fdso =
-    Number(state.data.fdso);
+    Number(
+      state.data.fdso
+    );
 
   const usdAssets =
-    Number(state.data.usdAssetsUsdB) *
+    Number(
+      state.data.usdAssetsUsdB
+    ) *
     1e9;
 
   const debt =
-    Number(state.data.debtUsdB) *
+    Number(
+      state.data.debtUsdB
+    ) *
     1e9;
 
   const preferred =
-    Number(state.data.preferredUsdB) *
+    Number(
+      state.data.preferredUsdB
+    ) *
     1e9;
 
 
@@ -542,7 +775,7 @@ function targetPrice() {
 
 
 /* =========================
-   시나리오 테이블
+   시나리오
 ========================= */
 
 function buildScenarioTable() {
@@ -556,7 +789,14 @@ function buildScenarioTable() {
 
 
   const mnavs =
-    [1, 1.25, 1.5, 2, 2.5, 3];
+    [
+      1,
+      1.25,
+      1.5,
+      2,
+      2.5,
+      3
+    ];
 
 
   const prices =
@@ -599,7 +839,6 @@ function buildScenarioTable() {
 
           </tr>
         `;
-
       }
     ).join("");
 }
@@ -641,7 +880,7 @@ document.addEventListener(
 
 
     /*
-      가격은 60초마다 갱신
+      60초마다 가격 갱신
     */
 
     setInterval(
