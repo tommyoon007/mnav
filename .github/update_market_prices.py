@@ -50,7 +50,6 @@ def get_btc_price():
         headers=HEADERS,
         timeout=TIMEOUT
     )
-
     response.raise_for_status()
 
     data = response.json()
@@ -60,9 +59,7 @@ def get_btc_price():
     )
 
     if price <= 0:
-        raise ValueError(
-            "Invalid BTC price"
-        )
+        raise ValueError("Invalid BTC price")
 
     return price
 
@@ -73,16 +70,13 @@ def get_mstr_price():
         headers=HEADERS,
         timeout=TIMEOUT
     )
-
     response.raise_for_status()
 
     data = response.json()
 
     result = data["chart"]["result"][0]
 
-    price = result[
-        "meta"
-    ].get(
+    price = result["meta"].get(
         "regularMarketPrice"
     )
 
@@ -94,85 +88,53 @@ def get_mstr_price():
     price = float(price)
 
     if price <= 0:
-        raise ValueError(
-            "Invalid MSTR price"
-        )
+        raise ValueError("Invalid MSTR price")
 
     return price
 
 
 def main():
 
-    previous =
-        load_previous()
+    previous = load_previous()
 
-    now =
-        datetime.now(
-            timezone.utc
-        ).isoformat()
-
+    now = datetime.now(
+        timezone.utc
+    ).isoformat()
 
     # BTC
     try:
-        btc_price =
-            get_btc_price()
+        btc_price = get_btc_price()
 
-        previous["btcPrice"] =
-            btc_price
+        previous["btcPrice"] = btc_price
+        previous["btcSource"] = "CoinGecko"
 
-        previous["btcSource"] =
-            "CoinGecko"
-
-        print(
-            "BTC:",
-            btc_price
-        )
+        print("BTC:", btc_price)
 
     except Exception as exc:
-
-        print(
-            "BTC price failed:",
-            exc
-        )
-
+        print("BTC price failed:", exc)
 
     # MSTR
     try:
-        mstr_price =
-            get_mstr_price()
+        mstr_price = get_mstr_price()
 
-        previous["mstrPrice"] =
-            mstr_price
+        previous["mstrPrice"] = mstr_price
+        previous["mstrSource"] = "Yahoo Finance"
 
-        previous["mstrSource"] =
-            "Yahoo Finance"
-
-        print(
-            "MSTR:",
-            mstr_price
-        )
+        print("MSTR:", mstr_price)
 
     except Exception as exc:
+        print("MSTR price failed:", exc)
 
-        print(
-            "MSTR price failed:",
-            exc
-        )
-
-
+    # 기존 정상 가격이 하나라도 없으면 실패
     if (
         previous.get("btcPrice") is None
-        or
-        previous.get("mstrPrice") is None
+        or previous.get("mstrPrice") is None
     ):
         raise RuntimeError(
             "No valid market price available"
         )
 
-
-    previous["updatedAt"] =
-        now
-
+    previous["updatedAt"] = now
 
     LIVE_FILE.write_text(
         json.dumps(
@@ -182,7 +144,6 @@ def main():
         ) + "\n",
         encoding="utf-8"
     )
-
 
     print(
         json.dumps(
