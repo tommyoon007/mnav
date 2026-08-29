@@ -18,26 +18,42 @@ COINGECKO_URL = (
     "?ids=bitcoin&vs_currencies=usd"
 )
 
+# BTCUSDT perpetual futures
+BINANCE_OI_URL = (
+    "https://fapi.binance.com/fapi/v1/openInterest"
+    "?symbol=BTCUSDT"
+)
+
+BINANCE_FUNDING_URL = (
+    "https://fapi.binance.com/fapi/v1/fundingRate"
+    "?symbol=BTCUSDT&limit=1"
+)
+
 HEADERS = {
-    "User-Agent": "tommyoon007-mnav-history/1.0"
+    "User-Agent": "tommyoon007-mnav-history/2.0"
 }
 
 TIMEOUT = 20
 
 
 def load_json(path, default):
+
     if not path.exists():
         return default
 
     try:
         return json.loads(
-            path.read_text(encoding="utf-8")
+            path.read_text(
+                encoding="utf-8"
+            )
         )
+
     except Exception:
         return default
 
 
 def save_json(path, data):
+
     path.write_text(
         json.dumps(
             data,
@@ -48,16 +64,24 @@ def save_json(path, data):
     )
 
 
-def get_btc_price():
+def get_json(url):
+
     response = requests.get(
-        COINGECKO_URL,
+        url,
         headers=HEADERS,
         timeout=TIMEOUT
     )
 
     response.raise_for_status()
 
-    data = response.json()
+    return response.json()
+
+
+def get_btc_price():
+
+    data = get_json(
+        COINGECKO_URL
+    )
 
     price = float(
         data["bitcoin"]["usd"]
@@ -72,17 +96,15 @@ def get_btc_price():
 
 
 def get_mstr_price():
-    response = requests.get(
-        YAHOO_URL,
-        headers=HEADERS,
-        timeout=TIMEOUT
+
+    data = get_json(
+        YAHOO_URL
     )
 
-    response.raise_for_status()
-
-    data = response.json()
-
-    result = data["chart"]["result"][0]
+    result = (
+        data["chart"]
+        ["result"][0]
+    )
 
     price = result["meta"].get(
         "regularMarketPrice"
@@ -103,11 +125,53 @@ def get_mstr_price():
     return price
 
 
+def get_open_interest():
+
+    data = get_json(
+        BINANCE_OI_URL
+    )
+
+    oi_btc = float(
+        data["openInterest"]
+    )
+
+    if oi_btc < 0:
+        raise ValueError(
+            "Invalid BTC open interest"
+        )
+
+    return oi_btc
+
+
+def get_funding_rate():
+
+    data = get_json(
+        BINANCE_FUNDING_URL
+    )
+
+    if not data:
+        raise ValueError(
+            "No funding rate returned"
+        )
+
+    rate_decimal = float(
+        data[0]["fundingRate"]
+    )
+
+    # 0.0001 = +0.01%
+    funding_percent = (
+        rate_decimal * 100
+    )
+
+    return funding_percent
+
+
 def calculate_mnav(
     btc_price,
     mstr_price,
     company
 ):
+
     holdings = float(
         company["btcHoldings"]
     )
@@ -156,9 +220,14 @@ def calculate_mnav(
     )
 
     return {
-        "netReserveUsd": net_reserve,
-        "netBpsUsd": net_bps,
-        "mnav": mnav
+        "netReserveUsd":
+            net_reserve,
+
+        "netBpsUsd":
+            net_bps,
+
+        "mnav":
+            mnav
     }
 
 
@@ -174,15 +243,72 @@ def main():
             "data.json not found"
         )
 
-    btc_price = get_btc_price()
+    # --------------------------------
+    # 기본 시장 데이터
+    # --------------------------------
 
-    mstr_price = get_mstr_price()
+    btc_price = (
+        get_btc_price()
+    )
+
+    mstr_price = (
+        get_mstr_price()
+    )
 
     result = calculate_mnav(
         btc_price,
         mstr_price,
         company
     )
+
+    # --------------------------------
+    # OI
+    # --------------------------------
+
+    oi_btc = None
+    oi_usd = None
+
+    try:
+
+        oi_btc = (
+            get_open_interest()
+        )
+
+        oi_usd = (
+            oi_btc *
+            btc_price
+        )
+
+    except Exception as error:
+
+        print(
+            "WARNING: "
+            f"OI unavailable: {error}"
+        )
+
+    # --------------------------------
+    # Funding
+    # --------------------------------
+
+    funding_rate = None
+
+    try:
+
+        funding_rate = (
+            get_funding_rate()
+        )
+
+    except Exception as error:
+
+        print(
+            "WARNING: "
+            f"Funding unavailable: "
+            f"{error}"
+        )
+
+    # --------------------------------
+    # 날짜
+    # --------------------------------
 
     now = datetime.now(
         timezone.utc
@@ -192,50 +318,113 @@ def main():
         "%Y-%m-%d"
     )
 
+    # --------------------------------
+    # 기존 history
+    # --------------------------------
+
     history = load_json(
         HISTORY_FILE,
         []
     )
 
-    if not isinstance(history, list):
+    if not isinstance(
+        history,
+        list
+    ):
         history = []
 
+    # --------------------------------
+    # 새 기록
+    # --------------------------------
+
     record = {
-        "date": date_key,
-        "timestamp": now.isoformat(),
-        "btc": round(
-            btc_price,
-            2
-        ),
-        "mstr": round(
-            mstr_price,
-            2
-        ),
-        "mnav": round(
-            result["mnav"],
-            4
-        ),
-        "netBpsUsd": round(
-            result["netBpsUsd"],
-            2
-        )
+
+        "date":
+            date_key,
+
+        "timestamp":
+            now.isoformat(),
+
+        "btc":
+            round(
+                btc_price,
+                2
+            ),
+
+        "mstr":
+            round(
+                mstr_price,
+                2
+            ),
+
+        "mnav":
+            round(
+                result["mnav"],
+                4
+            ),
+
+        "netBpsUsd":
+            round(
+                result["netBpsUsd"],
+                2
+            ),
+
+        "oiBtc":
+            (
+                round(
+                    oi_btc,
+                    2
+                )
+                if oi_btc is not None
+                else None
+            ),
+
+        "oiUsd":
+            (
+                round(
+                    oi_usd,
+                    2
+                )
+                if oi_usd is not None
+                else None
+            ),
+
+        "fundingRate":
+            (
+                round(
+                    funding_rate,
+                    5
+                )
+                if funding_rate is not None
+                else None
+            )
     }
 
-    # 같은 날짜 데이터가 이미 있으면 교체
+    # --------------------------------
+    # 같은 날짜 데이터 교체
+    # --------------------------------
+
     history = [
+
         item
+
         for item in history
-        if item.get("date") != date_key
+
+        if item.get(
+            "date"
+        ) != date_key
     ]
 
-    history.append(record)
+    history.append(
+        record
+    )
 
-    # 날짜순 정렬
     history.sort(
-        key=lambda x: x.get(
-            "date",
-            ""
-        )
+        key=lambda x:
+            x.get(
+                "date",
+                ""
+            )
     )
 
     save_json(
@@ -252,7 +441,8 @@ def main():
     )
 
     print(
-        f"History records: {len(history)}"
+        "History records: "
+        f"{len(history)}"
     )
 
 
