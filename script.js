@@ -682,6 +682,69 @@ function buildScenarioTable() {
     ).join("");
 }
 
+/* =========================
+   빠른 시나리오 버튼
+========================= */
+
+function scenario(btcPrice) {
+
+  const targetBtc =
+    $("targetBtcPrice");
+
+  const targetMnav =
+    $("targetMnav");
+
+  if (!targetBtc || !targetMnav) {
+    return;
+  }
+
+  /* BTC 목표가격 자동 입력 */
+  targetBtc.value =
+    btcPrice;
+
+  /* 목표 mNAV가 비어 있으면 1.5 */
+  const currentMnav =
+    parseFloat(
+      targetMnav.value
+    );
+
+  if (
+    !Number.isFinite(currentMnav) ||
+    currentMnav <= 0
+  ) {
+    targetMnav.value = "1.5";
+  }
+
+  /* 저장 */
+  localStorage.setItem(
+    "mnav_target_btc",
+    targetBtc.value
+  );
+
+  localStorage.setItem(
+    "mnav_target_mnav",
+    targetMnav.value
+  );
+
+  /* 계산 */
+  targetPrice();
+
+  /* 화면 이동 */
+  const section =
+    document.querySelector(
+      ".quick-calc-section"
+    );
+
+  if (section) {
+
+    window.scrollTo({
+      top:
+        section.offsetTop - 15,
+      behavior: "smooth"
+    });
+  }
+}
+
 
 /* =========================
    시작
