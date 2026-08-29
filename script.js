@@ -5,6 +5,11 @@ const state = {
 
 const $ = (id) => document.getElementById(id);
 
+
+/* =========================
+   표시 함수
+========================= */
+
 function money(value) {
   if (!Number.isFinite(value)) return "-";
 
@@ -53,40 +58,49 @@ async function loadCompanyData() {
 
     state.data = await response.json();
 
-    $("btcHoldings").value =
-      state.data.btcHoldings ?? "";
+    if ($("btcHoldings")) {
+      $("btcHoldings").value =
+        state.data.btcHoldings ?? "";
+      $("btcHoldings").readOnly = true;
+    }
 
-    $("assumedShares").value =
-      state.data.adso ?? "";
+    if ($("assumedShares")) {
+      $("assumedShares").value =
+        state.data.adso ?? "";
+      $("assumedShares").readOnly = true;
+    }
 
-    $("fullyDilutedShares").value =
-      state.data.fdso ?? "";
+    if ($("fullyDilutedShares")) {
+      $("fullyDilutedShares").value =
+        state.data.fdso ?? "";
+      $("fullyDilutedShares").readOnly = true;
+    }
 
-    $("btcHoldings").readOnly = true;
-    $("assumedShares").readOnly = true;
-    $("fullyDilutedShares").readOnly = true;
+    if ($("dataStatus")) {
+      const companyTime =
+        state.data.updatedAt
+          ? new Date(
+              state.data.updatedAt
+            ).toLocaleString("ko-KR")
+          : "정보 없음";
 
-    const companyTime =
-      state.data.updatedAt
-        ? new Date(state.data.updatedAt)
-            .toLocaleString("ko-KR")
-        : "정보 없음";
-
-    $("dataStatus").textContent =
-      "회사 데이터: " + companyTime;
+      $("dataStatus").textContent =
+        "회사 데이터: " + companyTime;
+    }
 
   } catch (error) {
     console.error(error);
 
-    $("dataStatus").textContent =
-      "회사 데이터 불러오기 실패";
+    if ($("dataStatus")) {
+      $("dataStatus").textContent =
+        "회사 데이터 불러오기 실패";
+    }
   }
 }
 
 
 /* =========================
-   실시간에 가까운 가격 데이터
-   live.json은 GitHub Actions가 생성
+   실시간 가격
 ========================= */
 
 async function loadLivePrices() {
@@ -97,7 +111,9 @@ async function loadLivePrices() {
     );
 
     if (!response.ok) {
-      throw new Error("live.json " + response.status);
+      throw new Error(
+        "live.json " + response.status
+      );
     }
 
     state.live = await response.json();
@@ -110,36 +126,45 @@ async function loadLivePrices() {
 
     if (
       Number.isFinite(btcPrice) &&
-      btcPrice > 0
+      btcPrice > 0 &&
+      $("btcPrice")
     ) {
-      $("btcPrice").value = btcPrice;
+      $("btcPrice").value =
+        btcPrice;
+      $("btcPrice").readOnly = true;
     }
 
     if (
       Number.isFinite(mstrPrice) &&
-      mstrPrice > 0
+      mstrPrice > 0 &&
+      $("mstrPrice")
     ) {
-      $("mstrPrice").value = mstrPrice;
+      $("mstrPrice").value =
+        mstrPrice;
+      $("mstrPrice").readOnly = true;
     }
-
-    $("btcPrice").readOnly = true;
-    $("mstrPrice").readOnly = true;
 
     updatePriceStatus();
 
     calculate();
 
   } catch (error) {
+
     console.error(
       "Live price error:",
       error
     );
 
     updatePriceStatus(true);
+
     calculate();
   }
 }
 
+
+/* =========================
+   가격 상태
+========================= */
 
 function updatePriceStatus(error = false) {
 
@@ -173,8 +198,10 @@ function updatePriceStatus(error = false) {
   }
 
   if (error) {
+
     element.textContent =
       "가격 자동 업데이트 실패 — 마지막 데이터 사용";
+
     return;
   }
 
@@ -207,12 +234,12 @@ function calculate() {
 
   const btcPrice =
     parseFloat(
-      $("btcPrice").value
+      $("btcPrice")?.value
     );
 
   const mstrPrice =
     parseFloat(
-      $("mstrPrice").value
+      $("mstrPrice")?.value
     );
 
   const holdings =
@@ -304,57 +331,79 @@ function calculate() {
       : NaN;
 
 
-  $("grossBpsSats").textContent =
-    sats(grossBpsSats);
+  if ($("grossBpsSats")) {
+    $("grossBpsSats").textContent =
+      sats(grossBpsSats);
+  }
 
-  $("netBpsSats").textContent =
-    sats(netBpsSats);
+  if ($("netBpsSats")) {
+    $("netBpsSats").textContent =
+      sats(netBpsSats);
+  }
 
-  $("netBpsUsd").textContent =
-    money(netBpsUsd);
+  if ($("netBpsUsd")) {
+    $("netBpsUsd").textContent =
+      money(netBpsUsd);
+  }
 
-  $("mnavMultiple").textContent =
-    Number.isFinite(mnav)
-      ? mnav.toFixed(2) + "×"
-      : "-";
+  if ($("mnavMultiple")) {
+    $("mnavMultiple").textContent =
+      Number.isFinite(mnav)
+        ? mnav.toFixed(2) + "×"
+        : "-";
+  }
 
-  $("premium").textContent =
-    Number.isFinite(mnav)
-      ? (
-          (mnav - 1) * 100
-        ).toFixed(1) +
-        "% " +
-        (
-          mnav >= 1
-            ? "프리미엄"
-            : "디스카운트"
-        )
-      : "-";
+  if ($("premium")) {
+    $("premium").textContent =
+      Number.isFinite(mnav)
+        ? (
+            (mnav - 1) * 100
+          ).toFixed(1) +
+          "% " +
+          (
+            mnav >= 1
+              ? "프리미엄"
+              : "디스카운트"
+          )
+        : "-";
+  }
 
-  $("btcTotalValue").textContent =
-    moneyB(btcValue / 1e9);
+  if ($("btcTotalValue")) {
+    $("btcTotalValue").textContent =
+      moneyB(btcValue / 1e9);
+  }
 
-  $("seniorClaims").textContent =
-    moneyB(
-      (debt + preferred) / 1e9
-    );
+  if ($("seniorClaims")) {
+    $("seniorClaims").textContent =
+      moneyB(
+        (debt + preferred) / 1e9
+      );
+  }
 
-  $("reserveValue").textContent =
-    moneyB(usdAssets / 1e9);
+  if ($("reserveValue")) {
+    $("reserveValue").textContent =
+      moneyB(usdAssets / 1e9);
+  }
 
-  $("netBtc").textContent =
-    btc(netBtc);
+  if ($("netBtc")) {
+    $("netBtc").textContent =
+      btc(netBtc);
+  }
 
-  $("grossBpsUsd").textContent =
-    money(grossBpsUsd);
+  if ($("grossBpsUsd")) {
+    $("grossBpsUsd").textContent =
+      money(grossBpsUsd);
+  }
 
-  $("fdsoDisplay").textContent =
-    fdso.toLocaleString(
-      "en-US",
-      {
-        maximumFractionDigits: 3
-      }
-    ) + "M";
+  if ($("fdsoDisplay")) {
+    $("fdsoDisplay").textContent =
+      fdso.toLocaleString(
+        "en-US",
+        {
+          maximumFractionDigits: 3
+        }
+      ) + "M";
+  }
 
   updateSignal(mnav);
 
@@ -371,25 +420,38 @@ function updateSignal(mnav) {
   const element =
     $("signal");
 
+  if (!element) return;
+
   if (!Number.isFinite(mnav)) {
+
     element.textContent =
       "MSTR 가격 데이터를 기다리는 중";
+
     return;
   }
 
   if (mnav >= 3) {
+
     element.textContent =
       "🔴 3× 이상 — 매우 높은 프리미엄";
+
   } else if (mnav >= 2) {
+
     element.textContent =
       "🟠 2–3× — 높은 프리미엄";
+
   } else if (mnav >= 1.5) {
+
     element.textContent =
       "🟡 1.5–2× — 중간 프리미엄";
+
   } else if (mnav >= 1) {
+
     element.textContent =
       "🟢 1–1.5× — 비교적 낮은 프리미엄";
+
   } else {
+
     element.textContent =
       "🔵 1× 미만 — Net BTC 가치보다 낮음";
   }
@@ -397,12 +459,86 @@ function updateSignal(mnav) {
 
 
 /* =========================
-   목표 BTC 가격
+   목표값 저장
+========================= */
+
+function loadSavedTargets() {
+
+  const savedBtc =
+    localStorage.getItem(
+      "mnav_target_btc"
+    );
+
+  const savedMnav =
+    localStorage.getItem(
+      "mnav_target_mnav"
+    );
+
+  if (
+    savedBtc !== null &&
+    $("targetBtcPrice")
+  ) {
+    $("targetBtcPrice").value =
+      savedBtc;
+  }
+
+  if (
+    savedMnav !== null &&
+    $("targetMnav")
+  ) {
+    $("targetMnav").value =
+      savedMnav;
+  }
+
+  targetPrice();
+}
+
+
+function saveTargetBtc() {
+
+  const value =
+    $("targetBtcPrice")?.value;
+
+  if (value !== undefined) {
+
+    localStorage.setItem(
+      "mnav_target_btc",
+      value
+    );
+  }
+
+  targetPrice();
+}
+
+
+function saveTargetMnav() {
+
+  const value =
+    $("targetMnav")?.value;
+
+  if (value !== undefined) {
+
+    localStorage.setItem(
+      "mnav_target_mnav",
+      value
+    );
+  }
+
+  targetPrice();
+}
+
+
+/* =========================
+   목표 BTC 가격 계산
 ========================= */
 
 function calculateNetBpsAtBtcPrice(
   targetBtcPrice
 ) {
+
+  if (!state.data) {
+    return NaN;
+  }
 
   const holdings =
     Number(
@@ -449,6 +585,13 @@ function calculateNetBpsAtBtcPrice(
 
 function targetPrice() {
 
+  if (
+    !$("targetBtcPrice") ||
+    !$("targetMnav")
+  ) {
+    return;
+  }
+
   const targetBtc =
     parseFloat(
       $("targetBtcPrice").value
@@ -476,11 +619,15 @@ function targetPrice() {
   const predicted =
     netBps * targetMnav;
 
-  $("predictedMstrPrice").textContent =
-    money(predicted);
+  if ($("predictedMstrPrice")) {
+    $("predictedMstrPrice").textContent =
+      money(predicted);
+  }
 
-  $("predictedNetBps").textContent =
-    `BTC ${money(targetBtc)} → Net BPS ${money(netBps)} × ${targetMnav.toFixed(2)}×`;
+  if ($("predictedNetBps")) {
+    $("predictedNetBps").textContent =
+      `BTC ${money(targetBtc)} → Net BPS ${money(netBps)} × ${targetMnav.toFixed(2)}×`;
+  }
 }
 
 
@@ -493,7 +640,9 @@ function buildScenarioTable() {
   const tbody =
     $("scenarioTable");
 
-  if (!state.data) return;
+  if (!tbody || !state.data) {
+    return;
+  }
 
   const mnavs =
     [1, 1.25, 1.5, 2, 2.5, 3];
@@ -526,6 +675,7 @@ function buildScenarioTable() {
                   netBps * mnav
                 )}</td>`
             ).join("")}
+
           </tr>
         `;
       }
@@ -545,22 +695,25 @@ document.addEventListener(
 
     await loadLivePrices();
 
+    /* 목표값 자동 저장 */
+
     $("targetBtcPrice")
       ?.addEventListener(
         "input",
-        targetPrice
+        saveTargetBtc
       );
 
     $("targetMnav")
       ?.addEventListener(
         "input",
-        targetPrice
+        saveTargetMnav
       );
 
-    /*
-      live.json은 5분마다 GitHub Actions가
-      새로 생성하지만, 앱은 1분마다 확인한다.
-    */
+    /* 저장된 목표값 불러오기 */
+
+    loadSavedTargets();
+
+    /* 1분마다 실시간 가격 확인 */
 
     setInterval(
       loadLivePrices,
