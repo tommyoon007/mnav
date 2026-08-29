@@ -3,8 +3,9 @@ name: Update MSTR mNAV data
 on:
   workflow_dispatch:
 
+  # 매일 00:00 UTC = 한국시간 매일 오전 9시
   schedule:
-    - cron: "0 0 * * 1"
+    - cron: "0 0 * * *"
 
 permissions:
   contents: write
