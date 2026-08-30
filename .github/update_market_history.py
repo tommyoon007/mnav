@@ -89,7 +89,7 @@ OKX_FUNDING_URL = (
 
 HEADERS = {
     "User-Agent":
-        "tommyoon007-mnav-history/8.0 "
+        "tommyoon007-mnav-history/7.0 "
         "(investment dashboard)",
     "Accept":
         "application/json,text/html"
@@ -141,10 +141,7 @@ def save_json(path, data):
 # HTTP
 # =========================================================
 
-def get_response(
-    url,
-    headers=None
-):
+def get_response(url, headers=None):
 
     response = requests.get(
         url,
@@ -163,7 +160,7 @@ def get_json(url):
 
 
 # =========================================================
-# SEC HELPERS
+# SEC
 # =========================================================
 
 def sec_get_text(url):
@@ -172,7 +169,7 @@ def sec_get_text(url):
         url,
         headers={
             "User-Agent":
-                "tommyoon007-mnav-history/8.0 "
+                "tommyoon007-mnav-history/7.0 "
                 "(investment dashboard)"
         },
         timeout=TIMEOUT
@@ -197,18 +194,13 @@ def normalize_number(text):
     )
 
     try:
-
         return float(text)
 
     except Exception:
-
         return None
 
 
-def find_number(
-    patterns,
-    text
-):
+def find_number(patterns, text):
 
     for pattern in patterns:
 
@@ -233,7 +225,7 @@ def find_number(
 
 
 # =========================================================
-# SEC RECENT 8-K
+# SEC LATEST 8-K
 # =========================================================
 
 def get_latest_8k_filings():
@@ -307,7 +299,7 @@ def get_latest_8k_filings():
 
 
 # =========================================================
-# SEC DOCUMENT
+# SEC 8-K DOCUMENT
 # =========================================================
 
 def get_8k_document(
@@ -378,7 +370,7 @@ def find_investor_briefing():
 
 
         # -------------------------------------------------
-        # Exhibits
+        # Exhibit links
         # -------------------------------------------------
 
         links = re.findall(
@@ -392,13 +384,9 @@ def find_investor_briefing():
             link = link.split("#")[0]
 
             if (
-                link.startswith(
-                    "http://"
-                )
+                link.startswith("http://")
                 or
-                link.startswith(
-                    "https://"
-                )
+                link.startswith("https://")
             ):
 
                 url = link
@@ -436,12 +424,11 @@ def find_investor_briefing():
                     filing
                 )
 
-
     return None, None
 
 
 # =========================================================
-# STRATEGY CAPITAL DATA
+# SEC CAPITAL DATA
 # =========================================================
 
 def get_strategy_capital_data():
@@ -466,14 +453,9 @@ def get_strategy_capital_data():
 
     text = (
         text
-        .replace(
-            "&nbsp;",
-            " "
-        )
-        .replace(
-            "&#160;",
-            " "
-        )
+        .replace("&nbsp;", " ")
+        .replace("&#160;", " ")
+        .replace("&amp;", "&")
     )
 
     text = re.sub(
@@ -483,9 +465,9 @@ def get_strategy_capital_data():
     )
 
 
-    # -----------------------------------------------------
+    # =====================================================
     # BTC HOLDINGS
-    # -----------------------------------------------------
+    # =====================================================
 
     btc_holdings = find_number(
         [
@@ -504,9 +486,9 @@ def get_strategy_capital_data():
     )
 
 
-    # -----------------------------------------------------
+    # =====================================================
     # USD RESERVE
-    # -----------------------------------------------------
+    # =====================================================
 
     usd_reserve = find_number(
         [
@@ -516,16 +498,16 @@ def get_strategy_capital_data():
             r"\s*B",
 
             r"USD Reserve.*?"
-            r"([0-9]+\.[0-9]+)"
+            r"([0-9]+(?:\.[0-9]+)?)"
             r"\s*billion"
         ],
         text
     )
 
 
-    # -----------------------------------------------------
+    # =====================================================
     # USD CASH
-    # -----------------------------------------------------
+    # =====================================================
 
     usd_cash = find_number(
         [
@@ -535,16 +517,16 @@ def get_strategy_capital_data():
             r"\s*B",
 
             r"USD Cash.*?"
-            r"([0-9]+\.[0-9]+)"
+            r"([0-9]+(?:\.[0-9]+)?)"
             r"\s*billion"
         ],
         text
     )
 
 
-    # -----------------------------------------------------
+    # =====================================================
     # USD ASSETS
-    # -----------------------------------------------------
+    # =====================================================
 
     usd_assets = find_number(
         [
@@ -554,78 +536,73 @@ def get_strategy_capital_data():
             r"\s*B",
 
             r"USD Assets.*?"
-            r"([0-9]+\.[0-9]+)"
+            r"([0-9]+(?:\.[0-9]+)?)"
             r"\s*billion"
         ],
         text
     )
 
 
-    # -----------------------------------------------------
+    # =====================================================
     # DEBT
-    # -----------------------------------------------------
+    # =====================================================
 
     debt = find_number(
         [
 
             r"Debt.*?"
             r"\$?\s*([0-9]+(?:\.[0-9]+)?)"
-            r"\s*B"
-            r".{0,100}"
-            r"notional",
+            r"\s*B",
 
             r"Debt.*?"
-            r"\$?\s*([0-9]+\.[0-9]+)"
+            r"([0-9]+(?:\.[0-9]+)?)"
             r"\s*billion"
         ],
         text
     )
 
 
-    # -----------------------------------------------------
+    # =====================================================
     # PREFERRED
-    # -----------------------------------------------------
+    # =====================================================
 
     preferred = find_number(
         [
 
             r"Preferred stock.*?"
             r"\$?\s*([0-9]+(?:\.[0-9]+)?)"
-            r"\s*B"
-            r".{0,100}"
-            r"notional",
+            r"\s*B",
 
             r"Preferred stock.*?"
-            r"\$?\s*([0-9]+\.[0-9]+)"
+            r"([0-9]+(?:\.[0-9]+)?)"
             r"\s*billion"
         ],
         text
     )
 
 
-    # -----------------------------------------------------
+    # =====================================================
     # FDSO
-    # -----------------------------------------------------
+    # =====================================================
 
-    fdso = find_number(
+    fdso_millions = find_number(
         [
+
+            r"([0-9]+\.[0-9]+)\s*M\s*FDSO",
 
             r"([0-9]+\.[0-9]+)M"
             r"\s*FDSO",
 
             r"([0-9]+\.[0-9]+)\s*M"
-            r"\s*FDSO",
-
-            r"([0-9]+\.[0-9]+)M"
             r"\s*fully diluted shares"
         ],
         text
     )
 
 
-    # -----------------------------------------------------
+    # =====================================================
     # VALIDATION
-    # -----------------------------------------------------
+    # =====================================================
 
     if btc_holdings is None:
 
@@ -633,11 +610,13 @@ def get_strategy_capital_data():
             "SEC parser could not find BTC holdings"
         )
 
+
     if debt is None:
 
         raise RuntimeError(
             "SEC parser could not find debt"
         )
+
 
     if preferred is None:
 
@@ -645,16 +624,17 @@ def get_strategy_capital_data():
             "SEC parser could not find preferred stock"
         )
 
-    if fdso is None:
+
+    if fdso_millions is None:
 
         raise RuntimeError(
             "SEC parser could not find FDSO"
         )
 
 
-    # -----------------------------------------------------
-    # USD ASSET FALLBACK
-    # -----------------------------------------------------
+    # =====================================================
+    # USD ASSETS FALLBACK
+    # =====================================================
 
     if usd_assets is None:
 
@@ -676,6 +656,31 @@ def get_strategy_capital_data():
         raise RuntimeError(
             "SEC parser could not find USD Assets"
         )
+
+
+    # =====================================================
+    # FDSO UNIT CONVERSION
+    #
+    # IMPORTANT:
+    #
+    # SEC gives FDSO in MILLIONS.
+    #
+    # Example:
+    #
+    # 419.9 M
+    #
+    # becomes:
+    #
+    # 419,900,000 shares
+    #
+    # We store ONLY the actual share count.
+    # =====================================================
+
+    fdso = (
+        fdso_millions
+        *
+        1_000_000
+    )
 
 
     return {
@@ -706,9 +711,10 @@ def get_strategy_capital_data():
             ),
 
         "fdso":
-            round(
-                fdso * 1_000_000,
-                0
+            int(
+                round(
+                    fdso
+                )
             ),
 
         "source":
@@ -732,6 +738,7 @@ def update_data_json():
         {}
     )
 
+
     try:
 
         latest = (
@@ -744,15 +751,33 @@ def update_data_json():
             dict
         ):
 
-            old_data.update(
+            data = old_data.copy()
+
+            data.update(
                 latest
             )
-
-            data = old_data
 
         else:
 
             data = latest
+
+
+        # -------------------------------------------------
+        # SAFETY CHECK
+        #
+        # FDSO must be actual shares.
+        # -------------------------------------------------
+
+        fdso = float(
+            data["fdso"]
+        )
+
+        if fdso < 100_000_000:
+
+            raise RuntimeError(
+                "FDSO safety check failed. "
+                "Expected actual share count."
+            )
 
 
         save_json(
@@ -795,7 +820,7 @@ def update_data_json():
 
         print(
             "SEC date:",
-            data.get("asOf")
+            data["asOf"]
         )
 
         return data
@@ -851,21 +876,12 @@ def get_mstr_price():
     )
 
     result = (
-        data
-        .get("chart", {})
-        .get("result", [None])[0]
+        data["chart"]
+        ["result"][0]
     )
 
-    if not result:
-
-        raise ValueError(
-            "Yahoo returned no MSTR data"
-        )
-
-    price = (
-        result
-        .get("meta", {})
-        .get("regularMarketPrice")
+    price = result["meta"].get(
+        "regularMarketPrice"
     )
 
     if price is None:
@@ -920,11 +936,13 @@ def get_binance_funding():
             "No Binance funding data"
         )
 
-    rate = float(
-        data[0]["fundingRate"]
+    return (
+        float(
+            data[0]["fundingRate"]
+        )
+        *
+        100.0
     )
-
-    return rate * 100.0
 
 
 # =========================================================
@@ -959,10 +977,11 @@ def get_bybit_data():
         float(
             row["fundingRate"]
         )
-        * 100.0
+        *
+        100.0
     )
 
-    if oi_usd <= 0:
+    if oi_usd < 0:
 
         raise ValueError(
             "Invalid Bybit OI"
@@ -999,7 +1018,7 @@ def get_okx_oi():
         rows[0]["oiUsd"]
     )
 
-    if oi_usd <= 0:
+    if oi_usd < 0:
 
         raise ValueError(
             "Invalid OKX OI"
@@ -1025,18 +1044,17 @@ def get_okx_funding():
             "No OKX funding data"
         )
 
-    funding = (
+    return (
         float(
             rows[0]["fundingRate"]
         )
-        * 100.0
+        *
+        100.0
     )
-
-    return funding
 
 
 # =========================================================
-# mNAV
+# mNAV CALCULATION
 # =========================================================
 
 def calculate_mnav(
@@ -1044,6 +1062,20 @@ def calculate_mnav(
     mstr_price,
     company
 ):
+
+    # -----------------------------------------------------
+    # IMPORTANT:
+    #
+    # holdings = BTC count
+    #
+    # fdso = ACTUAL NUMBER OF SHARES
+    #
+    # Example:
+    #
+    # 419,900,000 shares
+    #
+    # NEVER multiply fdso by 1,000,000 here.
+    # -----------------------------------------------------
 
     holdings = float(
         company["btcHoldings"]
@@ -1057,36 +1089,59 @@ def calculate_mnav(
         float(
             company["usdAssetsUsdB"]
         )
-        * 1e9
+        *
+        1e9
     )
 
     debt = (
         float(
             company["debtUsdB"]
         )
-        * 1e9
+        *
+        1e9
     )
 
     preferred = (
         float(
             company["preferredUsdB"]
         )
-        * 1e9
+        *
+        1e9
     )
 
 
     # -----------------------------------------------------
-    # BTC value
+    # SAFETY
+    # -----------------------------------------------------
+
+    if fdso < 100_000_000:
+
+        raise ValueError(
+            "FDSO is invalid. "
+            "Expected actual share count."
+        )
+
+
+    if holdings <= 0:
+
+        raise ValueError(
+            "Invalid BTC holdings"
+        )
+
+
+    # -----------------------------------------------------
+    # BTC VALUE
     # -----------------------------------------------------
 
     btc_value = (
-        holdings *
+        holdings
+        *
         btc_price
     )
 
 
     # -----------------------------------------------------
-    # Net reserve
+    # NET RESERVE
     # -----------------------------------------------------
 
     net_reserve = (
@@ -1101,35 +1156,36 @@ def calculate_mnav(
 
 
     # -----------------------------------------------------
-    # Per share
+    # PER SHARE VALUES
     # -----------------------------------------------------
 
     gross_bps = (
-        btc_value /
+        btc_value
+        /
         fdso
     )
 
     net_bps = (
-        net_reserve /
+        net_reserve
+        /
         fdso
     )
 
 
     # -----------------------------------------------------
-    # BTC per share
+    # BTC PER SHARE
     # -----------------------------------------------------
 
     btc_per_share = (
-        holdings /
+        holdings
+        /
         fdso
     )
 
 
-    if net_bps <= 0:
-
-        raise ValueError(
-            "Invalid Net BPS"
-        )
+    # -----------------------------------------------------
+    # VALIDATION
+    # -----------------------------------------------------
 
     if gross_bps <= 0:
 
@@ -1138,17 +1194,27 @@ def calculate_mnav(
         )
 
 
+    if net_bps <= 0:
+
+        raise ValueError(
+            "Invalid Net BPS"
+        )
+
+
     # -----------------------------------------------------
     # mNAV
     # -----------------------------------------------------
 
     mnav = (
-        mstr_price /
+        mstr_price
+        /
         net_bps
     )
 
+
     gross_mnav = (
-        mstr_price /
+        mstr_price
+        /
         gross_bps
     )
 
@@ -1203,19 +1269,14 @@ def get_previous_record(
     )
 
 
-    target_key = (
-        target.strftime(
-            "%Y-%m-%d"
-        )
+    target_key = target.strftime(
+        "%Y-%m-%d"
     )
 
 
     candidates = [
-
         item
-
         for item in history
-
         if item.get(
             "date",
             ""
@@ -1264,14 +1325,15 @@ def percentage_change(
         return None
 
 
-    if previous <= 0:
+    if previous == 0:
 
         return None
 
 
     return (
         (
-            current /
+            current
+            /
             previous
         )
         -
@@ -1336,17 +1398,15 @@ def calculate_mnav_percentile(
 
 
     below_or_equal = sum(
-
         1
-
         for value in values
-
         if value <= current
     )
 
 
     return (
-        below_or_equal /
+        below_or_equal
+        /
         len(values)
     ) * 100.0
 
@@ -1390,7 +1450,7 @@ def calculate_risk_score(
 
 
     # -----------------------------------------------------
-    # Funding
+    # FUNDING
     # -----------------------------------------------------
 
     if funding_rate is not None:
@@ -1492,7 +1552,7 @@ def calculate_risk_score(
 
 
     # -----------------------------------------------------
-    # Limit
+    # CAP
     # -----------------------------------------------------
 
     score = min(
@@ -1505,7 +1565,7 @@ def calculate_risk_score(
 
 
     # -----------------------------------------------------
-    # Level
+    # LEVEL
     # -----------------------------------------------------
 
     if score < 25:
@@ -1547,7 +1607,7 @@ def main():
     )
 
     print(
-        "MSTR Market History Update v8.0"
+        "MSTR Market History Update v7"
     )
 
     print(
@@ -1557,7 +1617,7 @@ def main():
 
     # =====================================================
     # STEP 1
-    # SEC
+    # SEC AUTO UPDATE
     # =====================================================
 
     company = (
@@ -1574,7 +1634,7 @@ def main():
 
     # =====================================================
     # STEP 2
-    # MARKET
+    # MARKET DATA
     # =====================================================
 
     btc_price = (
@@ -1627,36 +1687,36 @@ def main():
     funding_values = []
 
 
-    # =====================================================
-    # BINANCE
-    # =====================================================
+    # -----------------------------------------------------
+    # Binance
+    # -----------------------------------------------------
 
     try:
 
-        binance_oi_btc = (
+        oi_btc = (
             get_binance_oi()
         )
 
-
-        binance_oi_usd = (
-            binance_oi_btc *
+        oi_usd = (
+            oi_btc
+            *
             btc_price
         )
 
 
-        if binance_oi_usd > 0:
+        if oi_usd > 0:
 
             oi_values.append(
                 (
                     "Binance",
-                    binance_oi_usd
+                    oi_usd
                 )
             )
 
 
             try:
 
-                binance_funding = (
+                funding = (
                     get_binance_funding()
                 )
 
@@ -1664,8 +1724,8 @@ def main():
                 funding_values.append(
                     (
                         "Binance",
-                        binance_funding,
-                        binance_oi_usd
+                        funding,
+                        oi_usd
                     )
                 )
 
@@ -1686,24 +1746,24 @@ def main():
         )
 
 
-    # =====================================================
-    # BYBIT
-    # =====================================================
+    # -----------------------------------------------------
+    # Bybit
+    # -----------------------------------------------------
 
     try:
 
         (
-            bybit_oi_usd,
-            bybit_funding
+            oi_usd,
+            funding
         ) = get_bybit_data()
 
 
-        if bybit_oi_usd > 0:
+        if oi_usd > 0:
 
             oi_values.append(
                 (
                     "Bybit",
-                    bybit_oi_usd
+                    oi_usd
                 )
             )
 
@@ -1711,8 +1771,8 @@ def main():
             funding_values.append(
                 (
                     "Bybit",
-                    bybit_funding,
-                    bybit_oi_usd
+                    funding,
+                    oi_usd
                 )
             )
 
@@ -1725,26 +1785,26 @@ def main():
         )
 
 
-    # =====================================================
+    # -----------------------------------------------------
     # OKX
-    # =====================================================
+    # -----------------------------------------------------
 
-    okx_oi_usd = None
+    okx_oi = None
 
 
     try:
 
-        okx_oi_usd = (
+        okx_oi = (
             get_okx_oi()
         )
 
 
-        if okx_oi_usd > 0:
+        if okx_oi > 0:
 
             oi_values.append(
                 (
                     "OKX",
-                    okx_oi_usd
+                    okx_oi
                 )
             )
 
@@ -1759,22 +1819,22 @@ def main():
 
     try:
 
-        okx_funding = (
+        funding = (
             get_okx_funding()
         )
 
 
         if (
-            okx_oi_usd is not None
+            okx_oi is not None
             and
-            okx_oi_usd > 0
+            okx_oi > 0
         ):
 
             funding_values.append(
                 (
                     "OKX",
-                    okx_funding,
-                    okx_oi_usd
+                    funding,
+                    okx_oi
                 )
             )
 
@@ -1800,24 +1860,22 @@ def main():
     if oi_values:
 
         aggregate_oi_usd = sum(
-
             value
-
             for _, value
-
             in oi_values
         )
 
 
         aggregate_oi_btc = (
-            aggregate_oi_usd /
+            aggregate_oi_usd
+            /
             btc_price
         )
 
 
     # =====================================================
     # STEP 7
-    # WEIGHTED FUNDING
+    # AGGREGATE FUNDING
     # =====================================================
 
     aggregate_funding = None
@@ -1826,13 +1884,9 @@ def main():
     if funding_values:
 
         total_weight = sum(
-
             oi
-
             for _, _, oi
-
             in funding_values
-
             if oi > 0
         )
 
@@ -1840,19 +1894,12 @@ def main():
         if total_weight > 0:
 
             aggregate_funding = (
-
                 sum(
-
                     rate * oi
-
                     for _, rate, oi
-
                     in funding_values
-
                 )
-
                 /
-
                 total_weight
             )
 
@@ -1879,24 +1926,19 @@ def main():
 
 
     # =====================================================
-    # STEP 9
     # CHANGES
     # =====================================================
 
     oi_change_1d = None
-
     oi_change_7d = None
 
     btc_change_1d = None
-
     btc_change_7d = None
 
     mnav_change_1d = None
-
     mnav_change_7d = None
 
     btc_yield_1d = None
-
     btc_yield_7d = None
 
 
@@ -1938,14 +1980,18 @@ def main():
         )
 
 
-        btc_yield_1d = (
-            percentage_change(
-                result["btcPerShare"],
-                previous_1d.get(
-                    "btcPerShare"
+        if previous_1d.get(
+            "btcPerShare"
+        ) is not None:
+
+            btc_yield_1d = (
+                percentage_change(
+                    result["btcPerShare"],
+                    previous_1d.get(
+                        "btcPerShare"
+                    )
                 )
             )
-        )
 
 
     # -----------------------------------------------------
@@ -1986,18 +2032,22 @@ def main():
         )
 
 
-        btc_yield_7d = (
-            percentage_change(
-                result["btcPerShare"],
-                previous_7d.get(
-                    "btcPerShare"
+        if previous_7d.get(
+            "btcPerShare"
+        ) is not None:
+
+            btc_yield_7d = (
+                percentage_change(
+                    result["btcPerShare"],
+                    previous_7d.get(
+                        "btcPerShare"
+                    )
                 )
             )
-        )
 
 
     # =====================================================
-    # STEP 10
+    # STEP 9
     # mNAV PERCENTILE
     # =====================================================
 
@@ -2010,29 +2060,24 @@ def main():
 
 
     # =====================================================
-    # STEP 11
-    # RISK
+    # STEP 10
+    # RISK SCORE
     # =====================================================
 
     (
         risk_score,
         risk_level
     ) = calculate_risk_score(
-
         mnav_percentile,
-
         aggregate_funding,
-
         oi_change_1d,
-
         oi_change_7d,
-
         btc_change_7d
     )
 
 
     # =====================================================
-    # STEP 12
+    # STEP 11
     # DATE
     # =====================================================
 
@@ -2047,7 +2092,7 @@ def main():
 
 
     # =====================================================
-    # STEP 13
+    # STEP 12
     # RECORD
     # =====================================================
 
@@ -2267,16 +2312,13 @@ def main():
 
 
     # =====================================================
-    # STEP 14
+    # STEP 13
     # REPLACE TODAY
     # =====================================================
 
     history = [
-
         item
-
         for item in history
-
         if item.get(
             "date"
         ) != date_key
@@ -2289,7 +2331,7 @@ def main():
 
 
     # =====================================================
-    # STEP 15
+    # STEP 14
     # SORT
     # =====================================================
 
@@ -2303,7 +2345,7 @@ def main():
 
 
     # =====================================================
-    # STEP 16
+    # STEP 15
     # SAVE
     # =====================================================
 
@@ -2324,56 +2366,11 @@ def main():
     )
 
     print(
-        "SEC CAPITAL DATA"
+        "FINAL CHECK"
     )
 
     print(
-        "BTC holdings:",
-        company.get(
-            "btcHoldings"
-        )
-    )
-
-    print(
-        "USD Assets:",
-        company.get(
-            "usdAssetsUsdB"
-        ),
-        "B"
-    )
-
-    print(
-        "Debt:",
-        company.get(
-            "debtUsdB"
-        ),
-        "B"
-    )
-
-    print(
-        "Preferred:",
-        company.get(
-            "preferredUsdB"
-        ),
-        "B"
-    )
-
-    print(
-        "FDSO:",
-        company.get(
-            "fdso"
-        )
-    )
-
-    print(
-        "SEC date:",
-        company.get(
-            "asOf"
-        )
-    )
-
-    print(
-        "--------------------------------------"
+        "======================================"
     )
 
     print(
@@ -2384,6 +2381,16 @@ def main():
     print(
         "MSTR:",
         mstr_price
+    )
+
+    print(
+        "FDSO:",
+        company["fdso"]
+    )
+
+    print(
+        "BTC / share:",
+        result["btcPerShare"]
     )
 
     print(
@@ -2404,15 +2411,6 @@ def main():
     print(
         "Net mNAV:",
         result["mnav"]
-    )
-
-    print(
-        "BTC / share:",
-        result["btcPerShare"]
-    )
-
-    print(
-        "--------------------------------------"
     )
 
     print(
@@ -2446,16 +2444,6 @@ def main():
     )
 
     print(
-        "BTC Yield 1D:",
-        btc_yield_1d
-    )
-
-    print(
-        "BTC Yield 7D:",
-        btc_yield_7d
-    )
-
-    print(
         "mNAV percentile:",
         mnav_percentile
     )
@@ -2468,10 +2456,6 @@ def main():
     print(
         "Risk Level:",
         risk_level
-    )
-
-    print(
-        "--------------------------------------"
     )
 
     print(
