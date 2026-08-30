@@ -18,36 +18,32 @@
   },
   {
     "date": "2026-08-30",
-    "timestamp": "2026-08-30T22:49:18.865269+00:00",
-    "btc": 78422.0,
+    "timestamp": "2026-08-30T23:04:26.682234+00:00",
+    "btc": 78357.0,
     "mstr": 127.31,
-    "btcValueUsd": 65909534634.0,
-    "grossBpsUsd": 156.96,
-    "netBpsUsd": 121.17,
+    "btcValueUsd": 65854905579.0,
+    "grossBpsUsd": 156.83,
+    "netBpsUsd": 121.04,
     "btcPerShare": 0.0020015408,
-    "mnav": 1.0507,
-    "grossMnav": 0.8111,
-    "oiBtc": 27421.15,
-    "oiUsd": 2150421715.69,
-    "fundingRate": 0.00595,
-    "oiChange1dPct": -4.22,
+    "grossMnav": 0.8117,
+    "mnav": 1.0518,
+    "oiBtc": 27423.05,
+    "oiUsd": 2148788187.54,
+    "fundingRate": 0.00604,
+    "oiChange1dPct": -4.21,
     "oiChange7dPct": null,
-    "btcChange1dPct": 0.34,
+    "btcChange1dPct": 0.26,
     "btcChange7dPct": null,
-    "mnavChange1dPct": -0.44,
+    "mnavChange1dPct": -0.33,
     "mnavChange7dPct": null,
     "btcYield1dPct": null,
     "btcYield7dPct": null,
-    "mnavPercentile": null,
-    "riskScore": 0.0,
-    "riskLevel": "SAFE",
     "oiSources": [
       "OKX"
     ],
     "fundingSources": [
       "OKX"
     ],
-    "capitalDataDate": "2026-08-23",
-    "capitalDataSource": "Strategy Investor Briefing / SEC Form 8-K"
+    "capitalDataDate": "2026-08-23"
   }
 ]
