@@ -15,5 +15,22 @@
     "fundingSources": [
       "OKX"
     ]
+  },
+  {
+    "date": "2026-08-30",
+    "timestamp": "2026-08-30T05:18:34.251289+00:00",
+    "btc": 78139.0,
+    "mstr": 127.31,
+    "mnav": 1.0556,
+    "netBpsUsd": 120.6,
+    "oiBtc": 28518.44,
+    "oiUsd": 2228402486.7,
+    "fundingRate": 0.00452,
+    "oiSources": [
+      "OKX"
+    ],
+    "fundingSources": [
+      "OKX"
+    ]
   }
 ]
