@@ -1,156 +1,142 @@
 /* =========================================
-   BTC Leverage Warning System
+   MSTR BTC Derivatives Warning Light
    SAFE / CAUTION / OVERHEATED / EXTREME
 ========================================= */
 
 (function () {
 
-  const DATA_URL =
+  const HISTORY_URL =
     "history.json?ts=" + Date.now();
 
   const WARNING_ID =
-    "btcLeverageWarning";
+    "mstrDerivativesWarning";
 
   /* ---------------------------------------
-     CSS
+     스타일
   --------------------------------------- */
 
   function injectStyle() {
 
     if (
       document.getElementById(
-        "btcWarningStyle"
+        "mstrWarningStyle"
       )
     ) {
       return;
     }
 
     const style =
-      document.createElement(
-        "style"
-      );
+      document.createElement("style");
 
     style.id =
-      "btcWarningStyle";
+      "mstrWarningStyle";
 
     style.textContent = `
 
       #${WARNING_ID} {
-        margin: 22px 0;
-        padding: 20px 22px;
+        margin-top: 18px;
+        padding: 20px 24px;
         border-radius: 14px;
-        background:
-          linear-gradient(
-            135deg,
-            #111722,
-            #0d121b
-          );
-        border:
-          1px solid
-          rgba(255,255,255,.08);
-        box-shadow:
-          0 12px 35px
-          rgba(0,0,0,.25);
+        background: #101620;
+        border: 1px solid rgba(255,255,255,.08);
+        box-shadow: 0 10px 30px rgba(0,0,0,.25);
       }
 
-      .btc-warning-header {
+      .warning-title {
+        font-size: 17px;
+        font-weight: 900;
+        color: #e8edf3;
+        margin-bottom: 15px;
+      }
+
+      .warning-status {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 15px;
-        margin-bottom: 16px;
+        gap: 14px;
+        padding: 16px;
+        border-radius: 12px;
+        background: #151c28;
+        border: 1px solid rgba(255,255,255,.08);
       }
 
-      .btc-warning-title {
-        font-size: 16px;
-        font-weight: 800;
-        color: #e8edf3;
-      }
-
-      .btc-warning-status {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 7px 13px;
-        border-radius: 999px;
-        font-size: 12px;
-        font-weight: 900;
-        letter-spacing: .4px;
-      }
-
-      .btc-warning-light {
-        width: 10px;
-        height: 10px;
+      .warning-light {
+        width: 22px;
+        height: 22px;
         border-radius: 50%;
-        display: inline-block;
-        box-shadow:
-          0 0 10px currentColor;
+        flex-shrink: 0;
+        box-shadow: 0 0 16px currentColor;
       }
 
-      .btc-warning-grid {
+      .warning-name {
+        font-size: 21px;
+        font-weight: 950;
+        letter-spacing: .5px;
+      }
+
+      .warning-description {
+        margin-top: 3px;
+        font-size: 12px;
+        color: #8c98a8;
+      }
+
+      .warning-grid {
         display: grid;
         grid-template-columns:
           repeat(3, 1fr);
         gap: 10px;
+        margin-top: 12px;
       }
 
-      .btc-warning-card {
-        padding: 12px;
+      .warning-card {
+        padding: 13px;
         border-radius: 10px;
-        background: #101620;
-        border:
-          1px solid
-          rgba(255,255,255,.06);
+        background: #0d131c;
+        border: 1px solid rgba(255,255,255,.06);
       }
 
-      .btc-warning-label {
+      .warning-label {
         font-size: 11px;
-        color: #7f8b9c;
+        color: #788496;
       }
 
-      .btc-warning-value {
+      .warning-value {
         margin-top: 5px;
-        font-size: 17px;
-        font-weight: 800;
+        font-size: 16px;
+        font-weight: 850;
+        color: #e8edf3;
       }
 
-      .btc-warning-note {
-        margin-top: 14px;
-        font-size: 12px;
+      .warning-note {
+        margin-top: 13px;
+        font-size: 11px;
         line-height: 1.6;
-        color: #8f9bab;
-      }
-
-      .btc-warning-building {
-        color: #f3c64e;
+        color: #778496;
       }
 
       @media (max-width: 650px) {
 
-        .btc-warning-grid {
+        #${WARNING_ID} {
+          padding: 18px;
+        }
+
+        .warning-grid {
           grid-template-columns:
             1fr;
         }
 
-        .btc-warning-header {
-          align-items: flex-start;
-          flex-direction: column;
-        }
       }
 
     `;
 
-    document.head.appendChild(
-      style
-    );
+    document.head.appendChild(style);
   }
 
 
   /* ---------------------------------------
-     Section
+     화면 생성
   --------------------------------------- */
 
-  function createWarning() {
+  function createWarningSection() {
 
     if (
       document.getElementById(
@@ -161,78 +147,141 @@
     }
 
     const section =
-      document.createElement(
-        "section"
-      );
+      document.createElement("section");
 
     section.id =
       WARNING_ID;
 
     section.innerHTML = `
 
-      <div class="btc-warning-header">
+      <div class="warning-title">
+        ⚡ BTC 선물 과열 경고등
+      </div>
 
-        <div class="btc-warning-title">
-          ⚡ BTC 레버리지 위험도
-        </div>
+      <div
+        id="warningStatus"
+        class="warning-status">
 
         <div
-          id="btcWarningStatus"
-          class="btc-warning-status">
+          class="warning-light">
+        </div>
+
+        <div>
+
+          <div
+            id="warningName"
+            class="warning-name">
+            분석 중...
+          </div>
+
+          <div
+            id="warningDescription"
+            class="warning-description">
+            BTC OI와 Funding Rate를 분석하고 있습니다.
+          </div>
+
         </div>
 
       </div>
 
       <div
-        id="btcWarningGrid"
-        class="btc-warning-grid">
+        id="warningGrid"
+        class="warning-grid">
       </div>
 
       <div
-        id="btcWarningNote"
-        class="btc-warning-note">
+        class="warning-note">
+
+        ※ 이 경고등은 BTC 선물시장의
+        OI와 Funding Rate를 이용한
+        과열도 참고 지표입니다.
+        MSTR 매수·매도의 단독 신호가 아닙니다.
+
       </div>
 
     `;
 
-
-    /*
-      핵심 결과 바로 아래에 삽입
-    */
-
-    const resultSection =
-      document.querySelector(
-        ".result-section"
+    const history =
+      document.getElementById(
+        "mnavHistorySection"
       );
 
-    if (resultSection) {
+    if (history) {
 
-      resultSection.parentNode.insertBefore(
+      history.parentNode.insertBefore(
         section,
-        resultSection.nextSibling
+        history
       );
 
     } else {
 
-      const header =
-        document.querySelector(
-          "header"
+      document.body.appendChild(
+        section
+      );
+
+    }
+  }
+
+
+  /* ---------------------------------------
+     데이터
+  --------------------------------------- */
+
+  async function loadData() {
+
+    try {
+
+      const response =
+        await fetch(
+          HISTORY_URL,
+          {
+            cache: "no-store"
+          }
         );
 
-      if (header) {
-
-        header.parentNode.insertBefore(
-          section,
-          header.nextSibling
-        );
-
-      } else {
-
-        document.body.prepend(
-          section
+      if (!response.ok) {
+        throw new Error(
+          "history.json " +
+          response.status
         );
       }
+
+      const data =
+        await response.json();
+
+      if (
+        !Array.isArray(data) ||
+        !data.length
+      ) {
+        throw new Error(
+          "No history data"
+        );
+      }
+
+      const latest =
+        data[data.length - 1];
+
+      updateWarning(latest);
+
+    } catch (error) {
+
+      console.error(
+        "Warning error:",
+        error
+      );
+
+      const name =
+        document.getElementById(
+          "warningName"
+        );
+
+      if (name) {
+        name.textContent =
+          "DATA UNAVAILABLE";
+      }
+
     }
+
   }
 
 
@@ -248,367 +297,145 @@
     return Number.isFinite(n)
       ? n
       : null;
+
   }
 
 
   /* ---------------------------------------
-     최근 7일 기준값
+     경고등 계산
   --------------------------------------- */
 
-  function getPrevious7Day(
-    history
-  ) {
-
-    if (
-      history.length < 2
-    ) {
-      return null;
-    }
-
-    const latest =
-      history[
-        history.length - 1
-      ];
-
-    const latestDate =
-      new Date(
-        latest.date
-      );
-
-    let candidate = null;
-
-    for (
-      let i = 0;
-      i < history.length - 1;
-      i++
-    ) {
-
-      const item =
-        history[i];
-
-      const date =
-        new Date(
-          item.date
-        );
-
-      const diff =
-        (
-          latestDate -
-          date
-        ) /
-        86400000;
-
-      if (
-        diff >= 6 &&
-        diff <= 10
-      ) {
-
-        candidate = item;
-      }
-    }
-
-    return candidate;
-  }
-
-
-  /* ---------------------------------------
-     변화율
-  --------------------------------------- */
-
-  function changePercent(
-    latest,
-    previous,
-    key
-  ) {
-
-    const a =
-      number(
-        previous &&
-        previous[key]
-      );
-
-    const b =
-      number(
-        latest &&
-        latest[key]
-      );
-
-    if (
-      a === null ||
-      b === null ||
-      a === 0
-    ) {
-      return null;
-    }
-
-    return (
-      (
-        b / a
-      ) - 1
-    ) * 100;
-  }
-
-
-  /* ---------------------------------------
-     Funding 위험 단계
-  --------------------------------------- */
-
-  function fundingLevel(
-    funding
+  function calculateWarning(
+    oiBtc,
+    fundingRate
   ) {
 
     /*
-      Funding은 % 단위
+      Funding Rate:
+      0.01% 이하 → 비교적 정상
+      0.01~0.03% → 주의
+      0.03~0.06% → 과열
+      0.06% 이상 → 극단적 과열
 
-      < 0.01%
-      SAFE
+      OI:
+      절대값만으로 과열을 판단하지 않고
+      Funding과 함께 사용한다.
 
-      0.01 ~ 0.03%
-      CAUTION
-
-      0.03 ~ 0.05%
-      OVERHEATED
-
-      >= 0.05%
-      EXTREME
+      따라서 OI 단독으로 EXTREME을
+      발생시키지 않는다.
     */
 
-    if (
-      funding === null ||
-      funding < 0.01
-    ) {
-      return 0;
-    }
 
-    if (
-      funding < 0.03
-    ) {
-      return 1;
-    }
-
-    if (
-      funding < 0.05
-    ) {
-      return 2;
-    }
-
-    return 3;
-  }
-
-
-  /* ---------------------------------------
-     OI 위험 단계
-     7일 증가율
-  --------------------------------------- */
-
-  function oiLevel(
-    oiChange
-  ) {
-
-    if (
-      oiChange === null ||
-      oiChange < 5
-    ) {
-      return 0;
-    }
-
-    if (
-      oiChange < 10
-    ) {
-      return 1;
-    }
-
-    if (
-      oiChange < 20
-    ) {
-      return 2;
-    }
-
-    return 3;
-  }
-
-
-  /* ---------------------------------------
-     상태
-  --------------------------------------- */
-
-  function getStatus(
-    funding,
-    oiChange,
-    btcChange
-  ) {
-
-    const f =
-      fundingLevel(
-        funding
+    const funding =
+      Math.abs(
+        fundingRate
       );
 
-    const o =
-      oiLevel(
-        oiChange
-      );
+    let score = 0;
 
-    let level =
-      Math.max(
-        f,
-        o
-      );
+
+    /* Funding */
+
+    if (
+      funding >= 0.06
+    ) {
+
+      score += 3;
+
+    } else if (
+      funding >= 0.03
+    ) {
+
+      score += 2;
+
+    } else if (
+      funding >= 0.01
+    ) {
+
+      score += 1;
+
+    }
 
 
     /*
-      BTC가 급등하면서
-      Funding + OI가 동시에 증가하면
-      한 단계 더 주의한다.
+      OI는 현재값 자체보다
+      데이터 존재 여부를 확인한다.
+
+      장기적으로는 OI 변화율까지
+      추가하면 더 정교해질 수 있다.
     */
 
     if (
-      funding !== null &&
-      oiChange !== null &&
-      btcChange !== null
+      oiBtc !== null &&
+      oiBtc > 0
     ) {
 
-      if (
-        funding >= 0.03 &&
-        oiChange >= 10 &&
-        btcChange >= 5
-      ) {
+      score += 0;
 
-        level =
-          Math.min(
-            3,
-            level + 1
-          );
-      }
-    }
-
-
-    const statuses = [
-
-      {
-        name: "SAFE",
-        icon: "🟢",
-        color: "#5ee6a8",
-        background:
-          "rgba(94,230,168,.10)"
-      },
-
-      {
-        name: "CAUTION",
-        icon: "🟡",
-        color: "#f3c64e",
-        background:
-          "rgba(243,198,78,.10)"
-      },
-
-      {
-        name: "OVERHEATED",
-        icon: "🟠",
-        color: "#ff9f43",
-        background:
-          "rgba(255,159,67,.10)"
-      },
-
-      {
-        name: "EXTREME",
-        icon: "🔴",
-        color: "#ff4d5a",
-        background:
-          "rgba(255,77,90,.10)"
-      }
-
-    ];
-
-    return statuses[level];
-  }
-
-
-  /* ---------------------------------------
-     Format
-  --------------------------------------- */
-
-  function fmt(
-    value,
-    digits = 2
-  ) {
-
-    const n =
-      number(value);
-
-    if (n === null) {
-      return "—";
-    }
-
-    return n.toLocaleString(
-      "en-US",
-      {
-        maximumFractionDigits:
-          digits
-      }
-    );
-  }
-
-
-  /* ---------------------------------------
-     Render
-  --------------------------------------- */
-
-  function render(
-    history
-  ) {
-
-    const status =
-      document.getElementById(
-        "btcWarningStatus"
-      );
-
-    const grid =
-      document.getElementById(
-        "btcWarningGrid"
-      );
-
-    const note =
-      document.getElementById(
-        "btcWarningNote"
-      );
-
-    if (
-      !status ||
-      !grid ||
-      !note
-    ) {
-      return;
     }
 
 
     if (
-      !Array.isArray(history) ||
-      history.length === 0
+      score >= 3
     ) {
 
-      status.innerHTML =
-        `<span>⚪</span> DATA`;
+      return {
+        level: "EXTREME",
+        description:
+          "Funding이 매우 높습니다. 레버리지 포지션 과열 위험이 큽니다.",
+        glow: "#ff3658"
+      };
 
-      grid.innerHTML =
-        "";
-
-      note.textContent =
-        "아직 데이터가 없습니다.";
-
-      return;
     }
 
+    if (
+      score >= 2
+    ) {
 
-    const latest =
-      history[
-        history.length - 1
-      ];
+      return {
+        level: "OVERHEATED",
+        description:
+          "Funding이 높은 편입니다. 단기 과열 가능성을 주의하세요.",
+        glow: "#ff8a3d"
+      };
+
+    }
+
+    if (
+      score >= 1
+    ) {
+
+      return {
+        level: "CAUTION",
+        description:
+          "레버리지 수요가 증가하고 있습니다. 추격 매수는 주의하세요.",
+        glow: "#f3c64e"
+      };
+
+    }
+
+    return {
+      level: "SAFE",
+      description:
+        "Funding이 비교적 안정적입니다. 선물시장 과열 신호는 낮습니다.",
+      glow: "#5ee6a8"
+    };
+
+  }
 
 
-    const previous7 =
-      getPrevious7Day(
-        history
+  /* ---------------------------------------
+     화면 업데이트
+  --------------------------------------- */
+
+  function updateWarning(
+    latest
+  ) {
+
+    const oi =
+      number(
+        latest.oiBtc
       );
-
 
     const funding =
       number(
@@ -616,257 +443,159 @@
       );
 
 
-    const oiChange =
-      changePercent(
-        latest,
-        previous7,
-        "oiBtc"
-      );
-
-
-    const btcChange =
-      changePercent(
-        latest,
-        previous7,
-        "btc"
-      );
-
-
-    /*
-      7일 데이터가 아직 부족하면
-      Funding만으로 임시 판정
-    */
-
-    const enoughHistory =
-      previous7 !== null &&
-      oiChange !== null;
-
-
-    const statusData =
-      getStatus(
-        funding,
-        oiChange,
-        btcChange
-      );
-
-
-    status.style.color =
-      statusData.color;
-
-    status.style.background =
-      statusData.background;
-
-    status.innerHTML = `
-      <span>
-        ${statusData.icon}
-      </span>
-      ${statusData.name}
-    `;
-
-
-    grid.innerHTML = `
-
-      <div
-        class="btc-warning-card">
-
-        <div
-          class="btc-warning-label">
-          Funding Rate
-        </div>
-
-        <div
-          class="btc-warning-value"
-          style="
-            color:${funding !== null
-              ? statusData.color
-              : "#788496"};
-          ">
-
-          ${
-            funding !== null
-              ? fmt(
-                  funding,
-                  4
-                ) + "%"
-              : "—"
-          }
-
-        </div>
-
-      </div>
-
-
-      <div
-        class="btc-warning-card">
-
-        <div
-          class="btc-warning-label">
-          BTC OI 7일 변화
-        </div>
-
-        <div
-          class="btc-warning-value"
-          style="
-            color:${
-              oiChange !== null
-                ? (
-                    oiChange >= 0
-                      ? "#b56cff"
-                      : "#5ee6a8"
-                  )
-                : "#788496"
-            };
-          ">
-
-          ${
-            oiChange !== null
-              ? (
-                  oiChange >= 0
-                    ? "+"
-                    : ""
-                ) +
-                oiChange.toFixed(
-                  1
-                ) +
-                "%"
-              : "데이터 축적 중"
-          }
-
-        </div>
-
-      </div>
-
-
-      <div
-        class="btc-warning-card">
-
-        <div
-          class="btc-warning-label">
-          BTC 7일 변화
-        </div>
-
-        <div
-          class="btc-warning-value"
-          style="
-            color:${
-              btcChange !== null
-                ? (
-                    btcChange >= 0
-                      ? "#4d9cff"
-                      : "#ff4d5a"
-                  )
-                : "#788496"
-            };
-          ">
-
-          ${
-            btcChange !== null
-              ? (
-                  btcChange >= 0
-                    ? "+"
-                    : ""
-                ) +
-                btcChange.toFixed(
-                  1
-                ) +
-                "%"
-              : "데이터 축적 중"
-          }
-
-        </div>
-
-      </div>
-
-    `;
-
-
     if (
-      !enoughHistory
+      oi === null ||
+      funding === null
     ) {
 
-      note.innerHTML =
-        `
-        ⚠️ <strong>
-        초기 데이터 축적 중
-        </strong><br>
-        현재 Funding을 기준으로
-        임시 위험도를 표시합니다.
-        OI 7일 데이터가 쌓이면
-        정식 SAFE / CAUTION /
-        OVERHEATED / EXTREME 판정으로
-        자동 전환됩니다.
-        `;
-
-    } else {
-
-      note.innerHTML =
-        `
-        Funding + OI 7일 변화 + BTC 7일 변화를
-        함께 사용한 레버리지 위험도입니다.
-        <br>
-        이 신호는 매매 신호가 아니라
-        레버리지 과열 정도를 판단하기 위한
-        보조지표입니다.
-        `;
-    }
-  }
-
-
-  /* ---------------------------------------
-     Load
-  --------------------------------------- */
-
-  async function load() {
-
-    try {
-
-      const response =
-        await fetch(
-          DATA_URL,
-          {
-            cache:
-              "no-store"
-          }
+      const name =
+        document.getElementById(
+          "warningName"
         );
 
-      if (
-        !response.ok
-      ) {
-        throw new Error(
-          "history.json " +
-          response.status
+      const description =
+        document.getElementById(
+          "warningDescription"
         );
+
+      if (name) {
+        name.textContent =
+          "DATA UNAVAILABLE";
       }
 
-      const data =
-        await response.json();
+      if (description) {
+        description.textContent =
+          "OI 또는 Funding 데이터를 가져오지 못했습니다.";
+      }
 
-      render(data);
+      return;
+    }
 
-    } catch (error) {
 
-      console.error(
-        "BTC warning error:",
-        error
+    const warning =
+      calculateWarning(
+        oi,
+        funding
       );
 
-      const status =
-        document.getElementById(
-          "btcWarningStatus"
-        );
 
-      if (status) {
+    const status =
+      document.getElementById(
+        "warningStatus"
+      );
 
-        status.innerHTML =
-          "⚪ DATA ERROR";
+    const light =
+      status
+        ? status.querySelector(
+            ".warning-light"
+          )
+        : null;
 
-      }
+
+    const name =
+      document.getElementById(
+        "warningName"
+      );
+
+    const description =
+      document.getElementById(
+        "warningDescription"
+      );
+
+
+    if (light) {
+
+      light.style.color =
+        warning.glow;
+
+      light.style.background =
+        warning.glow;
+
     }
+
+
+    if (name) {
+
+      name.textContent =
+        warning.level;
+
+      name.style.color =
+        warning.glow;
+
+    }
+
+
+    if (description) {
+
+      description.textContent =
+        warning.description;
+
+    }
+
+
+    const grid =
+      document.getElementById(
+        "warningGrid"
+      );
+
+
+    if (grid) {
+
+      grid.innerHTML = `
+
+        <div class="warning-card">
+
+          <div class="warning-label">
+            BTC OI
+          </div>
+
+          <div class="warning-value">
+            ${oi.toLocaleString(
+              "en-US",
+              {
+                maximumFractionDigits: 0
+              }
+            )} BTC
+          </div>
+
+        </div>
+
+
+        <div class="warning-card">
+
+          <div class="warning-label">
+            Funding Rate
+          </div>
+
+          <div class="warning-value">
+            ${funding >= 0 ? "+" : ""}
+            ${funding.toFixed(4)}%
+          </div>
+
+        </div>
+
+
+        <div class="warning-card">
+
+          <div class="warning-label">
+            Updated
+          </div>
+
+          <div class="warning-value">
+            ${latest.date || "—"}
+          </div>
+
+        </div>
+
+      `;
+
+    }
+
   }
 
 
   /* ---------------------------------------
-     Start
+     실행
   --------------------------------------- */
 
   document.addEventListener(
@@ -875,9 +604,9 @@
 
       injectStyle();
 
-      createWarning();
+      createWarningSection();
 
-      load();
+      loadData();
 
     }
   );
