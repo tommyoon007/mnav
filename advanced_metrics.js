@@ -1,556 +1,924 @@
+/* =========================================
+   MSTR Advanced Metrics
+   - mNAV percentile
+   - BTC per share
+   - BTC Yield
+   - Risk Score
+========================================= */
 
-import json
-from datetime import datetime, timezone
-from pathlib import Path
+(function () {
 
-DATA_FILE = Path("data.json")
-HISTORY_FILE = Path("history.json")
-ADVANCED_FILE = Path("advanced_history.json")
+  const HISTORY_URL =
+    "history.json?ts=" + Date.now();
 
+  const DATA_URL =
+    "data.json?ts=" + Date.now();
 
-def load_json(path, default):
-    if not path.exists():
-        return default
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception as error:
-        print(f"WARNING: failed to read {path}: {error}")
-        return default
+  let history = [];
+  let company = {};
 
 
-def save_json(path, data):
-    path.write_text(
-        json.dumps(data, indent=2, ensure_ascii=False) + "\n",
-        encoding="utf-8"
-    )
+  /* ---------------------------------------
+     스타일
+  --------------------------------------- */
 
-
-def number(value):
-    try:
-        value = float(value)
-        return value if value == value else None
-    except (TypeError, ValueError):
-        return None
-
-
-def find_previous(records, latest_date, days_min=6, days_max=10):
-    latest_dt = datetime.fromisoformat(
-        latest_date + "T00:00:00+00:00"
-    )
-    candidate = None
-
-    for item in records:
-        if item.get("date") == latest_date:
-            continue
-
-        try:
-            dt = datetime.fromisoformat(
-                item["date"] + "T00:00:00+00:00"
-            )
-            diff = (latest_dt - dt).days
-
-            if days_min <= diff <= days_max:
-                candidate = item
-
-        except Exception:
-            continue
-
-    return candidate
-
-
-def percentile(values, current):
-    values = [
-        v for v in values
-        if number(v) is not None
-    ]
-
-    if not values or current is None:
-        return None
-
-    count = sum(
-        1 for v in values
-        if float(v) <= current
-    )
-
-    return round(
-        (count / len(values)) * 100,
-        1
-    )
-
-
-def level_from_score(score):
-    if score < 25:
-        return "SAFE"
-
-    if score < 50:
-        return "CAUTION"
-
-    if score < 75:
-        return "OVERHEATED"
-
-    return "EXTREME"
-
-
-def funding_points(rate):
-    if rate is None or rate <= 0.01:
-        return 0
-
-    if rate < 0.03:
-        return 8
-
-    if rate < 0.05:
-        return 18
-
-    return 25
-
-
-def oi_points(change):
-    if change is None or change <= 5:
-        return 0
-
-    if change < 10:
-        return 8
-
-    if change < 20:
-        return 15
-
-    return 20
-
-
-def btc_points(change):
-    if change is None or change <= 5:
-        return 0
-
-    if change < 10:
-        return 8
-
-    return 10
-
-
-def balance_points(ratio):
-    if ratio is None or ratio <= 0.25:
-        return 0
-
-    if ratio <= 0.40:
-        return 4
-
-    if ratio <= 0.60:
-        return 7
-
-    return 10
-
-
-def mnav_points(mnav):
-    if mnav is None or mnav <= 1.5:
-        return 0
-
-    if mnav < 2.0:
-        return 2
-
-    if mnav < 3.0:
-        return 4
-
-    return 5
-
-
-def main():
-
-    company = load_json(
-        DATA_FILE,
-        {}
-    )
-
-    history = load_json(
-        HISTORY_FILE,
-        []
-    )
-
-    advanced = load_json(
-        ADVANCED_FILE,
-        []
-    )
-
-    if not company:
-        raise RuntimeError(
-            "data.json not found"
-        )
-
-    if not isinstance(history, list) or not history:
-        raise RuntimeError(
-            "history.json has no data"
-        )
-
-    if not isinstance(advanced, list):
-        advanced = []
-
-    latest = history[-1]
-
-    date_key = latest.get("date")
-
-    if not date_key:
-        raise RuntimeError(
-            "Latest history record has no date"
-        )
-
-    btc_price = number(
-        latest.get("btc")
-    )
-
-    mnav = number(
-        latest.get("mnav")
-    )
-
-    oi_btc = number(
-        latest.get("oiBtc")
-    )
-
-    funding = number(
-        latest.get("fundingRate")
-    )
-
-    holdings = number(
-        company.get("btcHoldings")
-    )
-
-    fdso_m = number(
-        company.get("fdso")
-    )
-
-    debt_b = number(
-        company.get("debtUsdB")
-    ) or 0
-
-    preferred_b = number(
-        company.get("preferredUsdB")
-    ) or 0
-
-    usd_assets_b = number(
-        company.get("usdAssetsUsdB")
-    ) or 0
+  function injectStyle() {
 
     if (
-        holdings is None
-        or fdso_m is None
-        or fdso_m <= 0
-    ):
-        raise RuntimeError(
-            "Invalid BTC holdings or FDSO"
-        )
-
-    # BTC / share in sats
-    btc_per_share_sats = (
-        holdings *
-        1e8 /
-        (fdso_m * 1e6)
-    )
-
-    # 7-day comparison
-    previous7 = find_previous(
-        history,
-        date_key,
-        6,
-        10
-    )
-
-    oi_change_7d = None
-    btc_change_7d = None
-
-    if previous7:
-
-        old_oi = number(
-            previous7.get("oiBtc")
-        )
-
-        old_btc = number(
-            previous7.get("btc")
-        )
-
-        if (
-            old_oi
-            and old_oi > 0
-            and oi_btc is not None
-        ):
-            oi_change_7d = (
-                oi_btc /
-                old_oi -
-                1
-            ) * 100
-
-        if (
-            old_btc
-            and old_btc > 0
-            and btc_price is not None
-        ):
-            btc_change_7d = (
-                btc_price /
-                old_btc -
-                1
-            ) * 100
-
-    # BTC Yield requires a previous BTC/share snapshot.
-    previous_advanced = find_previous(
-        advanced,
-        date_key,
-        6,
-        10
-    )
-
-    btc_yield_7d = None
-
-    if previous_advanced:
-
-        old_bps = number(
-            previous_advanced.get(
-                "btcPerShareSats"
-            )
-        )
-
-        if (
-            old_bps
-            and old_bps > 0
-        ):
-            btc_yield_7d = (
-                btc_per_share_sats /
-                old_bps -
-                1
-            ) * 100
-
-    # Historical mNAV percentile
-    mnav_values = [
-        number(item.get("mnav"))
-        for item in history
-    ]
-
-    mnav_percentile = percentile(
-        mnav_values,
-        mnav
-    )
-
-    # Balance sheet risk
-    btc_asset_b = None
-
-    if btc_price is not None:
-        btc_asset_b = (
-            holdings *
-            btc_price /
-            1e9
-        )
-
-    senior_b = (
-        debt_b +
-        preferred_b
-    )
-
-    balance_ratio = None
-
-    if (
-        btc_asset_b is not None
-        and btc_asset_b > 0
-    ):
-        balance_ratio = (
-            senior_b /
-            (
-                btc_asset_b +
-                usd_assets_b
-            )
-        )
-
-    # Composite risk score.
-    # Only available components are used,
-    # then normalized back to 0-100.
-    components = []
-
-    if mnav_percentile is not None:
-        components.append(
-            (
-                mnav_percentile * 0.30,
-                30
-            )
-        )
-
-    if funding is not None:
-        components.append(
-            (
-                funding_points(funding),
-                25
-            )
-        )
-
-    if oi_change_7d is not None:
-        components.append(
-            (
-                oi_points(oi_change_7d),
-                20
-            )
-        )
-
-    if btc_change_7d is not None:
-        components.append(
-            (
-                btc_points(btc_change_7d),
-                10
-            )
-        )
-
-    if balance_ratio is not None:
-        components.append(
-            (
-                balance_points(balance_ratio),
-                10
-            )
-        )
-
-    if mnav is not None:
-        components.append(
-            (
-                mnav_points(mnav),
-                5
-            )
-        )
-
-    if components:
-
-        raw_score = sum(
-            item[0]
-            for item in components
-        )
-
-        available_weight = sum(
-            item[1]
-            for item in components
-        )
-
-        risk_score = round(
-            (
-                raw_score /
-                available_weight
-            ) * 100,
-            1
-        )
-
-    else:
-        risk_score = None
-
-    record = {
-
-        "date":
-            date_key,
-
-        "timestamp":
-            datetime.now(
-                timezone.utc
-            ).isoformat(),
-
-        "mnav":
-            mnav,
-
-        "mnavPercentile":
-            mnav_percentile,
-
-        "btcPerShareSats":
-            round(
-                btc_per_share_sats,
-                2
-            ),
-
-        "btcYield7d":
-            (
-                round(
-                    btc_yield_7d,
-                    3
-                )
-                if btc_yield_7d is not None
-                else None
-            ),
-
-        "oiBtc":
-            oi_btc,
-
-        "fundingRate":
-            funding,
-
-        "oiChange7d":
-            (
-                round(
-                    oi_change_7d,
-                    2
-                )
-                if oi_change_7d is not None
-                else None
-            ),
-
-        "btcChange7d":
-            (
-                round(
-                    btc_change_7d,
-                    2
-                )
-                if btc_change_7d is not None
-                else None
-            ),
-
-        "balanceSheetRatio":
-            (
-                round(
-                    balance_ratio * 100,
-                    2
-                )
-                if balance_ratio is not None
-                else None
-            ),
-
-        "riskScore":
-            risk_score,
-
-        "riskLevel":
-            (
-                level_from_score(
-                    risk_score
-                )
-                if risk_score is not None
-                else "DATA"
-            )
+      document.getElementById(
+        "advancedMetricsStyle"
+      )
+    ) {
+      return;
     }
 
-    # Replace today's record.
-    advanced = [
-        item
-        for item in advanced
-        if item.get("date") != date_key
-    ]
+    const style =
+      document.createElement("style");
 
-    advanced.append(record)
+    style.id =
+      "advancedMetricsStyle";
 
-    advanced.sort(
-        key=lambda x:
-        x.get("date", "")
-    )
+    style.textContent = `
 
-    save_json(
-        ADVANCED_FILE,
-        advanced
-    )
+      #advancedMetricsSection {
+        margin-top: 22px;
+      }
 
-    print("======================================")
-    print("MSTR Advanced Metrics Updated")
-    print("======================================")
-    print("mNAV percentile:", mnav_percentile)
-    print("BTC/share sats:", btc_per_share_sats)
-    print("BTC Yield 7d:", btc_yield_7d)
-    print("OI 7d:", oi_change_7d)
-    print("BTC 7d:", btc_change_7d)
-    print("Balance sheet ratio:", balance_ratio)
-    print("Risk score:", risk_score)
-    print(
-        "Risk level:",
-        record["riskLevel"]
-    )
-    print(
-        "Advanced records:",
-        len(advanced)
-    )
-    print("======================================")
+      .advanced-grid {
+        display: grid;
+        grid-template-columns:
+          repeat(4, 1fr);
+        gap: 10px;
+        padding:
+          18px 24px 24px;
+      }
+
+      .advanced-card {
+        padding: 15px;
+        border-radius: 10px;
+        background: #101620;
+        border:
+          1px solid
+          rgba(255,255,255,.07);
+      }
+
+      .advanced-label {
+        font-size: 11px;
+        color: #7f8b9c;
+      }
+
+      .advanced-value {
+        margin-top: 6px;
+        font-size: 18px;
+        font-weight: 800;
+      }
+
+      .advanced-note {
+        margin-top: 5px;
+        font-size: 11px;
+        color: #788496;
+      }
+
+      .risk-box {
+        margin:
+          0 24px 22px;
+        padding: 18px;
+        border-radius: 10px;
+        background: #101620;
+        border:
+          1px solid
+          rgba(255,255,255,.08);
+      }
+
+      .risk-title {
+        font-size: 12px;
+        color: #7f8b9c;
+      }
+
+      .risk-value {
+        margin-top: 6px;
+        font-size: 25px;
+        font-weight: 900;
+      }
+
+      .risk-bar {
+        margin-top: 12px;
+        height: 8px;
+        border-radius: 999px;
+        background: #202936;
+        overflow: hidden;
+      }
+
+      .risk-fill {
+        height: 100%;
+        width: 0%;
+        border-radius: 999px;
+      }
+
+      @media (max-width: 800px) {
+
+        .advanced-grid {
+          grid-template-columns:
+            repeat(2, 1fr);
+        }
+
+      }
+
+      @media (max-width: 500px) {
+
+        .advanced-grid {
+          padding-left: 18px;
+          padding-right: 18px;
+        }
+
+        .risk-box {
+          margin-left: 18px;
+          margin-right: 18px;
+        }
+
+      }
+
+    `;
+
+    document.head.appendChild(style);
+  }
 
 
-if __name__ == "__main__":
-    main()
+  /* ---------------------------------------
+     영역 생성
+  --------------------------------------- */
+
+  function createSection() {
+
+    if (
+      document.getElementById(
+        "advancedMetricsSection"
+      )
+    ) {
+      return;
+    }
+
+    const section =
+      document.createElement("section");
+
+    section.id =
+      "advancedMetricsSection";
+
+    section.innerHTML = `
+
+      <h2>
+        🧠 MSTR 투자 보조지표
+      </h2>
+
+      <div class="advanced-grid">
+
+        <div class="advanced-card">
+
+          <div class="advanced-label">
+            BTC / 주식
+          </div>
+
+          <div
+            id="btcPerShare"
+            class="advanced-value">
+            —
+          </div>
+
+          <div class="advanced-note">
+            보유 BTC ÷ 희석주식수
+          </div>
+
+        </div>
+
+
+        <div class="advanced-card">
+
+          <div class="advanced-label">
+            BTC Yield
+          </div>
+
+          <div
+            id="btcYield"
+            class="advanced-value">
+            —
+          </div>
+
+          <div class="advanced-note">
+            최근 데이터 기준
+          </div>
+
+        </div>
+
+
+        <div class="advanced-card">
+
+          <div class="advanced-label">
+            mNAV Percentile
+          </div>
+
+          <div
+            id="mnavPercentile"
+            class="advanced-value">
+            —
+          </div>
+
+          <div class="advanced-note">
+            역사적 위치
+          </div>
+
+        </div>
+
+
+        <div class="advanced-card">
+
+          <div class="advanced-label">
+            Risk Score
+          </div>
+
+          <div
+            id="riskScore"
+            class="advanced-value">
+            —
+          </div>
+
+          <div class="advanced-note">
+            0 = 낮음 / 100 = 높음
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <div class="risk-box">
+
+        <div class="risk-title">
+          종합 위험도
+        </div>
+
+        <div
+          id="riskLabel"
+          class="risk-value">
+          계산 중...
+        </div>
+
+        <div class="risk-bar">
+
+          <div
+            id="riskFill"
+            class="risk-fill">
+          </div>
+
+        </div>
+
+      </div>
+
+    `;
+
+    const historySection =
+      document.getElementById(
+        "mnavHistorySection"
+      );
+
+    if (historySection) {
+
+      historySection.parentNode.insertBefore(
+        section,
+        historySection
+      );
+
+    } else {
+
+      const footer =
+        document.querySelector("footer");
+
+      if (footer) {
+
+        footer.parentNode.insertBefore(
+          section,
+          footer
+        );
+
+      } else {
+
+        document.body.appendChild(
+          section
+        );
+
+      }
+
+    }
+
+  }
+
+
+  /* ---------------------------------------
+     JSON
+  --------------------------------------- */
+
+  async function loadJSON(
+    url
+  ) {
+
+    const response =
+      await fetch(
+        url,
+        {
+          cache: "no-store"
+        }
+      );
+
+    if (!response.ok) {
+
+      throw new Error(
+        url +
+        " " +
+        response.status
+      );
+
+    }
+
+    return response.json();
+
+  }
+
+
+  /* ---------------------------------------
+     Percentile
+  --------------------------------------- */
+
+  function calculatePercentile(
+    value,
+    values
+  ) {
+
+    const valid =
+      values
+        .map(Number)
+        .filter(
+          Number.isFinite
+        );
+
+    if (
+      !valid.length ||
+      !Number.isFinite(
+        Number(value)
+      )
+    ) {
+      return null;
+    }
+
+    const below =
+      valid.filter(
+        x =>
+          x <= Number(value)
+      ).length;
+
+    return (
+      below /
+      valid.length
+    ) * 100;
+
+  }
+
+
+  /* ---------------------------------------
+     BTC / Share
+  --------------------------------------- */
+
+  function calculateBTCPerShare() {
+
+    const holdings =
+      Number(
+        company.btcHoldings
+      );
+
+    const fdso =
+      Number(
+        company.fdso
+      );
+
+    if (
+      !Number.isFinite(holdings) ||
+      !Number.isFinite(fdso) ||
+      fdso <= 0
+    ) {
+      return null;
+    }
+
+    return (
+      holdings /
+      (fdso * 1e6)
+    );
+
+  }
+
+
+  /* ---------------------------------------
+     BTC Yield
+  --------------------------------------- */
+
+  function calculateBTCYield() {
+
+    if (
+      history.length < 2
+    ) {
+      return null;
+    }
+
+    const first =
+      history[0];
+
+    const latest =
+      history[
+        history.length - 1
+      ];
+
+    const firstBtc =
+      Number(
+        first.btc
+      );
+
+    const latestBtc =
+      Number(
+        latest.btc
+      );
+
+    if (
+      !Number.isFinite(
+        firstBtc
+      ) ||
+      !Number.isFinite(
+        latestBtc
+      ) ||
+      firstBtc <= 0
+    ) {
+      return null;
+    }
+
+    return (
+      (
+        latestBtc /
+        firstBtc
+      ) - 1
+    ) * 100;
+
+  }
+
+
+  /* ---------------------------------------
+     Risk Score
+  --------------------------------------- */
+
+  function calculateRisk() {
+
+    if (
+      !history.length
+    ) {
+      return null;
+    }
+
+    const latest =
+      history[
+        history.length - 1
+      ];
+
+    let score = 0;
+
+
+    /* mNAV */
+
+    const mnav =
+      Number(
+        latest.mnav
+      );
+
+    if (
+      Number.isFinite(mnav)
+    ) {
+
+      if (mnav >= 2.5) {
+
+        score += 35;
+
+      } else if (mnav >= 2.0) {
+
+        score += 25;
+
+      } else if (mnav >= 1.5) {
+
+        score += 15;
+
+      } else if (mnav >= 1.2) {
+
+        score += 8;
+
+      }
+
+    }
+
+
+    /* Funding */
+
+    const funding =
+      Number(
+        latest.fundingRate
+      );
+
+    if (
+      Number.isFinite(funding)
+    ) {
+
+      const absoluteFunding =
+        Math.abs(funding);
+
+      if (
+        absoluteFunding >= 0.06
+      ) {
+
+        score += 35;
+
+      } else if (
+        absoluteFunding >= 0.03
+      ) {
+
+        score += 25;
+
+      } else if (
+        absoluteFunding >= 0.01
+      ) {
+
+        score += 15;
+
+      } else if (
+        absoluteFunding >= 0.005
+      ) {
+
+        score += 8;
+
+      }
+
+    }
+
+
+    /* OI */
+
+    if (
+      history.length >= 2
+    ) {
+
+      const previous =
+        Number(
+          history[
+            history.length - 2
+          ].oiBtc
+        );
+
+      const current =
+        Number(
+          latest.oiBtc
+        );
+
+      if (
+        Number.isFinite(previous) &&
+        Number.isFinite(current) &&
+        previous > 0
+      ) {
+
+        const oiChange =
+          (
+            current /
+            previous
+          ) - 1;
+
+        if (
+          oiChange >= 0.10
+        ) {
+
+          score += 30;
+
+        } else if (
+          oiChange >= 0.05
+        ) {
+
+          score += 20;
+
+        } else if (
+          oiChange >= 0.02
+        ) {
+
+          score += 10;
+
+        }
+
+      }
+
+    }
+
+
+    return Math.min(
+      100,
+      Math.round(score)
+    );
+
+  }
+
+
+  /* ---------------------------------------
+     Risk Label
+  --------------------------------------- */
+
+  function getRiskLabel(
+    score
+  ) {
+
+    if (
+      score === null
+    ) {
+
+      return {
+        label: "DATA UNAVAILABLE",
+        className: "neutral"
+      };
+
+    }
+
+    if (
+      score >= 75
+    ) {
+
+      return {
+        label: "🔴 EXTREME",
+        className: "extreme"
+      };
+
+    }
+
+    if (
+      score >= 50
+    ) {
+
+      return {
+        label: "🟠 OVERHEATED",
+        className: "overheated"
+      };
+
+    }
+
+    if (
+      score >= 25
+    ) {
+
+      return {
+        label: "🟡 CAUTION",
+        className: "caution"
+      };
+
+    }
+
+    return {
+      label: "🟢 SAFE",
+      className: "safe"
+    };
+
+  }
+
+
+  /* ---------------------------------------
+     화면 업데이트
+  --------------------------------------- */
+
+  function render() {
+
+    if (
+      !history.length
+    ) {
+      return;
+    }
+
+    const latest =
+      history[
+        history.length - 1
+      ];
+
+
+    /* BTC / Share */
+
+    const btcPerShare =
+      calculateBTCPerShare();
+
+    const btcPerShareElement =
+      document.getElementById(
+        "btcPerShare"
+      );
+
+    if (
+      btcPerShareElement
+    ) {
+
+      btcPerShareElement.textContent =
+        btcPerShare !== null
+          ? btcPerShare.toFixed(
+              6
+            ) + " BTC"
+          : "—";
+
+    }
+
+
+    /* BTC Yield */
+
+    const btcYield =
+      calculateBTCYield();
+
+    const btcYieldElement =
+      document.getElementById(
+        "btcYield"
+      );
+
+    if (
+      btcYieldElement
+    ) {
+
+      btcYieldElement.textContent =
+        btcYield !== null
+          ? (
+              btcYield >= 0
+                ? "+"
+                : ""
+            ) +
+            btcYield.toFixed(
+              2
+            ) +
+            "%"
+          : "—";
+
+    }
+
+
+    /* mNAV percentile */
+
+    const mnavPercentile =
+      calculatePercentile(
+        latest.mnav,
+        history.map(
+          item =>
+            item.mnav
+        )
+      );
+
+    const percentileElement =
+      document.getElementById(
+        "mnavPercentile"
+      );
+
+    if (
+      percentileElement
+    ) {
+
+      percentileElement.textContent =
+        mnavPercentile !== null
+          ? mnavPercentile.toFixed(
+              0
+            ) + " percentile"
+          : "—";
+
+    }
+
+
+    /* Risk */
+
+    const score =
+      calculateRisk();
+
+    const risk =
+      getRiskLabel(
+        score
+      );
+
+    const scoreElement =
+      document.getElementById(
+        "riskScore"
+      );
+
+    const labelElement =
+      document.getElementById(
+        "riskLabel"
+      );
+
+    const fillElement =
+      document.getElementById(
+        "riskFill"
+      );
+
+
+    if (
+      scoreElement
+    ) {
+
+      scoreElement.textContent =
+        score !== null
+          ? score + " / 100"
+          : "—";
+
+    }
+
+
+    if (
+      labelElement
+    ) {
+
+      labelElement.textContent =
+        risk.label;
+
+    }
+
+
+    if (
+      fillElement &&
+      score !== null
+    ) {
+
+      fillElement.style.width =
+        score + "%";
+
+    }
+
+  }
+
+
+  /* ---------------------------------------
+     실행
+  --------------------------------------- */
+
+  async function init() {
+
+    injectStyle();
+
+    createSection();
+
+    try {
+
+      const results =
+        await Promise.all([
+          loadJSON(
+            HISTORY_URL
+          ),
+          loadJSON(
+            DATA_URL
+          )
+        ]);
+
+      history =
+        Array.isArray(
+          results[0]
+        )
+          ? results[0]
+          : [];
+
+      company =
+        results[1] || {};
+
+      render();
+
+    } catch (error) {
+
+      console.error(
+        "Advanced metrics error:",
+        error
+      );
+
+      const label =
+        document.getElementById(
+          "riskLabel"
+        );
+
+      if (label) {
+
+        label.textContent =
+          "DATA UNAVAILABLE";
+
+      }
+
+    }
+
+  }
+
+
+  if (
+    document.readyState ===
+    "loading"
+  ) {
+
+    document.addEventListener(
+      "DOMContentLoaded",
+      init
+    );
+
+  } else {
+
+    init();
+
+  }
+
+})();
