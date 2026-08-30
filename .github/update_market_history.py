@@ -69,12 +69,16 @@ OKX_FUNDING_URL = (
 # =========================================================
 
 HEADERS = {
-    "User-Agent": "tommyoon007-mnav-history/4.0",
+    "User-Agent": "tommyoon007-mnav-history/5.0",
     "Accept": "application/json"
 }
 
 TIMEOUT = 20
 
+
+# =========================================================
+# JSON
+# =========================================================
 
 def load_json(path, default):
 
@@ -82,6 +86,7 @@ def load_json(path, default):
         return default
 
     try:
+
         return json.loads(
             path.read_text(
                 encoding="utf-8"
@@ -314,7 +319,7 @@ def get_okx_funding():
 
 
 # =========================================================
-# M NAV
+# mNAV
 # =========================================================
 
 def calculate_mnav(
@@ -383,6 +388,246 @@ def calculate_mnav(
 
 
 # =========================================================
+# RISK CALCULATION
+# =========================================================
+#
+# Funding + OI 증가를 함께 판단한다.
+#
+# fundingRate 단위:
+# %
+#
+# 예:
+# 0.01 = +0.01%
+# 0.05 = +0.05%
+# 0.10 = +0.10%
+#
+# OI 변화:
+# 최근 데이터 대비 증가율
+#
+# =========================================================
+
+def calculate_risk(
+    funding_rate,
+    current_oi_usd,
+    history
+):
+
+    if (
+        funding_rate is None or
+        current_oi_usd is None
+    ):
+
+        return {
+            "riskLevel": "UNKNOWN",
+            "riskScore": None,
+            "fundingSignal": "UNKNOWN",
+            "oiSignal": "UNKNOWN"
+        }
+
+
+    # -----------------------------------------------------
+    # Funding score
+    # -----------------------------------------------------
+
+    funding_abs = abs(
+        float(funding_rate)
+    )
+
+    funding_score = 0
+
+    if funding_abs >= 0.10:
+
+        funding_score = 3
+
+    elif funding_abs >= 0.05:
+
+        funding_score = 2
+
+    elif funding_abs >= 0.03:
+
+        funding_score = 1
+
+
+    # -----------------------------------------------------
+    # Funding 방향
+    # -----------------------------------------------------
+
+    if funding_rate >= 0.10:
+
+        funding_signal = "EXTREME_LONG"
+
+    elif funding_rate >= 0.05:
+
+        funding_signal = "HIGH_LONG"
+
+    elif funding_rate >= 0.03:
+
+        funding_signal = "ELEVATED_LONG"
+
+    elif funding_rate <= -0.10:
+
+        funding_signal = "EXTREME_SHORT"
+
+    elif funding_rate <= -0.05:
+
+        funding_signal = "HIGH_SHORT"
+
+    elif funding_rate <= -0.03:
+
+        funding_signal = "ELEVATED_SHORT"
+
+    else:
+
+        funding_signal = "NORMAL"
+
+
+    # -----------------------------------------------------
+    # OI 변화
+    # -----------------------------------------------------
+
+    previous_oi = None
+
+    if isinstance(history, list):
+
+        valid = [
+            item
+            for item in history
+            if item.get("oiUsd") is not None
+        ]
+
+        if valid:
+
+            # 가장 최근 저장값
+            previous_oi = float(
+                valid[-1]["oiUsd"]
+            )
+
+
+    oi_change = None
+    oi_score = 0
+
+    if (
+        previous_oi is not None and
+        previous_oi > 0
+    ):
+
+        oi_change = (
+            (
+                current_oi_usd /
+                previous_oi
+            ) - 1
+        ) * 100
+
+        if oi_change >= 10:
+
+            oi_score = 2
+
+        elif oi_change >= 5:
+
+            oi_score = 1
+
+
+    # -----------------------------------------------------
+    # OI signal
+    # -----------------------------------------------------
+
+    if oi_change is None:
+
+        oi_signal = "UNKNOWN"
+
+    elif oi_change >= 10:
+
+        oi_signal = "RAPID_RISE"
+
+    elif oi_change >= 5:
+
+        oi_signal = "RISING"
+
+    elif oi_change <= -10:
+
+        oi_signal = "RAPID_FALL"
+
+    elif oi_change <= -5:
+
+        oi_signal = "FALLING"
+
+    else:
+
+        oi_signal = "STABLE"
+
+
+    # -----------------------------------------------------
+    # Risk score
+    # -----------------------------------------------------
+
+    risk_score = (
+        funding_score +
+        oi_score
+    )
+
+
+    # -----------------------------------------------------
+    # 특별히 Funding + OI가 동시에 증가하면
+    # 한 단계 더 위험하게 판단
+    # -----------------------------------------------------
+
+    if (
+        funding_rate >= 0.05 and
+        oi_change is not None and
+        oi_change >= 5
+    ):
+
+        risk_score += 1
+
+
+    # -----------------------------------------------------
+    # Level
+    # -----------------------------------------------------
+
+    if risk_score >= 5:
+
+        risk_level = "EXTREME"
+
+    elif risk_score >= 3:
+
+        risk_level = "OVERHEATED"
+
+    elif risk_score >= 1:
+
+        risk_level = "CAUTION"
+
+    else:
+
+        risk_level = "SAFE"
+
+
+    return {
+
+        "riskLevel":
+            risk_level,
+
+        "riskScore":
+            risk_score,
+
+        "fundingSignal":
+            funding_signal,
+
+        "oiSignal":
+            oi_signal,
+
+        "oiChangePct":
+            (
+                round(
+                    oi_change,
+                    2
+                )
+                if oi_change is not None
+                else None
+            )
+    }
+
+
+# =========================================================
 # MAIN
 # =========================================================
 
@@ -394,6 +639,7 @@ def main():
     )
 
     if not company:
+
         raise RuntimeError(
             "data.json not found"
         )
@@ -423,14 +669,19 @@ def main():
     # -----------------------------------------------------
 
     oi_values = []
+
     funding_values = []
 
 
+    # -----------------------------------------------------
     # Binance
+    # -----------------------------------------------------
 
     try:
 
-        oi_btc = get_binance_oi()
+        oi_btc = (
+            get_binance_oi()
+        )
 
         oi_usd = (
             oi_btc *
@@ -445,6 +696,7 @@ def main():
                     oi_usd
                 )
             )
+
 
         try:
 
@@ -475,7 +727,9 @@ def main():
         )
 
 
+    # -----------------------------------------------------
     # Bybit
+    # -----------------------------------------------------
 
     try:
 
@@ -509,13 +763,17 @@ def main():
         )
 
 
+    # -----------------------------------------------------
     # OKX
+    # -----------------------------------------------------
 
     okx_oi = None
 
     try:
 
-        okx_oi = get_okx_oi()
+        okx_oi = (
+            get_okx_oi()
+        )
 
         if okx_oi > 0:
 
@@ -652,6 +910,17 @@ def main():
 
 
     # -----------------------------------------------------
+    # Risk
+    # -----------------------------------------------------
+
+    risk = calculate_risk(
+        aggregate_funding,
+        aggregate_oi_usd,
+        history
+    )
+
+
+    # -----------------------------------------------------
     # Record
     # -----------------------------------------------------
 
@@ -732,7 +1001,26 @@ def main():
                 name
                 for name, _, _
                 in funding_values
-            ]
+            ],
+
+        # -------------------------------------------------
+        # NEW RISK DATA
+        # -------------------------------------------------
+
+        "riskLevel":
+            risk["riskLevel"],
+
+        "riskScore":
+            risk["riskScore"],
+
+        "fundingSignal":
+            risk["fundingSignal"],
+
+        "oiSignal":
+            risk["oiSignal"],
+
+        "oiChangePct":
+            risk["oiChangePct"]
     }
 
 
@@ -754,6 +1042,10 @@ def main():
     )
 
 
+    # -----------------------------------------------------
+    # Sort
+    # -----------------------------------------------------
+
     history.sort(
         key=lambda x:
         x.get(
@@ -762,6 +1054,10 @@ def main():
         )
     )
 
+
+    # -----------------------------------------------------
+    # Save
+    # -----------------------------------------------------
 
     save_json(
         HISTORY_FILE,
@@ -814,6 +1110,31 @@ def main():
     print(
         "Funding Rate:",
         aggregate_funding
+    )
+
+    print(
+        "OI Change:",
+        risk["oiChangePct"]
+    )
+
+    print(
+        "Funding Signal:",
+        risk["fundingSignal"]
+    )
+
+    print(
+        "OI Signal:",
+        risk["oiSignal"]
+    )
+
+    print(
+        "Risk Level:",
+        risk["riskLevel"]
+    )
+
+    print(
+        "Risk Score:",
+        risk["riskScore"]
     )
 
     print(
