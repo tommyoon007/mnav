@@ -1,4 +1,4 @@
-name: Update MSTR market prices v2
+name: Update MSTR market prices
 run-name: Market price update 
 
 on:
