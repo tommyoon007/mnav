@@ -7,7 +7,7 @@ on:
     - cron: "7,22,37,52 * * * *"
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -40,6 +40,14 @@ jobs:
       - name: Update market prices
         run: |
           python .github/update_market_prices.py
+
+      - name: Commit updated live.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add live.json
+          git diff --staged --quiet || git commit -m "Auto-update market prices"
+          git push
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
