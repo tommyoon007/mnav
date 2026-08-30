@@ -18,19 +18,31 @@
   },
   {
     "date": "2026-08-30",
-    "timestamp": "2026-08-30T05:19:05.508554+00:00",
-    "btc": 78140.0,
+    "timestamp": "2026-08-30T06:19:53.620649+00:00",
+    "btc": 78119.0,
     "mstr": 127.31,
-    "mnav": 1.0556,
-    "netBpsUsd": 120.61,
-    "oiBtc": 28518.53,
-    "oiUsd": 2228437936.31,
-    "fundingRate": 0.00452,
+    "mnav": 1.056,
+    "netBpsUsd": 120.56,
+    "btcPerShare": 0.0020015408,
+    "oiBtc": 28541.18,
+    "oiUsd": 2229608409.72,
+    "fundingRate": 0.00556,
+    "oiChange1dPct": -0.3,
+    "oiChange7dPct": null,
+    "btcChange1dPct": -0.05,
+    "btcChange7dPct": null,
+    "mnavChange1dPct": 0.06,
+    "mnavChange7dPct": null,
+    "mnavPercentile": null,
+    "riskScore": 0.0,
+    "riskLevel": "SAFE",
     "oiSources": [
       "OKX"
     ],
     "fundingSources": [
       "OKX"
-    ]
+    ],
+    "btcYield1dPct": null,
+    "btcYield7dPct": null
   }
 ]
