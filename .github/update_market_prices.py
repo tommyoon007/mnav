@@ -17,8 +17,16 @@ COINGECKO_URL = (
     "?ids=bitcoin&vs_currencies=usd"
 )
 
+# Yahoo blocks non-browser-looking requests (401/429). Use a real
+# browser User-Agent + standard headers to reduce block rate.
 HEADERS = {
-    "User-Agent": "mnav-market-updater/1.0"
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/125.0.0.0 Safari/537.36"
+    ),
+    "Accept": "*/*",
+    "Accept-Language": "en-US,en;q=0.9",
 }
 
 TIMEOUT = 20
@@ -126,6 +134,8 @@ def main():
         print("MSTR price failed:", exc)
 
     # 기존 정상 가격이 하나라도 없으면 실패
+    # (live.json을 워크플로우에서 커밋해두면 이 previous 값은
+    #  "직전 성공값"이 되므로, 한쪽만 실패해도 여기서 죽지 않음)
     if (
         previous.get("btcPrice") is None
         or previous.get("mstrPrice") is None
