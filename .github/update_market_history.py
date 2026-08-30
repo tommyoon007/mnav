@@ -1,9 +1,13 @@
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 import requests
 
+
+# =========================================================
+# FILES
+# =========================================================
 
 DATA_FILE = Path("data.json")
 HISTORY_FILE = Path("history.json")
@@ -86,7 +90,6 @@ def load_json(path, default):
         return default
 
     try:
-
         return json.loads(
             path.read_text(
                 encoding="utf-8"
@@ -114,6 +117,10 @@ def save_json(path, data):
         encoding="utf-8"
     )
 
+
+# =========================================================
+# HTTP
+# =========================================================
 
 def get_json(url):
 
@@ -221,6 +228,7 @@ def get_binance_funding():
         data[0]["fundingRate"]
     )
 
+    # Decimal → percent
     return rate * 100.0
 
 
@@ -375,7 +383,17 @@ def calculate_mnav(
         net_bps
     )
 
+    # BTC per diluted share
+    btc_per_share = (
+        holdings /
+        (fdso * 1e6)
+    )
+
+    # BTC Yield proxy:
+    # current BTC/share will be compared
+    # with previous history later.
     return {
+
         "netReserveUsd":
             net_reserve,
 
@@ -383,248 +401,301 @@ def calculate_mnav(
             net_bps,
 
         "mnav":
-            mnav
+            mnav,
+
+        "btcPerShare":
+            btc_per_share
     }
 
 
 # =========================================================
-# RISK CALCULATION
-# =========================================================
-#
-# Funding + OI 증가를 함께 판단한다.
-#
-# fundingRate 단위:
-# %
-#
-# 예:
-# 0.01 = +0.01%
-# 0.05 = +0.05%
-# 0.10 = +0.10%
-#
-# OI 변화:
-# 최근 데이터 대비 증가율
-#
+# CHANGE HELPERS
 # =========================================================
 
-def calculate_risk(
-    funding_rate,
-    current_oi_usd,
+def get_previous_record(
+    history,
+    days_back=1
+):
+
+    if not history:
+        return None
+
+    target_date = (
+        datetime.now(
+            timezone.utc
+        ).date()
+        - timedelta(
+            days=days_back
+        )
+    )
+
+    target_key = target_date.strftime(
+        "%Y-%m-%d"
+    )
+
+    candidates = [
+        item
+        for item in history
+        if item.get("date", "") <= target_key
+    ]
+
+    if not candidates:
+        return None
+
+    candidates.sort(
+        key=lambda x:
+        x.get("date", "")
+    )
+
+    return candidates[-1]
+
+
+def percentage_change(
+    current,
+    previous
+):
+
+    try:
+
+        current = float(current)
+        previous = float(previous)
+
+    except (
+        TypeError,
+        ValueError
+    ):
+
+        return None
+
+    if (
+        not current > 0 or
+        not previous > 0
+    ):
+        return None
+
+    return (
+        (
+            current /
+            previous
+        ) - 1
+    ) * 100.0
+
+
+# =========================================================
+# mNAV PERCENTILE
+# =========================================================
+
+def calculate_mnav_percentile(
+    current_mnav,
     history
 ):
 
-    if (
-        funding_rate is None or
-        current_oi_usd is None
+    try:
+
+        current = float(
+            current_mnav
+        )
+
+    except (
+        TypeError,
+        ValueError
     ):
 
-        return {
-            "riskLevel": "UNKNOWN",
-            "riskScore": None,
-            "fundingSignal": "UNKNOWN",
-            "oiSignal": "UNKNOWN"
-        }
+        return None
 
+    values = []
 
-    # -----------------------------------------------------
-    # Funding score
-    # -----------------------------------------------------
+    for item in history:
 
-    funding_abs = abs(
-        float(funding_rate)
-    )
+        try:
 
-    funding_score = 0
-
-    if funding_abs >= 0.10:
-
-        funding_score = 3
-
-    elif funding_abs >= 0.05:
-
-        funding_score = 2
-
-    elif funding_abs >= 0.03:
-
-        funding_score = 1
-
-
-    # -----------------------------------------------------
-    # Funding 방향
-    # -----------------------------------------------------
-
-    if funding_rate >= 0.10:
-
-        funding_signal = "EXTREME_LONG"
-
-    elif funding_rate >= 0.05:
-
-        funding_signal = "HIGH_LONG"
-
-    elif funding_rate >= 0.03:
-
-        funding_signal = "ELEVATED_LONG"
-
-    elif funding_rate <= -0.10:
-
-        funding_signal = "EXTREME_SHORT"
-
-    elif funding_rate <= -0.05:
-
-        funding_signal = "HIGH_SHORT"
-
-    elif funding_rate <= -0.03:
-
-        funding_signal = "ELEVATED_SHORT"
-
-    else:
-
-        funding_signal = "NORMAL"
-
-
-    # -----------------------------------------------------
-    # OI 변화
-    # -----------------------------------------------------
-
-    previous_oi = None
-
-    if isinstance(history, list):
-
-        valid = [
-            item
-            for item in history
-            if item.get("oiUsd") is not None
-        ]
-
-        if valid:
-
-            # 가장 최근 저장값
-            previous_oi = float(
-                valid[-1]["oiUsd"]
+            value = float(
+                item.get("mnav")
             )
 
+            if (
+                value > 0 and
+                value == value
+            ):
+                values.append(value)
 
-    oi_change = None
-    oi_score = 0
+        except (
+            TypeError,
+            ValueError
+        ):
+            continue
 
-    if (
-        previous_oi is not None and
-        previous_oi > 0
-    ):
+    if len(values) < 5:
+        return None
 
-        oi_change = (
-            (
-                current_oi_usd /
-                previous_oi
-            ) - 1
-        ) * 100
+    values.sort()
 
-        if oi_change >= 10:
-
-            oi_score = 2
-
-        elif oi_change >= 5:
-
-            oi_score = 1
-
-
-    # -----------------------------------------------------
-    # OI signal
-    # -----------------------------------------------------
-
-    if oi_change is None:
-
-        oi_signal = "UNKNOWN"
-
-    elif oi_change >= 10:
-
-        oi_signal = "RAPID_RISE"
-
-    elif oi_change >= 5:
-
-        oi_signal = "RISING"
-
-    elif oi_change <= -10:
-
-        oi_signal = "RAPID_FALL"
-
-    elif oi_change <= -5:
-
-        oi_signal = "FALLING"
-
-    else:
-
-        oi_signal = "STABLE"
-
-
-    # -----------------------------------------------------
-    # Risk score
-    # -----------------------------------------------------
-
-    risk_score = (
-        funding_score +
-        oi_score
+    below_or_equal = sum(
+        1
+        for value in values
+        if value <= current
     )
 
+    return (
+        below_or_equal /
+        len(values)
+    ) * 100.0
+
+
+# =========================================================
+# RISK SCORE
+# =========================================================
+
+def calculate_risk_score(
+    mnav_percentile,
+    funding_rate,
+    oi_change_1d,
+    oi_change_7d,
+    btc_change_7d
+):
+
+    score = 0.0
+
 
     # -----------------------------------------------------
-    # 특별히 Funding + OI가 동시에 증가하면
-    # 한 단계 더 위험하게 판단
+    # mNAV valuation
     # -----------------------------------------------------
 
-    if (
-        funding_rate >= 0.05 and
-        oi_change is not None and
-        oi_change >= 5
-    ):
+    if mnav_percentile is not None:
 
-        risk_score += 1
+        if mnav_percentile >= 95:
+            score += 35
 
+        elif mnav_percentile >= 85:
+            score += 28
+
+        elif mnav_percentile >= 70:
+            score += 20
+
+        elif mnav_percentile >= 50:
+            score += 10
+
+
+    # -----------------------------------------------------
+    # Funding
+    # -----------------------------------------------------
+
+    if funding_rate is not None:
+
+        funding = abs(
+            float(funding_rate)
+        )
+
+        if funding >= 0.08:
+            score += 30
+
+        elif funding >= 0.05:
+            score += 23
+
+        elif funding >= 0.03:
+            score += 15
+
+        elif funding >= 0.015:
+            score += 7
+
+
+    # -----------------------------------------------------
+    # OI 1D
+    # -----------------------------------------------------
+
+    if oi_change_1d is not None:
+
+        oi1 = float(
+            oi_change_1d
+        )
+
+        if oi1 >= 10:
+            score += 15
+
+        elif oi1 >= 6:
+            score += 11
+
+        elif oi1 >= 3:
+            score += 6
+
+
+    # -----------------------------------------------------
+    # OI 7D
+    # -----------------------------------------------------
+
+    if oi_change_7d is not None:
+
+        oi7 = float(
+            oi_change_7d
+        )
+
+        if oi7 >= 20:
+            score += 15
+
+        elif oi7 >= 12:
+            score += 11
+
+        elif oi7 >= 7:
+            score += 6
+
+
+    # -----------------------------------------------------
+    # BTC 7D momentum
+    # -----------------------------------------------------
+
+    if btc_change_7d is not None:
+
+        btc7 = float(
+            btc_change_7d
+        )
+
+        if btc7 >= 15:
+            score += 10
+
+        elif btc7 >= 10:
+            score += 7
+
+        elif btc7 >= 5:
+            score += 4
+
+
+    # -----------------------------------------------------
+    # Cap
+    # -----------------------------------------------------
+
+    score = min(
+        100.0,
+        max(
+            0.0,
+            score
+        )
+    )
 
     # -----------------------------------------------------
     # Level
     # -----------------------------------------------------
 
-    if risk_score >= 5:
+    if score < 25:
 
-        risk_level = "EXTREME"
+        level = "SAFE"
 
-    elif risk_score >= 3:
+    elif score < 50:
 
-        risk_level = "OVERHEATED"
+        level = "CAUTION"
 
-    elif risk_score >= 1:
+    elif score < 75:
 
-        risk_level = "CAUTION"
+        level = "OVERHEATED"
 
     else:
 
-        risk_level = "SAFE"
+        level = "EXTREME"
 
 
-    return {
-
-        "riskLevel":
-            risk_level,
-
-        "riskScore":
-            risk_score,
-
-        "fundingSignal":
-            funding_signal,
-
-        "oiSignal":
-            oi_signal,
-
-        "oiChangePct":
-            (
-                round(
-                    oi_change,
-                    2
-                )
-                if oi_change is not None
-                else None
-            )
-    }
+    return round(
+        score,
+        1
+    ), level
 
 
 # =========================================================
@@ -632,6 +703,22 @@ def calculate_risk(
 # =========================================================
 
 def main():
+
+    print()
+    print(
+        "======================================"
+    )
+    print(
+        "MSTR Market History Update"
+    )
+    print(
+        "======================================"
+    )
+
+
+    # -----------------------------------------------------
+    # Company data
+    # -----------------------------------------------------
 
     company = load_json(
         DATA_FILE,
@@ -646,7 +733,7 @@ def main():
 
 
     # -----------------------------------------------------
-    # BTC / MSTR / mNAV
+    # BTC / MSTR
     # -----------------------------------------------------
 
     btc_price = (
@@ -657,7 +744,7 @@ def main():
         get_mstr_price()
     )
 
-    result = calculate_mnav(
+    mnav_result = calculate_mnav(
         btc_price,
         mstr_price,
         company
@@ -665,7 +752,24 @@ def main():
 
 
     # -----------------------------------------------------
-    # OI / FUNDING
+    # Load existing history
+    # -----------------------------------------------------
+
+    history = load_json(
+        HISTORY_FILE,
+        []
+    )
+
+    if not isinstance(
+        history,
+        list
+    ):
+
+        history = []
+
+
+    # -----------------------------------------------------
+    # OI / Funding
     # -----------------------------------------------------
 
     oi_values = []
@@ -679,51 +783,51 @@ def main():
 
     try:
 
-        oi_btc = (
+        binance_oi_btc = (
             get_binance_oi()
         )
 
-        oi_usd = (
-            oi_btc *
+        binance_oi_usd = (
+            binance_oi_btc *
             btc_price
         )
 
-        if oi_usd > 0:
+        if binance_oi_usd > 0:
 
             oi_values.append(
                 (
                     "Binance",
-                    oi_usd
+                    binance_oi_usd
                 )
             )
 
 
-        try:
+            try:
 
-            funding = (
-                get_binance_funding()
-            )
-
-            funding_values.append(
-                (
-                    "Binance",
-                    funding,
-                    oi_usd
+                binance_funding = (
+                    get_binance_funding()
                 )
-            )
 
-        except Exception as error:
+                funding_values.append(
+                    (
+                        "Binance",
+                        binance_funding,
+                        binance_oi_usd
+                    )
+                )
 
-            print(
-                "WARNING: Binance "
-                f"Funding failed: {error}"
-            )
+            except Exception as error:
+
+                print(
+                    "WARNING: Binance funding failed:",
+                    error
+                )
 
     except Exception as error:
 
         print(
-            "WARNING: Binance OI "
-            f"failed: {error}"
+            "WARNING: Binance OI failed:",
+            error
         )
 
 
@@ -734,32 +838,32 @@ def main():
     try:
 
         (
-            oi_usd,
-            funding
+            bybit_oi_usd,
+            bybit_funding
         ) = get_bybit_data()
 
-        if oi_usd > 0:
+        if bybit_oi_usd > 0:
 
             oi_values.append(
                 (
                     "Bybit",
-                    oi_usd
+                    bybit_oi_usd
                 )
             )
 
             funding_values.append(
                 (
                     "Bybit",
-                    funding,
-                    oi_usd
+                    bybit_funding,
+                    bybit_oi_usd
                 )
             )
 
     except Exception as error:
 
         print(
-            "WARNING: Bybit failed: "
-            f"{error}"
+            "WARNING: Bybit failed:",
+            error
         )
 
 
@@ -767,28 +871,28 @@ def main():
     # OKX
     # -----------------------------------------------------
 
-    okx_oi = None
+    okx_oi_usd = None
 
     try:
 
-        okx_oi = (
+        okx_oi_usd = (
             get_okx_oi()
         )
 
-        if okx_oi > 0:
+        if okx_oi_usd > 0:
 
             oi_values.append(
                 (
                     "OKX",
-                    okx_oi
+                    okx_oi_usd
                 )
             )
 
     except Exception as error:
 
         print(
-            "WARNING: OKX OI failed: "
-            f"{error}"
+            "WARNING: OKX OI failed:",
+            error
         )
 
 
@@ -799,23 +903,23 @@ def main():
         )
 
         if (
-            okx_oi is not None and
-            okx_oi > 0
+            okx_oi_usd is not None and
+            okx_oi_usd > 0
         ):
 
             funding_values.append(
                 (
                     "OKX",
                     okx_funding,
-                    okx_oi
+                    okx_oi_usd
                 )
             )
 
     except Exception as error:
 
         print(
-            "WARNING: OKX Funding "
-            f"failed: {error}"
+            "WARNING: OKX funding failed:",
+            error
         )
 
 
@@ -850,9 +954,10 @@ def main():
     if funding_values:
 
         total_weight = sum(
-            item[2]
-            for item in funding_values
-            if item[2] > 0
+            oi
+            for _, _, oi
+            in funding_values
+            if oi > 0
         )
 
         if total_weight > 0:
@@ -871,12 +976,121 @@ def main():
 
             aggregate_funding = (
                 sum(
-                    item[1]
-                    for item in funding_values
+                    rate
+                    for _, rate, _
+                    in funding_values
                 )
                 /
                 len(funding_values)
             )
+
+
+    # -----------------------------------------------------
+    # Previous data
+    # -----------------------------------------------------
+
+    previous_1d = (
+        get_previous_record(
+            history,
+            1
+        )
+    )
+
+    previous_7d = (
+        get_previous_record(
+            history,
+            7
+        )
+    )
+
+
+    # -----------------------------------------------------
+    # Changes
+    # -----------------------------------------------------
+
+    oi_change_1d = None
+    oi_change_7d = None
+
+    btc_change_1d = None
+    btc_change_7d = None
+
+    mnav_change_1d = None
+    mnav_change_7d = None
+
+
+    if (
+        previous_1d and
+        aggregate_oi_btc is not None
+    ):
+
+        oi_change_1d = percentage_change(
+            aggregate_oi_btc,
+            previous_1d.get("oiBtc")
+        )
+
+
+    if (
+        previous_7d and
+        aggregate_oi_btc is not None
+    ):
+
+        oi_change_7d = percentage_change(
+            aggregate_oi_btc,
+            previous_7d.get("oiBtc")
+        )
+
+
+    if previous_1d:
+
+        btc_change_1d = percentage_change(
+            btc_price,
+            previous_1d.get("btc")
+        )
+
+        mnav_change_1d = percentage_change(
+            mnav_result["mnav"],
+            previous_1d.get("mnav")
+        )
+
+
+    if previous_7d:
+
+        btc_change_7d = percentage_change(
+            btc_price,
+            previous_7d.get("btc")
+        )
+
+        mnav_change_7d = percentage_change(
+            mnav_result["mnav"],
+            previous_7d.get("mnav")
+        )
+
+
+    # -----------------------------------------------------
+    # mNAV percentile
+    # -----------------------------------------------------
+
+    mnav_percentile = (
+        calculate_mnav_percentile(
+            mnav_result["mnav"],
+            history
+        )
+    )
+
+
+    # -----------------------------------------------------
+    # Risk
+    # -----------------------------------------------------
+
+    risk_score, risk_level = (
+        calculate_risk_score(
+            mnav_percentile,
+            aggregate_funding,
+            oi_change_1d,
+            oi_change_7d,
+            btc_change_7d
+        )
+    )
 
 
     # -----------------------------------------------------
@@ -889,34 +1103,6 @@ def main():
 
     date_key = now.strftime(
         "%Y-%m-%d"
-    )
-
-
-    # -----------------------------------------------------
-    # Load history
-    # -----------------------------------------------------
-
-    history = load_json(
-        HISTORY_FILE,
-        []
-    )
-
-    if not isinstance(
-        history,
-        list
-    ):
-
-        history = []
-
-
-    # -----------------------------------------------------
-    # Risk
-    # -----------------------------------------------------
-
-    risk = calculate_risk(
-        aggregate_funding,
-        aggregate_oi_usd,
-        history
     )
 
 
@@ -946,14 +1132,20 @@ def main():
 
         "mnav":
             round(
-                result["mnav"],
+                mnav_result["mnav"],
                 4
             ),
 
         "netBpsUsd":
             round(
-                result["netBpsUsd"],
+                mnav_result["netBpsUsd"],
                 2
+            ),
+
+        "btcPerShare":
+            round(
+                mnav_result["btcPerShare"],
+                10
             ),
 
         "oiBtc":
@@ -989,6 +1181,89 @@ def main():
                 else None
             ),
 
+        "oiChange1dPct":
+            (
+                round(
+                    oi_change_1d,
+                    2
+                )
+                if oi_change_1d
+                is not None
+                else None
+            ),
+
+        "oiChange7dPct":
+            (
+                round(
+                    oi_change_7d,
+                    2
+                )
+                if oi_change_7d
+                is not None
+                else None
+            ),
+
+        "btcChange1dPct":
+            (
+                round(
+                    btc_change_1d,
+                    2
+                )
+                if btc_change_1d
+                is not None
+                else None
+            ),
+
+        "btcChange7dPct":
+            (
+                round(
+                    btc_change_7d,
+                    2
+                )
+                if btc_change_7d
+                is not None
+                else None
+            ),
+
+        "mnavChange1dPct":
+            (
+                round(
+                    mnav_change_1d,
+                    2
+                )
+                if mnav_change_1d
+                is not None
+                else None
+            ),
+
+        "mnavChange7dPct":
+            (
+                round(
+                    mnav_change_7d,
+                    2
+                )
+                if mnav_change_7d
+                is not None
+                else None
+            ),
+
+        "mnavPercentile":
+            (
+                round(
+                    mnav_percentile,
+                    2
+                )
+                if mnav_percentile
+                is not None
+                else None
+            ),
+
+        "riskScore":
+            risk_score,
+
+        "riskLevel":
+            risk_level,
+
         "oiSources":
             [
                 name
@@ -1001,27 +1276,76 @@ def main():
                 name
                 for name, _, _
                 in funding_values
-            ],
-
-        # -------------------------------------------------
-        # NEW RISK DATA
-        # -------------------------------------------------
-
-        "riskLevel":
-            risk["riskLevel"],
-
-        "riskScore":
-            risk["riskScore"],
-
-        "fundingSignal":
-            risk["fundingSignal"],
-
-        "oiSignal":
-            risk["oiSignal"],
-
-        "oiChangePct":
-            risk["oiChangePct"]
+            ]
     }
+
+
+    # -----------------------------------------------------
+    # BTC Yield
+    #
+    # This is NOT BTC price return.
+    #
+    # It measures change in BTC per diluted share.
+    # -----------------------------------------------------
+
+    if previous_1d:
+
+        btcps_change_1d = (
+            percentage_change(
+                record["btcPerShare"],
+                previous_1d.get(
+                    "btcPerShare"
+                )
+            )
+        )
+
+        record[
+            "btcYield1dPct"
+        ] = (
+            round(
+                btcps_change_1d,
+                2
+            )
+            if btcps_change_1d
+            is not None
+            else None
+        )
+
+    else:
+
+        record[
+            "btcYield1dPct"
+        ] = None
+
+
+    if previous_7d:
+
+        btcps_change_7d = (
+            percentage_change(
+                record["btcPerShare"],
+                previous_7d.get(
+                    "btcPerShare"
+                )
+            )
+        )
+
+        record[
+            "btcYield7dPct"
+        ] = (
+            round(
+                btcps_change_7d,
+                2
+            )
+            if btcps_change_7d
+            is not None
+            else None
+        )
+
+    else:
+
+        record[
+            "btcYield7dPct"
+        ] = None
 
 
     # -----------------------------------------------------
@@ -1035,7 +1359,6 @@ def main():
             "date"
         ) != date_key
     ]
-
 
     history.append(
         record
@@ -1069,19 +1392,6 @@ def main():
     # Console
     # -----------------------------------------------------
 
-    print()
-    print(
-        "======================================"
-    )
-
-    print(
-        "MSTR Historical Data Updated"
-    )
-
-    print(
-        "======================================"
-    )
-
     print(
         "BTC:",
         btc_price
@@ -1094,7 +1404,12 @@ def main():
 
     print(
         "mNAV:",
-        result["mnav"]
+        mnav_result["mnav"]
+    )
+
+    print(
+        "BTC / diluted share:",
+        mnav_result["btcPerShare"]
     )
 
     print(
@@ -1113,28 +1428,33 @@ def main():
     )
 
     print(
-        "OI Change:",
-        risk["oiChangePct"]
+        "OI 1D:",
+        oi_change_1d
     )
 
     print(
-        "Funding Signal:",
-        risk["fundingSignal"]
+        "OI 7D:",
+        oi_change_7d
     )
 
     print(
-        "OI Signal:",
-        risk["oiSignal"]
+        "BTC 7D:",
+        btc_change_7d
     )
 
     print(
-        "Risk Level:",
-        risk["riskLevel"]
+        "mNAV percentile:",
+        mnav_percentile
     )
 
     print(
         "Risk Score:",
-        risk["riskScore"]
+        risk_score
+    )
+
+    print(
+        "Risk Level:",
+        risk_level
     )
 
     print(
