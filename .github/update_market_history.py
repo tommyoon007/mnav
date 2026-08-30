@@ -10,7 +10,7 @@ HISTORY_FILE = Path("history.json")
 
 
 # =========================================================
-# MSTR / BTC
+# URL
 # =========================================================
 
 YAHOO_URL = (
@@ -64,17 +64,17 @@ OKX_FUNDING_URL = (
 )
 
 
+# =========================================================
+# COMMON
+# =========================================================
+
 HEADERS = {
-    "User-Agent": "tommyoon007-mnav-history/3.0",
+    "User-Agent": "tommyoon007-mnav-history/4.0",
     "Accept": "application/json"
 }
 
 TIMEOUT = 20
 
-
-# =========================================================
-# 공통
-# =========================================================
 
 def load_json(path, default):
 
@@ -91,9 +91,8 @@ def load_json(path, default):
     except Exception as error:
 
         print(
-            f"WARNING: "
-            f"Failed to read {path}: "
-            f"{error}"
+            f"WARNING: Failed to read "
+            f"{path}: {error}"
         )
 
         return default
@@ -121,13 +120,11 @@ def get_json(url):
 
     response.raise_for_status()
 
-    data = response.json()
-
-    return data
+    return response.json()
 
 
 # =========================================================
-# BTC PRICE
+# BTC
 # =========================================================
 
 def get_btc_price():
@@ -149,7 +146,7 @@ def get_btc_price():
 
 
 # =========================================================
-# MSTR PRICE
+# MSTR
 # =========================================================
 
 def get_mstr_price():
@@ -183,7 +180,7 @@ def get_mstr_price():
 
 
 # =========================================================
-# BINANCE DATA
+# BINANCE
 # =========================================================
 
 def get_binance_oi():
@@ -215,17 +212,15 @@ def get_binance_funding():
             "No Binance funding data"
         )
 
-    rate_decimal = float(
+    rate = float(
         data[0]["fundingRate"]
     )
 
-    # 예:
-    # 0.0001 = 0.01%
-    return rate_decimal * 100.0
+    return rate * 100.0
 
 
 # =========================================================
-# BYBIT DATA
+# BYBIT
 # =========================================================
 
 def get_bybit_data():
@@ -247,32 +242,24 @@ def get_bybit_data():
 
     row = rows[0]
 
-    # Bybit은 BTCUSDT linear의
-    # openInterestValue를 USD로 제공
     oi_usd = float(
         row["openInterestValue"]
     )
 
-    # fundingRate는 decimal fraction
-    # 예: 0.0001 = 0.01%
-    funding_pct = (
-        float(row["fundingRate"]) *
-        100.0
-    )
+    funding = float(
+        row["fundingRate"]
+    ) * 100.0
 
     if oi_usd < 0:
         raise ValueError(
             "Invalid Bybit OI"
         )
 
-    return (
-        oi_usd,
-        funding_pct
-    )
+    return oi_usd, funding
 
 
 # =========================================================
-# OKX DATA
+# OKX
 # =========================================================
 
 def get_okx_oi():
@@ -291,11 +278,8 @@ def get_okx_oi():
             "No OKX OI data"
         )
 
-    row = rows[0]
-
-    # OKX가 USD 기준 OI를 직접 제공
     oi_usd = float(
-        row["oiUsd"]
+        rows[0]["oiUsd"]
     )
 
     if oi_usd < 0:
@@ -322,16 +306,11 @@ def get_okx_funding():
             "No OKX funding data"
         )
 
-    row = rows[0]
+    funding = float(
+        rows[0]["fundingRate"]
+    ) * 100.0
 
-    funding_pct = (
-        float(
-            row["fundingRate"]
-        ) *
-        100.0
-    )
-
-    return funding_pct
+    return funding
 
 
 # =========================================================
@@ -421,7 +400,7 @@ def main():
 
 
     # -----------------------------------------------------
-    # BTC / MSTR
+    # BTC / MSTR / mNAV
     # -----------------------------------------------------
 
     btc_price = (
@@ -440,181 +419,120 @@ def main():
 
 
     # -----------------------------------------------------
-    # OI / Funding
+    # OI / FUNDING
     # -----------------------------------------------------
 
-    oi_sources = []
-    funding_sources = []
-
-    oi_usd_total = 0.0
-
-    weighted_funding_sum = 0.0
-
-    weighted_funding_oi = 0.0
+    oi_values = []
+    funding_values = []
 
 
-    # =====================================================
-    # BINANCE
-    # =====================================================
+    # Binance
 
     try:
 
-        binance_oi_btc = (
-            get_binance_oi()
-        )
+        oi_btc = get_binance_oi()
 
-        binance_oi_usd = (
-            binance_oi_btc *
+        oi_usd = (
+            oi_btc *
             btc_price
         )
 
-        oi_usd_total += (
-            binance_oi_usd
-        )
+        if oi_usd > 0:
 
-        oi_sources.append(
-            "Binance"
-        )
-
-        print(
-            "Binance OI USD:",
-            binance_oi_usd
-        )
-
+            oi_values.append(
+                (
+                    "Binance",
+                    oi_usd
+                )
+            )
 
         try:
 
-            binance_funding = (
+            funding = (
                 get_binance_funding()
             )
 
-            weighted_funding_sum += (
-                binance_funding *
-                binance_oi_usd
-            )
-
-            weighted_funding_oi += (
-                binance_oi_usd
-            )
-
-            funding_sources.append(
-                "Binance"
-            )
-
-            print(
-                "Binance Funding:",
-                binance_funding
+            funding_values.append(
+                (
+                    "Binance",
+                    funding,
+                    oi_usd
+                )
             )
 
         except Exception as error:
 
             print(
-                "WARNING: "
-                f"Binance funding failed: "
-                f"{error}"
+                "WARNING: Binance "
+                f"Funding failed: {error}"
             )
 
     except Exception as error:
 
         print(
-            "WARNING: "
-            f"Binance OI failed: "
-            f"{error}"
+            "WARNING: Binance OI "
+            f"failed: {error}"
         )
 
 
-    # =====================================================
-    # BYBIT
-    # =====================================================
+    # Bybit
 
     try:
 
         (
-            bybit_oi_usd,
-            bybit_funding
+            oi_usd,
+            funding
         ) = get_bybit_data()
 
+        if oi_usd > 0:
 
-        oi_usd_total += (
-            bybit_oi_usd
-        )
+            oi_values.append(
+                (
+                    "Bybit",
+                    oi_usd
+                )
+            )
 
-        oi_sources.append(
-            "Bybit"
-        )
-
-        print(
-            "Bybit OI USD:",
-            bybit_oi_usd
-        )
-
-
-        weighted_funding_sum += (
-            bybit_funding *
-            bybit_oi_usd
-        )
-
-        weighted_funding_oi += (
-            bybit_oi_usd
-        )
-
-        funding_sources.append(
-            "Bybit"
-        )
-
-        print(
-            "Bybit Funding:",
-            bybit_funding
-        )
-
+            funding_values.append(
+                (
+                    "Bybit",
+                    funding,
+                    oi_usd
+                )
+            )
 
     except Exception as error:
 
         print(
-            "WARNING: "
-            f"Bybit failed: "
+            "WARNING: Bybit failed: "
             f"{error}"
         )
 
 
-    # =====================================================
-    # OKX OI
-    # =====================================================
+    # OKX
 
-    okx_oi_usd = None
+    okx_oi = None
 
     try:
 
-        okx_oi_usd = (
-            get_okx_oi()
-        )
+        okx_oi = get_okx_oi()
 
-        oi_usd_total += (
-            okx_oi_usd
-        )
+        if okx_oi > 0:
 
-        oi_sources.append(
-            "OKX"
-        )
-
-        print(
-            "OKX OI USD:",
-            okx_oi_usd
-        )
-
+            oi_values.append(
+                (
+                    "OKX",
+                    okx_oi
+                )
+            )
 
     except Exception as error:
 
         print(
-            "WARNING: "
-            f"OKX OI failed: "
+            "WARNING: OKX OI failed: "
             f"{error}"
         )
 
-
-    # =====================================================
-    # OKX Funding
-    # =====================================================
 
     try:
 
@@ -622,137 +540,90 @@ def main():
             get_okx_funding()
         )
 
-        # 가능하면 OKX OI로 가중
         if (
-            okx_oi_usd is not None and
-            okx_oi_usd > 0
+            okx_oi is not None and
+            okx_oi > 0
         ):
 
-            weighted_funding_sum += (
-                okx_funding *
-                okx_oi_usd
+            funding_values.append(
+                (
+                    "OKX",
+                    okx_funding,
+                    okx_oi
+                )
             )
-
-            weighted_funding_oi += (
-                okx_oi_usd
-            )
-
-        else:
-
-            # OI를 못 가져왔을 경우
-            # 단순 평균용으로 작은 weight
-            weighted_funding_sum += (
-                okx_funding
-            )
-
-        funding_sources.append(
-            "OKX"
-        )
-
-        print(
-            "OKX Funding:",
-            okx_funding
-        )
 
     except Exception as error:
 
         print(
-            "WARNING: "
-            f"OKX funding failed: "
-            f"{error}"
+            "WARNING: OKX Funding "
+            f"failed: {error}"
         )
 
 
-    # =====================================================
-    # 최종 OI
-    # =====================================================
+    # -----------------------------------------------------
+    # Aggregate OI
+    # -----------------------------------------------------
 
     aggregate_oi_usd = None
     aggregate_oi_btc = None
 
-    if (
-        oi_usd_total > 0
-    ):
+    if oi_values:
 
-        aggregate_oi_usd = (
-            oi_usd_total
+        aggregate_oi_usd = sum(
+            value
+            for _, value
+            in oi_values
         )
 
         aggregate_oi_btc = (
-            oi_usd_total /
+            aggregate_oi_usd /
             btc_price
         )
 
 
-    # =====================================================
-    # 최종 Funding
-    # =====================================================
+    # -----------------------------------------------------
+    # Aggregate Funding
+    # OI weighted
+    # -----------------------------------------------------
 
     aggregate_funding = None
 
-    if (
-        weighted_funding_oi > 0
-    ):
+    if funding_values:
 
-        aggregate_funding = (
-            weighted_funding_sum /
-            weighted_funding_oi
+        total_weight = sum(
+            item[2]
+            for item in funding_values
+            if item[2] > 0
         )
 
-    elif funding_sources:
-
-        # OI 가중치가 없는 경우
-        # 수집 가능한 Funding 단순 평균
-        # 을 위해 다시 조회
-        funding_values = []
-
-
-        try:
-
-            funding_values.append(
-                get_binance_funding()
-            )
-
-        except Exception:
-            pass
-
-
-        try:
-
-            (
-                _,
-                bybit_funding_value
-            ) = get_bybit_data()
-
-            funding_values.append(
-                bybit_funding_value
-            )
-
-        except Exception:
-            pass
-
-
-        try:
-
-            funding_values.append(
-                get_okx_funding()
-            )
-
-        except Exception:
-            pass
-
-
-        if funding_values:
+        if total_weight > 0:
 
             aggregate_funding = (
-                sum(funding_values) /
+                sum(
+                    rate * oi
+                    for _, rate, oi
+                    in funding_values
+                )
+                /
+                total_weight
+            )
+
+        else:
+
+            aggregate_funding = (
+                sum(
+                    item[1]
+                    for item in funding_values
+                )
+                /
                 len(funding_values)
             )
 
 
-    # =====================================================
-    # 날짜
-    # =====================================================
+    # -----------------------------------------------------
+    # Date
+    # -----------------------------------------------------
 
     now = datetime.now(
         timezone.utc
@@ -763,9 +634,9 @@ def main():
     )
 
 
-    # =====================================================
-    # 기존 history
-    # =====================================================
+    # -----------------------------------------------------
+    # Load history
+    # -----------------------------------------------------
 
     history = load_json(
         HISTORY_FILE,
@@ -780,9 +651,9 @@ def main():
         history = []
 
 
-    # =====================================================
-    # 기록
-    # =====================================================
+    # -----------------------------------------------------
+    # Record
+    # -----------------------------------------------------
 
     record = {
 
@@ -822,7 +693,8 @@ def main():
                     aggregate_oi_btc,
                     2
                 )
-                if aggregate_oi_btc is not None
+                if aggregate_oi_btc
+                is not None
                 else None
             ),
 
@@ -832,7 +704,8 @@ def main():
                     aggregate_oi_usd,
                     2
                 )
-                if aggregate_oi_usd is not None
+                if aggregate_oi_usd
+                is not None
                 else None
             ),
 
@@ -842,32 +715,37 @@ def main():
                     aggregate_funding,
                     5
                 )
-                if aggregate_funding is not None
+                if aggregate_funding
+                is not None
                 else None
             ),
 
         "oiSources":
-            oi_sources,
+            [
+                name
+                for name, _
+                in oi_values
+            ],
 
         "fundingSources":
-            funding_sources
+            [
+                name
+                for name, _, _
+                in funding_values
+            ]
     }
 
 
-    # =====================================================
-    # 같은 날짜 교체
-    # =====================================================
+    # -----------------------------------------------------
+    # Replace today's record
+    # -----------------------------------------------------
 
     history = [
-
         item
-
         for item in history
-
         if item.get(
             "date"
         ) != date_key
-
     ]
 
 
@@ -878,10 +756,10 @@ def main():
 
     history.sort(
         key=lambda x:
-            x.get(
-                "date",
-                ""
-            )
+        x.get(
+            "date",
+            ""
+        )
     )
 
 
@@ -890,6 +768,10 @@ def main():
         history
     )
 
+
+    # -----------------------------------------------------
+    # Console
+    # -----------------------------------------------------
 
     print()
     print(
@@ -936,15 +818,23 @@ def main():
 
     print(
         "OI Sources:",
-        ", ".join(oi_sources)
-        if oi_sources
+        ", ".join(
+            name
+            for name, _
+            in oi_values
+        )
+        if oi_values
         else "NONE"
     )
 
     print(
         "Funding Sources:",
-        ", ".join(funding_sources)
-        if funding_sources
+        ", ".join(
+            name
+            for name, _, _
+            in funding_values
+        )
+        if funding_values
         else "NONE"
     )
 
