@@ -99,60 +99,63 @@ async function loadCompanyData() {
 }
 
 /* =========================
-   실시간 가격 (브라우저 직접 호출)
+   실시간 가격
 ========================= */
 
 async function loadLivePrices() {
   try {
-    // 1. 상태 표시 업데이트 (로딩 중)
-    if ($("dataStatus")) {
-      $("dataStatus").textContent = "실시간 가격 불러오는 중...";
+    const response = await fetch(
+      "live.json?ts=" + Date.now(),
+      { cache: "no-store" }
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        "live.json " + response.status
+      );
     }
 
-    // 2. 비트코인(BTC) 가격 가져오기 (CoinGecko API)
-    const btcRes = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd");
-    if (!btcRes.ok) throw new Error("BTC API Error");
-    const btcData = await btcRes.json();
-    const btcPrice = Number(btcData.bitcoin.usd);
+    state.live = await response.json();
 
-    // 3. 마이크로스트레티지(MSTR) 가격 가져오기 (Yahoo Finance 우회)
-    // Yahoo는 브라우저 직접 접근(CORS)을 막기 때문에 무료 프록시(allorigins)를 사용합니다.
-    const yahooUrl = encodeURIComponent("https://query1.finance.yahoo.com/v8/finance/chart/MSTR?range=1d&interval=1m");
-    const mstrRes = await fetch(`https://api.allorigins.win/raw?url=${yahooUrl}`);
-    if (!mstrRes.ok) throw new Error("MSTR API Error");
-    const mstrData = await mstrRes.json();
-    const mstrPrice = Number(mstrData.chart.result[0].meta.regularMarketPrice);
+    const btcPrice =
+      Number(state.live.btcPrice);
 
-    // 4. state 객체에 실시간 데이터 저장 (기존 구조 호환 유지)
-    state.live = {
-      btcPrice: btcPrice,
-      mstrPrice: mstrPrice,
-      updatedAt: new Date().toISOString(),
-      btcSource: "CoinGecko",
-      mstrSource: "Yahoo (Proxy)"
-    };
+    const mstrPrice =
+      Number(state.live.mstrPrice);
 
-    // 5. 화면 Input 박스에 가격 채워 넣기
-    if (Number.isFinite(btcPrice) && btcPrice > 0 && $("btcPrice")) {
-      $("btcPrice").value = btcPrice;
+    if (
+      Number.isFinite(btcPrice) &&
+      btcPrice > 0 &&
+      $("btcPrice")
+    ) {
+      $("btcPrice").value =
+        btcPrice;
       $("btcPrice").readOnly = true;
     }
 
-    if (Number.isFinite(mstrPrice) && mstrPrice > 0 && $("mstrPrice")) {
-      $("mstrPrice").value = mstrPrice;
+    if (
+      Number.isFinite(mstrPrice) &&
+      mstrPrice > 0 &&
+      $("mstrPrice")
+    ) {
+      $("mstrPrice").value =
+        mstrPrice;
       $("mstrPrice").readOnly = true;
     }
 
-    // 6. 업데이트 상태 시간 표시 갱신
     updatePriceStatus();
 
-    // 7. 핵심 계산 함수 실행 (기존 로직)
     calculate();
 
   } catch (error) {
-    console.error("Live price error:", error);
+
+    console.error(
+      "Live price error:",
+      error
+    );
+
     updatePriceStatus(true);
-    // 에러가 나도 기존 계산 로직은 실행하여 마지막 데이터라도 표시
+
     calculate();
   }
 }
