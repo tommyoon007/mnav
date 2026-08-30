@@ -1,150 +1,154 @@
 /* =========================================
-   MSTR / BTC / mNAV
-   OI / Funding
-   4-Level Risk Warning
+   MSTR / BTC Derivatives Warning System
+   SAFE / CAUTION / OVERHEATED / EXTREME
 ========================================= */
 
 (function () {
 
-  const WARNING_ID =
-    "mnavRiskWarning";
-
+  const WARNING_ID = "mnavWarningSection";
   const HISTORY_URL =
-    "history.json?ts=" +
-    Date.now();
+    "history.json?ts=" + Date.now();
+
+  let latest = null;
 
 
   /* ---------------------------------------
-     Style
+     STYLE
   --------------------------------------- */
 
   function injectStyle() {
 
     if (
       document.getElementById(
-        "mnavRiskWarningStyle"
+        "mnavWarningStyle"
       )
     ) {
       return;
     }
 
     const style =
-      document.createElement(
-        "style"
-      );
+      document.createElement("style");
 
     style.id =
-      "mnavRiskWarningStyle";
+      "mnavWarningStyle";
 
     style.textContent = `
 
       #${WARNING_ID} {
-        margin-top: 20px;
+        margin-top: 22px;
+      }
+
+      .warning-box {
+        margin-top: 15px;
         padding: 20px 24px;
         border-radius: 12px;
         background: #101620;
-        border:
-          1px solid
+        border: 1px solid
           rgba(255,255,255,.08);
       }
 
-      .risk-header {
+      .warning-main {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        margin-bottom: 16px;
+        gap: 16px;
       }
 
-      .risk-title {
-        font-size: 18px;
-        font-weight: 900;
-        color: #e8edf3;
-      }
-
-      .risk-light {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 8px 14px;
-        border-radius: 999px;
-        background: #151c28;
-        font-size: 13px;
-        font-weight: 900;
-      }
-
-      .risk-bulb {
-        width: 13px;
-        height: 13px;
+      .warning-light {
+        width: 24px;
+        height: 24px;
         border-radius: 50%;
-        display: inline-block;
+        flex-shrink: 0;
+        box-shadow:
+          0 0 18px currentColor;
       }
 
-      .risk-grid {
+      .warning-title {
+        font-size: 22px;
+        font-weight: 900;
+        letter-spacing: .5px;
+      }
+
+      .warning-score {
+        margin-top: 3px;
+        font-size: 12px;
+        color: #7f8b9c;
+      }
+
+      .warning-message {
+        margin-top: 15px;
+        padding-top: 14px;
+        border-top:
+          1px solid
+          rgba(255,255,255,.07);
+        color: #b9c2cf;
+        font-size: 13px;
+        line-height: 1.6;
+      }
+
+      .warning-grid {
         display: grid;
         grid-template-columns:
           repeat(4, 1fr);
         gap: 10px;
+        margin-top: 14px;
       }
 
-      .risk-card {
-        padding: 13px;
+      .warning-card {
+        padding: 12px;
         border-radius: 9px;
-        background: #151c28;
+        background: #0d131c;
         border:
           1px solid
           rgba(255,255,255,.06);
       }
 
-      .risk-label {
-        font-size: 11px;
-        color: #7f8b9c;
+      .warning-label {
+        font-size: 10px;
+        color: #738093;
       }
 
-      .risk-value {
+      .warning-value {
         margin-top: 5px;
-        font-size: 16px;
-        font-weight: 900;
-        color: #e8edf3;
+        font-size: 14px;
+        font-weight: 800;
       }
 
-      .risk-explanation {
-        margin-top: 14px;
-        padding: 12px 14px;
-        border-radius: 8px;
-        background: #151c28;
-        color: #aeb8c7;
-        font-size: 12px;
-        line-height: 1.6;
+      .warning-note {
+        margin-top: 13px;
+        font-size: 11px;
+        color: #667386;
+        line-height: 1.5;
       }
 
       @media (max-width: 700px) {
 
-        #${WARNING_ID} {
-          padding: 18px;
-        }
-
-        .risk-grid {
+        .warning-grid {
           grid-template-columns:
             repeat(2, 1fr);
         }
 
-        .risk-header {
-          align-items: flex-start;
-          flex-direction: column;
+      }
+
+      @media (max-width: 600px) {
+
+        .warning-box {
+          padding: 18px;
+        }
+
+        .warning-title {
+          font-size: 19px;
         }
 
       }
+
     `;
 
-    document.head.appendChild(
-      style
-    );
+    document.head.appendChild(style);
   }
 
 
   /* ---------------------------------------
-     Create
+     SECTION
   --------------------------------------- */
 
   function createSection() {
@@ -158,83 +162,70 @@
     }
 
     const section =
-      document.createElement(
-        "section"
-      );
+      document.createElement("section");
 
     section.id =
       WARNING_ID;
 
     section.innerHTML = `
 
-      <div class="risk-header">
-
-        <div class="risk-title">
-          🚦 BTC / MSTR 시장 위험도
-        </div>
-
-        <div
-          id="riskLight"
-          class="risk-light">
-
-          <span
-            id="riskBulb"
-            class="risk-bulb">
-          </span>
-
-          <span
-            id="riskLevel">
-            분석 중...
-          </span>
-
-        </div>
-
-      </div>
+      <h2>
+        🚦 BTC 레버리지 경고등
+      </h2>
 
       <div
-        id="riskGrid"
-        class="risk-grid">
-      </div>
+        id="warningContent"
+        class="warning-box">
 
-      <div
-        id="riskExplanation"
-        class="risk-explanation">
-        데이터를 분석하고 있습니다...
+        데이터를 불러오는 중...
+
       </div>
 
     `;
 
+    const historySection =
+      document.getElementById(
+        "mnavHistorySection"
+      );
 
-    /*
-      기존 앱 위쪽에 삽입.
-      적당한 위치를 찾지 못하면 body 끝에 추가.
-    */
+    if (historySection) {
 
-    const target =
-      document.querySelector(
-        "main"
-      ) ||
-      document.querySelector(
-        ".container"
-      ) ||
-      document.body;
+      historySection.parentNode.insertBefore(
+        section,
+        historySection
+      );
 
-    target.appendChild(
-      section
-    );
+    } else {
+
+      const footer =
+        document.querySelector("footer");
+
+      if (footer) {
+
+        footer.parentNode.insertBefore(
+          section,
+          footer
+        );
+
+      } else {
+
+        document.body.appendChild(
+          section
+        );
+
+      }
+
+    }
   }
 
 
   /* ---------------------------------------
-     Helpers
+     NUMBER
   --------------------------------------- */
 
-  function number(
-    value
-  ) {
+  function number(value) {
 
-    const n =
-      Number(value);
+    const n = Number(value);
 
     return Number.isFinite(n)
       ? n
@@ -242,13 +233,9 @@
   }
 
 
-  function format(
-    value,
-    digits = 2
-  ) {
+  function fmt(value, digits = 2) {
 
-    const n =
-      number(value);
+    const n = number(value);
 
     if (n === null) {
       return "—";
@@ -257,492 +244,675 @@
     return n.toLocaleString(
       "en-US",
       {
-        maximumFractionDigits:
-          digits
+        maximumFractionDigits: digits
       }
     );
   }
 
 
   /* ---------------------------------------
-     Risk
+     CHANGE
+  --------------------------------------- */
+
+  function calculateChange(
+    history,
+    key,
+    days
+  ) {
+
+    if (
+      !Array.isArray(history) ||
+      !history.length
+    ) {
+      return null;
+    }
+
+    const latestIndex =
+      history.length - 1;
+
+    const latestValue =
+      number(
+        history[
+          latestIndex
+        ][key]
+      );
+
+    if (
+      latestValue === null
+    ) {
+      return null;
+    }
+
+    const targetDate =
+      new Date(
+        history[
+          latestIndex
+        ].date
+      );
+
+    targetDate.setDate(
+      targetDate.getDate() -
+      days
+    );
+
+    let previous = null;
+
+    for (
+      let i = latestIndex - 1;
+      i >= 0;
+      i--
+    ) {
+
+      const item =
+        history[i];
+
+      const date =
+        new Date(
+          item.date
+        );
+
+      if (
+        date <= targetDate
+      ) {
+
+        const value =
+          number(
+            item[key]
+          );
+
+        if (
+          value !== null
+        ) {
+
+          previous = value;
+          break;
+
+        }
+
+      }
+
+    }
+
+    if (
+      previous === null ||
+      previous === 0
+    ) {
+      return null;
+    }
+
+    return (
+      (
+        latestValue /
+        previous
+      ) - 1
+    ) * 100;
+  }
+
+
+  /* ---------------------------------------
+     RISK CALCULATION
   --------------------------------------- */
 
   function calculateRisk(
-    latest
+    item,
+    history
   ) {
 
     let score = 0;
 
-
-    /*
-      mNAV
-      ------------------------------------
-      역사적으로 높은 valuation일수록
-      위험 점수를 올린다.
-    */
-
-    const mnavPct =
-      number(
-        latest.mnavPercentile
-      );
-
-    if (mnavPct !== null) {
-
-      if (mnavPct >= 95) {
-        score += 35;
-      }
-
-      else if (mnavPct >= 85) {
-        score += 28;
-      }
-
-      else if (mnavPct >= 70) {
-        score += 20;
-      }
-
-      else if (mnavPct >= 50) {
-        score += 10;
-      }
-    }
-
-
-    /*
-      Funding
-      ------------------------------------
-      양(+)의 funding이 지나치게 높으면
-      롱 포지션 과열로 판단.
-    */
-
     const funding =
       number(
-        latest.fundingRate
+        item.fundingRate
       );
 
-    if (funding !== null) {
-
-      if (funding >= 0.08) {
-        score += 30;
-      }
-
-      else if (funding >= 0.05) {
-        score += 23;
-      }
-
-      else if (funding >= 0.03) {
-        score += 15;
-      }
-
-      else if (funding >= 0.015) {
-        score += 7;
-      }
-
-    }
-
-
-    /*
-      OI 1D
-    */
+    const oi =
+      number(
+        item.oiBtc
+      );
 
     const oi1d =
       number(
-        latest.oiChange1dPct
+        item.oiChange1dPct
       );
-
-    if (oi1d !== null) {
-
-      if (oi1d >= 10) {
-        score += 15;
-      }
-
-      else if (oi1d >= 6) {
-        score += 11;
-      }
-
-      else if (oi1d >= 3) {
-        score += 6;
-      }
-    }
-
-
-    /*
-      OI 7D
-    */
 
     const oi7d =
       number(
-        latest.oiChange7dPct
+        item.oiChange7dPct
       );
 
-    if (oi7d !== null) {
-
-      if (oi7d >= 20) {
-        score += 15;
-      }
-
-      else if (oi7d >= 12) {
-        score += 11;
-      }
-
-      else if (oi7d >= 7) {
-        score += 6;
-      }
-    }
-
-
-    /*
-      BTC 7D
-    */
+    const btc1d =
+      number(
+        item.btcChange1dPct
+      );
 
     const btc7d =
       number(
-        latest.btcChange7dPct
+        item.btcChange7dPct
       );
 
-    if (btc7d !== null) {
+    const mnav =
+      number(
+        item.mnav
+      );
 
-      if (btc7d >= 15) {
-        score += 10;
-      }
 
-      else if (btc7d >= 10) {
-        score += 7;
-      }
+    /* -----------------------------------
+       Funding
+    ----------------------------------- */
 
-      else if (btc7d >= 5) {
+    if (
+      funding !== null
+    ) {
+
+      if (
+        funding >= 0.10
+      ) {
+
         score += 4;
+
+      } else if (
+        funding >= 0.06
+      ) {
+
+        score += 3;
+
+      } else if (
+        funding >= 0.03
+      ) {
+
+        score += 2;
+
+      } else if (
+        funding >= 0.015
+      ) {
+
+        score += 1;
+
       }
+
     }
 
 
-    score =
-      Math.min(
-        100,
-        Math.max(
-          0,
-          score
-        )
-      );
+    /* -----------------------------------
+       OI 1D
+    ----------------------------------- */
 
+    if (
+      oi1d !== null
+    ) {
+
+      if (
+        oi1d >= 8
+      ) {
+
+        score += 4;
+
+      } else if (
+        oi1d >= 5
+      ) {
+
+        score += 3;
+
+      } else if (
+        oi1d >= 2.5
+      ) {
+
+        score += 2;
+
+      } else if (
+        oi1d >= 1
+      ) {
+
+        score += 1;
+
+      }
+
+    }
+
+
+    /* -----------------------------------
+       OI 7D
+    ----------------------------------- */
+
+    if (
+      oi7d !== null
+    ) {
+
+      if (
+        oi7d >= 15
+      ) {
+
+        score += 3;
+
+      } else if (
+        oi7d >= 10
+      ) {
+
+        score += 2;
+
+      } else if (
+        oi7d >= 5
+      ) {
+
+        score += 1;
+
+      }
+
+    }
+
+
+    /* -----------------------------------
+       BTC 상승 + OI 증가
+    ----------------------------------- */
+
+    if (
+      btc1d !== null &&
+      oi1d !== null
+    ) {
+
+      if (
+        btc1d >= 3 &&
+        oi1d >= 5
+      ) {
+
+        score += 3;
+
+      } else if (
+        btc1d >= 2 &&
+        oi1d >= 2.5
+      ) {
+
+        score += 2;
+
+      }
+
+    }
+
+
+    /* -----------------------------------
+       BTC 7D 상승
+    ----------------------------------- */
+
+    if (
+      btc7d !== null
+    ) {
+
+      if (
+        btc7d >= 15
+      ) {
+
+        score += 3;
+
+      } else if (
+        btc7d >= 10
+      ) {
+
+        score += 2;
+
+      } else if (
+        btc7d >= 5
+      ) {
+
+        score += 1;
+
+      }
+
+    }
+
+
+    /* -----------------------------------
+       mNAV
+    ----------------------------------- */
+
+    if (
+      mnav !== null
+    ) {
+
+      if (
+        mnav >= 2.5
+      ) {
+
+        score += 3;
+
+      } else if (
+        mnav >= 2.0
+      ) {
+
+        score += 2;
+
+      } else if (
+        mnav >= 1.5
+      ) {
+
+        score += 1;
+
+      }
+
+    }
+
+
+    /* -----------------------------------
+       LEVEL
+    ----------------------------------- */
 
     let level;
+    let symbol;
+    let color;
+    let message;
 
 
-    if (score < 25) {
-      level = "SAFE";
-    }
+    if (
+      score >= 13
+    ) {
 
-    else if (score < 50) {
-      level = "CAUTION";
-    }
+      level =
+        "EXTREME";
 
-    else if (score < 75) {
-      level = "OVERHEATED";
-    }
+      symbol =
+        "🔴";
 
-    else {
-      level = "EXTREME";
+      color =
+        "#ff4d5a";
+
+      message =
+        "레버리지와 투기적 포지션이 동시에 과열된 구간입니다. 급격한 롱 청산과 변동성 확대 위험을 매우 높게 봐야 합니다.";
+
+    } else if (
+      score >= 9
+    ) {
+
+      level =
+        "OVERHEATED";
+
+      symbol =
+        "🟠";
+
+      color =
+        "#ff9f43";
+
+      message =
+        "Funding과 OI를 중심으로 레버리지 과열 신호가 나타나고 있습니다. 추격매수는 조심하는 구간입니다.";
+
+    } else if (
+      score >= 5
+    ) {
+
+      level =
+        "CAUTION";
+
+      symbol =
+        "🟡";
+
+      color =
+        "#f3c64e";
+
+      message =
+        "레버리지 시장에 부담이 조금씩 쌓이고 있습니다. 방향성이 강해지면 과열 단계로 빠르게 이동할 수 있습니다.";
+
+    } else {
+
+      level =
+        "SAFE";
+
+      symbol =
+        "🟢";
+
+      color =
+        "#5ee6a8";
+
+      message =
+        "현재 확인되는 Funding, OI, BTC 가격 흐름에서는 뚜렷한 레버리지 과열 신호가 강하지 않습니다.";
+
     }
 
 
     return {
       score,
-      level
+      level,
+      symbol,
+      color,
+      message
     };
+
   }
 
 
   /* ---------------------------------------
-     Level UI
+     DRAW
   --------------------------------------- */
 
-  function applyLevel(
-    result
+  function draw(
+    history
   ) {
 
-    const bulb =
+    const content =
       document.getElementById(
-        "riskBulb"
+        "warningContent"
       );
-
-    const level =
-      document.getElementById(
-        "riskLevel"
-      );
-
-    if (!bulb || !level) {
-      return;
-    }
-
-
-    let color;
-    let text;
-
 
     if (
-      result.level ===
-      "SAFE"
+      !content
+    ) {
+      return;
+    }
+
+    if (
+      !Array.isArray(history) ||
+      !history.length
     ) {
 
-      color = "#42d392";
-      text =
-        "SAFE";
+      content.innerHTML = `
+        <div style="
+          text-align:center;
+          padding:20px;
+          color:#788496;
+        ">
+          아직 데이터가 없습니다.
+        </div>
+      `;
 
-    }
-
-    else if (
-      result.level ===
-      "CAUTION"
-    ) {
-
-      color = "#f3c64e";
-      text =
-        "CAUTION";
-
-    }
-
-    else if (
-      result.level ===
-      "OVERHEATED"
-    ) {
-
-      color = "#ff9f43";
-      text =
-        "OVERHEATED";
-
-    }
-
-    else {
-
-      color = "#ff4d5a";
-      text =
-        "EXTREME";
-    }
-
-
-    bulb.style.background =
-      color;
-
-    bulb.style.boxShadow =
-      `0 0 12px ${color}`;
-
-    level.textContent =
-      text;
-
-    level.style.color =
-      color;
-  }
-
-
-  /* ---------------------------------------
-     Grid
-  --------------------------------------- */
-
-  function renderGrid(
-    latest
-  ) {
-
-    const grid =
-      document.getElementById(
-        "riskGrid"
-      );
-
-    if (!grid) {
       return;
     }
 
 
-    const items = [
+    const item =
+      history[
+        history.length - 1
+      ];
 
-      {
-        label: "Risk Score",
-        value:
-          number(
-            latest.riskScore
-          ) !== null
-            ? format(
-                latest.riskScore,
-                0
-              ) + " / 100"
-            : "—"
-      },
-
-      {
-        label: "mNAV",
-        value:
-          number(
-            latest.mnav
-          ) !== null
-            ? Number(
-                latest.mnav
-              ).toFixed(2) + "×"
-            : "—"
-      },
-
-      {
-        label: "BTC Funding",
-        value:
-          number(
-            latest.fundingRate
-          ) !== null
-            ? Number(
-                latest.fundingRate
-              ).toFixed(4) + "%"
-            : "—"
-      },
-
-      {
-        label: "BTC OI",
-        value:
-          number(
-            latest.oiBtc
-          ) !== null
-            ? format(
-                latest.oiBtc
-              ) + " BTC"
-            : "—"
-      }
-
-    ];
+    latest = item;
 
 
-    grid.innerHTML =
-      items.map(
-        item => `
+    const risk =
+      calculateRisk(
+        item,
+        history
+      );
+
+
+    content.innerHTML = `
+
+      <div class="warning-main">
+
+        <div
+          class="warning-light"
+          style="
+            color:${risk.color};
+            background:${risk.color};
+          ">
+        </div>
+
+        <div>
+
           <div
-            class="risk-card">
+            class="warning-title"
+            style="
+              color:${risk.color};
+            ">
 
-            <div
-              class="risk-label">
-              ${item.label}
-            </div>
-
-            <div
-              class="risk-value">
-              ${item.value}
-            </div>
+            ${risk.symbol}
+            ${risk.level}
 
           </div>
-        `
-      ).join("");
+
+          <div
+            class="warning-score">
+
+            Risk Score:
+            ${risk.score}
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <div class="warning-message">
+
+        ${risk.message}
+
+      </div>
+
+
+      <div class="warning-grid">
+
+        <div
+          class="warning-card">
+
+          <div
+            class="warning-label">
+            Funding Rate
+          </div>
+
+          <div
+            class="warning-value"
+            style="color:#5ee6a8">
+
+            ${
+              number(
+                item.fundingRate
+              ) !== null
+                ? fmt(
+                    item.fundingRate,
+                    4
+                  ) + "%"
+                : "—"
+            }
+
+          </div>
+
+        </div>
+
+
+        <div
+          class="warning-card">
+
+          <div
+            class="warning-label">
+            BTC OI
+          </div>
+
+          <div
+            class="warning-value"
+            style="color:#b56cff">
+
+            ${
+              number(
+                item.oiBtc
+              ) !== null
+                ? fmt(
+                    item.oiBtc
+                  ) + " BTC"
+                : "—"
+            }
+
+          </div>
+
+        </div>
+
+
+        <div
+          class="warning-card">
+
+          <div
+            class="warning-label">
+            OI 1D
+          </div>
+
+          <div
+            class="warning-value">
+
+            ${
+              number(
+                item.oiChange1dPct
+              ) !== null
+                ? (
+                    item.oiChange1dPct >= 0
+                      ? "+"
+                      : ""
+                  ) +
+                  fmt(
+                    item.oiChange1dPct,
+                    1
+                  ) + "%"
+                : "—"
+            }
+
+          </div>
+
+        </div>
+
+
+        <div
+          class="warning-card">
+
+          <div
+            class="warning-label">
+            BTC 1D
+          </div>
+
+          <div
+            class="warning-value">
+
+            ${
+              number(
+                item.btcChange1dPct
+              ) !== null
+                ? (
+                    item.btcChange1dPct >= 0
+                      ? "+"
+                      : ""
+                  ) +
+                  fmt(
+                    item.btcChange1dPct,
+                    1
+                  ) + "%"
+                : "—"
+            }
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <div class="warning-note">
+
+        ※ 경고등은 단일 지표가 아니라
+        Funding + OI + BTC 가격 모멘텀 +
+        mNAV를 종합한 참고용 위험도입니다.
+        투자 신호 자체는 아닙니다.
+
+      </div>
+
+    `;
   }
 
 
   /* ---------------------------------------
-     Explanation
-  --------------------------------------- */
-
-  function renderExplanation(
-    latest,
-    result
-  ) {
-
-    const box =
-      document.getElementById(
-        "riskExplanation"
-      );
-
-    if (!box) {
-      return;
-    }
-
-
-    const messages = [];
-
-
-    const funding =
-      number(
-        latest.fundingRate
-      );
-
-    const oi7d =
-      number(
-        latest.oiChange7dPct
-      );
-
-    const mnavPct =
-      number(
-        latest.mnavPercentile
-      );
-
-    const btc7d =
-      number(
-        latest.btcChange7dPct
-      );
-
-
-    if (
-      funding !== null &&
-      funding >= 0.03
-    ) {
-
-      messages.push(
-        "Funding이 높아 롱 포지션이 몰리고 있습니다."
-      );
-    }
-
-
-    if (
-      oi7d !== null &&
-      oi7d >= 7
-    ) {
-
-      messages.push(
-        "BTC OI가 빠르게 증가하고 있습니다."
-      );
-    }
-
-
-    if (
-      mnavPct !== null &&
-      mnavPct >= 85
-    ) {
-
-      messages.push(
-        "MSTR mNAV가 역사적으로 높은 구간입니다."
-      );
-    }
-
-
-    if (
-      btc7d !== null &&
-      btc7d >= 10
-    ) {
-
-      messages.push(
-        "BTC가 최근 7일 동안 강한 상승 모멘텀을 보이고 있습니다."
-      );
-    }
-
-
-    if (!messages.length) {
-
-      messages.push(
-        "현재 주요 과열 신호가 강하게 나타나지 않습니다."
-      );
-    }
-
-
-    box.innerHTML =
-      `
-      <strong>
-        ${result.level}
-      </strong>
-      · 위험 점수
-      <strong>
-        ${result.score.toFixed(0)}
-      </strong>
-      / 100
-
-      <br>
-
-      ${messages.join(" ")}
-      `;
-  }
-
-
-  /* ---------------------------------------
-     Load
+     LOAD
   --------------------------------------- */
 
   async function load() {
@@ -753,123 +923,58 @@
         await fetch(
           HISTORY_URL,
           {
-            cache:
-              "no-store"
+            cache: "no-store"
           }
         );
 
-      if (!response.ok) {
+      if (
+        !response.ok
+      ) {
+
         throw new Error(
           "history.json " +
           response.status
         );
-      }
 
+      }
 
       const history =
         await response.json();
 
-
-      if (
-        !Array.isArray(
-          history
-        ) ||
-        !history.length
-      ) {
-
-        throw new Error(
-          "No history data"
-        );
-      }
-
-
-      const latest =
-        history[
-          history.length - 1
-        ];
-
-
-      /*
-        Python에서 계산한
-        riskLevel / riskScore가 있으면
-        그것을 우선 사용한다.
-
-        없으면 JS에서 다시 계산한다.
-      */
-
-      let result;
-
-
-      if (
-        number(
-          latest.riskScore
-        ) !== null &&
-        latest.riskLevel
-      ) {
-
-        result = {
-
-          score:
-            number(
-              latest.riskScore
-            ),
-
-          level:
-            latest.riskLevel
-
-        };
-
-      }
-
-      else {
-
-        result =
-          calculateRisk(
-            latest
-          );
-      }
-
-
-      applyLevel(
-        result
-      );
-
-      renderGrid(
-        latest
-      );
-
-      renderExplanation(
-        latest,
-        result
-      );
-
+      draw(history);
 
     } catch (error) {
 
       console.error(
-        "Risk warning error:",
+        "Warning error:",
         error
       );
 
-
-      const level =
+      const content =
         document.getElementById(
-          "riskLevel"
+          "warningContent"
         );
 
-      if (level) {
+      if (content) {
 
-        level.textContent =
-          "DATA ERROR";
+        content.innerHTML = `
+          <div style="
+            padding:20px;
+            color:#788496;
+          ">
+            경고 데이터를 불러오지 못했습니다.
+          </div>
+        `;
 
       }
 
     }
+
   }
 
 
   /* ---------------------------------------
-     Start
+     START
   --------------------------------------- */
 
   document.addEventListener(
