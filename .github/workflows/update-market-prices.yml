@@ -1,5 +1,5 @@
 name: Update MSTR market prices
-run-name: Market price update
+run-name: Market price update 
 
 on:
   workflow_dispatch:
