@@ -1,22 +1,20 @@
 /* =========================================
    MSTR / BTC / mNAV / OI / Funding History
-   + BTC Derivatives Risk Warning
+   Stable Version
 ========================================= */
 
 (function () {
 
-  const GRAPH_ID =
-    "mnavHistorySection";
+  const GRAPH_ID = "mnavHistorySection";
 
   const DATA_URL =
-    "history.json?ts=" +
-    Date.now();
+    "history.json?ts=" + Date.now();
 
   let historyData = [];
 
 
   /* ---------------------------------------
-     기본 스타일
+     STYLE
   --------------------------------------- */
 
   function injectStyle() {
@@ -30,9 +28,7 @@
     }
 
     const style =
-      document.createElement(
-        "style"
-      );
+      document.createElement("style");
 
     style.id =
       "mnavHistoryStyle";
@@ -141,7 +137,7 @@
           rgba(0,0,0,.4);
         color: #e8edf3;
         font-size: 12px;
-        line-height: 1.6;
+        line-height: 1.55;
       }
 
       .history-subtitle {
@@ -181,81 +177,11 @@
         font-weight: 800;
       }
 
-
-      /* -----------------------------------
-         Risk Warning
-      ----------------------------------- */
-
-      .risk-warning {
-        margin:
-          0 24px 24px;
-        padding: 18px;
-        border-radius: 14px;
-        background: #101620;
-        border:
-          1px solid
-          rgba(255,255,255,.08);
+      .history-empty {
+        padding: 40px;
+        text-align: center;
+        color: #788496;
       }
-
-      .risk-title {
-        font-size: 14px;
-        font-weight: 800;
-        color: #dce3eb;
-        margin-bottom: 14px;
-      }
-
-      .risk-main {
-        display: flex;
-        align-items: center;
-        gap: 13px;
-      }
-
-      .risk-icon {
-        font-size: 32px;
-        line-height: 1;
-      }
-
-      .risk-level {
-        font-size: 22px;
-        font-weight: 900;
-        letter-spacing: .5px;
-      }
-
-      .risk-data {
-        margin-top: 4px;
-        color: #7f8b9c;
-        font-size: 11px;
-      }
-
-      .risk-message {
-        margin-top: 12px;
-        padding-top: 12px;
-        border-top:
-          1px solid
-          rgba(255,255,255,.06);
-        color: #929eae;
-        font-size: 12px;
-        line-height: 1.65;
-      }
-
-      .risk-bar {
-        display: flex;
-        gap: 5px;
-        margin-top: 15px;
-      }
-
-      .risk-bar-item {
-        height: 5px;
-        flex: 1;
-        border-radius: 5px;
-        background:
-          rgba(255,255,255,.08);
-      }
-
-      .risk-bar-item.active {
-        background: currentColor;
-      }
-
 
       @media (max-width: 700px) {
 
@@ -265,7 +191,6 @@
         }
 
       }
-
 
       @media (max-width: 600px) {
 
@@ -294,23 +219,15 @@
           padding-right: 18px;
         }
 
-        .risk-warning {
-          margin-left: 18px;
-          margin-right: 18px;
-        }
-
       }
-
     `;
 
-    document.head.appendChild(
-      style
-    );
+    document.head.appendChild(style);
   }
 
 
   /* ---------------------------------------
-     그래프 영역
+     SECTION
   --------------------------------------- */
 
   function createSection() {
@@ -324,9 +241,7 @@
     }
 
     const section =
-      document.createElement(
-        "section"
-      );
+      document.createElement("section");
 
     section.id =
       GRAPH_ID;
@@ -359,7 +274,6 @@
 
       </div>
 
-
       <div class="history-legend">
 
         <span>
@@ -388,7 +302,6 @@
 
       </div>
 
-
       <div class="history-chart-wrap">
 
         <div
@@ -398,11 +311,9 @@
 
       </div>
 
-
       <div class="history-subtitle">
         📊 BTC 선물 레버리지 지표
       </div>
-
 
       <div class="history-legend">
 
@@ -424,7 +335,6 @@
 
       </div>
 
-
       <div class="history-chart-wrap">
 
         <div
@@ -434,13 +344,6 @@
 
       </div>
 
-
-      <div
-        id="riskWarning"
-        class="risk-warning">
-      </div>
-
-
       <div
         id="historySummary"
         class="history-summary">
@@ -448,11 +351,8 @@
 
     `;
 
-
     const footer =
-      document.querySelector(
-        "footer"
-      );
+      document.querySelector("footer");
 
     if (footer) {
 
@@ -508,7 +408,7 @@
 
 
   /* ---------------------------------------
-     데이터
+     LOAD
   --------------------------------------- */
 
   async function loadHistory() {
@@ -532,15 +432,11 @@
 
       }
 
-
-      historyData =
+      const json =
         await response.json();
 
-
       if (
-        !Array.isArray(
-          historyData
-        )
+        !Array.isArray(json)
       ) {
 
         throw new Error(
@@ -549,9 +445,8 @@
 
       }
 
-
       historyData =
-        historyData
+        json
           .filter(
             item =>
               item &&
@@ -563,9 +458,7 @@
               new Date(b.date)
           );
 
-
       draw("1y");
-
 
     } catch (error) {
 
@@ -574,27 +467,7 @@
         error
       );
 
-
-      const chart =
-        document.getElementById(
-          "historyChart"
-        );
-
-
-      if (chart) {
-
-        chart.innerHTML =
-          `
-          <div style="
-            padding:40px;
-            text-align:center;
-            color:#788496;
-          ">
-            아직 누적된 역사 데이터가 없습니다.
-          </div>
-          `;
-
-      }
+      showError();
 
     }
 
@@ -602,36 +475,74 @@
 
 
   /* ---------------------------------------
-     기간
+     ERROR
+  --------------------------------------- */
+
+  function showError() {
+
+    const chart =
+      document.getElementById(
+        "historyChart"
+      );
+
+    const derivatives =
+      document.getElementById(
+        "derivativesChart"
+      );
+
+    if (chart) {
+
+      chart.innerHTML = `
+        <div class="history-empty">
+          역사 데이터를 불러오지 못했습니다.
+        </div>
+      `;
+
+    }
+
+    if (derivatives) {
+
+      derivatives.innerHTML = "";
+
+    }
+
+  }
+
+
+  /* ---------------------------------------
+     FILTER
   --------------------------------------- */
 
   function filterData(period) {
 
-    if (!historyData.length) {
+    if (
+      !historyData.length
+    ) {
+
       return [];
+
     }
 
+    if (
+      period === "all"
+    ) {
 
-    if (period === "all") {
-      return historyData;
+      return historyData.slice();
+
     }
-
 
     const days =
       period === "1y"
         ? 365
         : 1095;
 
-
     const cutoff =
       new Date();
-
 
     cutoff.setDate(
       cutoff.getDate() -
       days
     );
-
 
     return historyData.filter(
       item =>
@@ -644,7 +555,54 @@
 
 
   /* ---------------------------------------
-     Scale
+     NUMBER
+  --------------------------------------- */
+
+  function toNumber(value) {
+
+    const n =
+      Number(value);
+
+    return Number.isFinite(n)
+      ? n
+      : null;
+
+  }
+
+
+  /* ---------------------------------------
+     FORMAT
+  --------------------------------------- */
+
+  function fmt(
+    value,
+    digits = 2
+  ) {
+
+    const n =
+      toNumber(value);
+
+    if (
+      n === null
+    ) {
+
+      return "—";
+
+    }
+
+    return n.toLocaleString(
+      "en-US",
+      {
+        maximumFractionDigits:
+          digits
+      }
+    );
+
+  }
+
+
+  /* ---------------------------------------
+     SCALE
   --------------------------------------- */
 
   function scale(
@@ -658,11 +616,14 @@
     if (
       !Number.isFinite(value)
     ) {
+
       return null;
+
     }
 
-
-    if (max === min) {
+    if (
+      max === min
+    ) {
 
       return (
         outMin +
@@ -670,7 +631,6 @@
       ) / 2;
 
     }
-
 
     return (
       outMin +
@@ -687,33 +647,7 @@
 
 
   /* ---------------------------------------
-     Format
-  --------------------------------------- */
-
-  function fmt(value) {
-
-    if (
-      !Number.isFinite(
-        Number(value)
-      )
-    ) {
-      return "—";
-    }
-
-
-    return Number(value)
-      .toLocaleString(
-        "en-US",
-        {
-          maximumFractionDigits: 2
-        }
-      );
-
-  }
-
-
-  /* ---------------------------------------
-     Path
+     PATH
   --------------------------------------- */
 
   function makePath(
@@ -726,14 +660,14 @@
     let path = "";
     let started = false;
 
-
     values.forEach(
-      (value, index) => {
+      (raw, index) => {
+
+        const value =
+          toNumber(raw);
 
         if (
-          !Number.isFinite(
-            Number(value)
-          )
+          value === null
         ) {
 
           started = false;
@@ -741,38 +675,32 @@
 
         }
 
-
         const px =
           x(index);
 
-
         const py =
           y(
-            Number(value),
+            value,
             range
           );
 
-
         if (
-          !Number.isFinite(py)
+          py === null
         ) {
+
           return;
+
         }
 
-
         path +=
-          (
-            started
-              ? ` L ${px} ${py}`
-              : `M ${px} ${py}`
-          );
-
+          started
+            ? ` L ${px} ${py}`
+            : `M ${px} ${py}`;
 
         started = true;
 
       }
     );
-
 
     return path;
 
@@ -780,355 +708,36 @@
 
 
   /* ---------------------------------------
-     Tooltip 제거
+     TOOLTIP
   --------------------------------------- */
 
-  function removeTooltips() {
+  function removeOldTooltips() {
 
     document
       .querySelectorAll(
         ".history-tooltip"
       )
       .forEach(
-        tooltip =>
-          tooltip.remove()
+        element =>
+          element.remove()
       );
 
   }
 
 
-  /* ---------------------------------------
-     공통 차트
-  --------------------------------------- */
-
-  function drawBaseChart(
+  function createTooltip(
     container,
     data,
     series
   ) {
 
-    if (
-      !container ||
-      !data.length
-    ) {
-      return;
-    }
-
-
-    const width = 1000;
-    const height = 420;
-
-
-    const margin = {
-      top: 20,
-      right: 25,
-      bottom: 45,
-      left: 55
-    };
-
-
-    const chartWidth =
-      width -
-      margin.left -
-      margin.right;
-
-
-    const chartHeight =
-      height -
-      margin.top -
-      margin.bottom;
-
-
-    function x(index) {
-
-      if (
-        data.length === 1
-      ) {
-
-        return (
-          margin.left +
-          chartWidth / 2
-        );
-
-      }
-
-
-      return (
-        margin.left +
-        (
-          index /
-          (data.length - 1)
-        ) *
-        chartWidth
-      );
-
-    }
-
-
-    const ranges = {};
-
-
-    series.forEach(
-      s => {
-
-        const values =
-          data
-            .map(
-              item =>
-                Number(
-                  item[s.key]
-                )
-            )
-            .filter(
-              Number.isFinite
-            );
-
-
-        if (
-          values.length
-        ) {
-
-          ranges[s.key] = [
-            Math.min(
-              ...values
-            ),
-            Math.max(
-              ...values
-            )
-          ];
-
-        }
-
-      }
-    );
-
-
-    function y(
-      value,
-      range
-    ) {
-
-      return scale(
-        value,
-        range[0],
-        range[1],
-        margin.top +
-          chartHeight,
-        margin.top
-      );
-
-    }
-
-
-    let svg =
-      `<svg
-        viewBox="
-          0 0 ${width} ${height}
-        "
-        preserveAspectRatio="none">
-
-        <rect
-          x="0"
-          y="0"
-          width="${width}"
-          height="${height}"
-          fill="transparent">
-        </rect>
-      `;
-
-
-    /* Grid */
-
-    for (
-      let i = 0;
-      i <= 4;
-      i++
-    ) {
-
-      const gy =
-        margin.top +
-        (
-          i / 4
-        ) *
-        chartHeight;
-
-
-      svg += `
-        <line
-          class="history-grid"
-          x1="${margin.left}"
-          y1="${gy}"
-          x2="${width - margin.right}"
-          y2="${gy}">
-        </line>
-      `;
-
-    }
-
-
-    /* 날짜 */
-
-    const labelCount =
-      Math.min(
-        7,
-        data.length
-      );
-
-
-    for (
-      let i = 0;
-      i < labelCount;
-      i++
-    ) {
-
-      const index =
-        Math.round(
-          i *
-          (
-            (data.length - 1) /
-            Math.max(
-              1,
-              labelCount - 1
-            )
-          )
-        );
-
-
-      const date =
-        new Date(
-          data[index].date
-        );
-
-
-      const label =
-        date.toLocaleDateString(
-          "ko-KR",
-          {
-            year: "numeric",
-            month: "short"
-          }
-        );
-
-
-      svg += `
-        <text
-          class="history-axis"
-          x="${x(index)}"
-          y="${height - 14}"
-          text-anchor="middle">
-          ${label}
-        </text>
-      `;
-
-    }
-
-
-    /* Lines */
-
-    series.forEach(
-      s => {
-
-        if (
-          !ranges[s.key]
-        ) {
-          return;
-        }
-
-
-        svg += `
-          <path
-            d="${makePath(
-              data.map(
-                item =>
-                  Number(
-                    item[s.key]
-                  )
-              ),
-              ranges[s.key],
-              x,
-              y
-            )}"
-            fill="none"
-            stroke="${s.color}"
-            stroke-width="3"
-            vector-effect=
-              "non-scaling-stroke">
-          </path>
-        `;
-
-      }
-    );
-
-
-    /* Points */
-
-    series.forEach(
-      s => {
-
-        if (
-          !ranges[s.key]
-        ) {
-          return;
-        }
-
-
-        data.forEach(
-          (item, index) => {
-
-            const value =
-              Number(
-                item[s.key]
-              );
-
-
-            if (
-              !Number.isFinite(
-                value
-              )
-            ) {
-              return;
-            }
-
-
-            svg += `
-              <circle
-                cx="${x(index)}"
-                cy="${y(
-                  value,
-                  ranges[s.key]
-                )}"
-                r="3"
-                fill="${s.color}"
-                data-index="${index}"
-                data-series="${s.key}">
-              </circle>
-            `;
-
-          }
-        );
-
-      }
-    );
-
-
-    svg += "</svg>";
-
-
-    container.innerHTML =
-      svg;
-
-
-    /* Tooltip */
+    removeOldTooltips();
 
     const tooltip =
-      document.createElement(
-        "div"
-      );
-
+      document.createElement("div");
 
     tooltip.className =
       "history-tooltip";
-
 
     document.body.appendChild(
       tooltip
@@ -1144,99 +753,88 @@
 
           point.addEventListener(
             "mouseenter",
-            event => {
+            () => {
 
               const index =
                 Number(
                   point.dataset.index
                 );
 
-
               const item =
                 data[index];
 
+              if (!item) {
+                return;
+              }
 
-              tooltip.innerHTML =
-                `
-                <strong>
-                  ${item.date}
-                </strong>
-                <br>
-                ${series.map(
-                  s => {
+              let html =
+                `<strong>
+                   ${item.date}
+                 </strong>`;
 
-                    const value =
-                      Number(
-                        item[s.key]
-                      );
+              series.forEach(
+                s => {
 
+                  const value =
+                    toNumber(
+                      item[s.key]
+                    );
 
-                    if (
-                      !Number.isFinite(
-                        value
-                      )
-                    ) {
-                      return "";
-                    }
+                  if (
+                    value === null
+                  ) {
 
-
-                    let display;
-
-
-                    if (
-                      s.key ===
-                      "mnav"
-                    ) {
-
-                      display =
-                        Number(
-                          value
-                        ).toFixed(
-                          2
-                        ) + "×";
-
-                    } else if (
-                      s.key ===
-                      "fundingRate"
-                    ) {
-
-                      display =
-                        Number(
-                          value
-                        ).toFixed(
-                          4
-                        ) + "%";
-
-                    } else if (
-                      s.key ===
-                      "oiBtc"
-                    ) {
-
-                      display =
-                        fmt(
-                          value
-                        ) +
-                        " BTC";
-
-                    } else {
-
-                      display =
-                        "$" +
-                        fmt(value);
-
-                    }
-
-
-                    return `
-                      <br>
-                      ${s.label}:
-                      ${display}
-                    `;
+                    return;
 
                   }
-                ).join("")}
-                `;
 
+                  let display;
+
+                  if (
+                    s.key ===
+                    "mnav"
+                  ) {
+
+                    display =
+                      value.toFixed(2) +
+                      "×";
+
+                  } else if (
+                    s.key ===
+                    "fundingRate"
+                  ) {
+
+                    display =
+                      value.toFixed(4) +
+                      "%";
+
+                  } else if (
+                    s.key ===
+                    "oiBtc"
+                  ) {
+
+                    display =
+                      fmt(value) +
+                      " BTC";
+
+                  } else {
+
+                    display =
+                      "$" +
+                      fmt(value);
+
+                  }
+
+                  html +=
+                    `<br>
+                     ${s.label}:
+                     ${display}`;
+
+                }
+              );
+
+              tooltip.innerHTML =
+                html;
 
               tooltip.style.display =
                 "block";
@@ -1254,7 +852,6 @@
                   event.clientX +
                   14
                 ) + "px";
-
 
               tooltip.style.top =
                 (
@@ -1282,140 +879,141 @@
   }
 
 
-  /* =======================================
-     DERIVATIVES RISK
-  ======================================= */
+  /* ---------------------------------------
+     BASE CHART
+  --------------------------------------- */
 
-  function calculateRisk(
-    data
+  function drawBaseChart(
+    container,
+    data,
+    series
   ) {
 
-    const valid =
-      data.filter(
-        item => {
-
-          const oi =
-            Number(
-              item.oiBtc
-            );
-
-          const funding =
-            Number(
-              item.fundingRate
-            );
-
-          return (
-            Number.isFinite(oi) &&
-            Number.isFinite(funding)
-          );
-
-        }
-      );
-
-
-    /*
-       데이터 부족
-    */
-
     if (
-      valid.length < 2
+      !container
     ) {
 
-      return {
+      return;
 
-        level:
-          "DATA BUILDING",
+    }
 
-        icon:
-          "⚪",
+    if (
+      !data.length
+    ) {
 
-        color:
-          "#8b95a5",
+      container.innerHTML =
+        `<div class="history-empty">
+           데이터가 없습니다.
+         </div>`;
 
-        score:
-          0,
-
-        message:
-          "OI와 Funding 데이터가 아직 부족합니다. 데이터를 계속 축적하는 중입니다."
-
-      };
+      return;
 
     }
 
 
-    const latest =
-      valid[
-        valid.length - 1
-      ];
+    const width = 1000;
+    const height = 420;
+
+    const margin = {
+
+      top: 20,
+      right: 25,
+      bottom: 45,
+      left: 55
+
+    };
+
+    const chartWidth =
+      width -
+      margin.left -
+      margin.right;
+
+    const chartHeight =
+      height -
+      margin.top -
+      margin.bottom;
 
 
-    const latestOI =
-      Number(
-        latest.oiBtc
+    function x(index) {
+
+      if (
+        data.length === 1
+      ) {
+
+        return (
+          margin.left +
+          chartWidth / 2
+        );
+
+      }
+
+      return (
+        margin.left +
+        (
+          index /
+          (
+            data.length - 1
+          )
+        ) *
+        chartWidth
       );
 
-
-    const funding =
-      Number(
-        latest.fundingRate
-      );
+    }
 
 
-    /* -----------------------------------
-       7일 전 OI
-    ----------------------------------- */
-
-    const latestDate =
-      new Date(
-        latest.date
-      );
+    const ranges = {};
 
 
-    const targetDate =
-      new Date(
-        latestDate
-      );
+    series.forEach(
+      s => {
 
-
-    targetDate.setDate(
-      targetDate.getDate() -
-      7
-    );
-
-
-    let previous =
-      null;
-
-
-    let smallestDiff =
-      Infinity;
-
-
-    valid.forEach(
-      item => {
-
-        const date =
-          new Date(
-            item.date
-          );
-
-
-        const diff =
-          Math.abs(
-            date -
-            targetDate
-          );
-
+        const values =
+          data
+            .map(
+              item =>
+                toNumber(
+                  item[s.key]
+                )
+            )
+            .filter(
+              value =>
+                value !== null
+            );
 
         if (
-          diff < smallestDiff
+          values.length
         ) {
 
-          smallestDiff =
-            diff;
+          let min =
+            Math.min(...values);
 
-          previous =
-            item;
+          let max =
+            Math.max(...values);
+
+
+          /*
+             동일값이면 너무 납작해지지 않도록
+             작은 여유를 준다.
+          */
+
+          if (
+            min === max
+          ) {
+
+            const padding =
+              Math.abs(min) *
+              0.05 ||
+              1;
+
+            min -= padding;
+            max += padding;
+
+          }
+
+          ranges[s.key] = [
+            min,
+            max
+          ];
 
         }
 
@@ -1423,491 +1021,345 @@
     );
 
 
-    /*
-       7일 데이터가 너무 부족하면
-       가장 오래된 데이터 사용
-    */
-
-    if (
-      !previous
+    function y(
+      value,
+      range
     ) {
 
-      previous =
-        valid[0];
-
-    }
-
-
-    const previousOI =
-      Number(
-        previous.oiBtc
+      return scale(
+        value,
+        range[0],
+        range[1],
+        margin.top +
+          chartHeight,
+        margin.top
       );
 
-
-    let oiChange =
-      0;
+    }
 
 
-    if (
-      previousOI > 0
+    let svg =
+      `<svg
+         viewBox="
+           0 0 ${width} ${height}
+         "
+         preserveAspectRatio="none">
+
+         <rect
+           x="0"
+           y="0"
+           width="${width}"
+           height="${height}"
+           fill="transparent">
+         </rect>`;
+
+
+    /* -----------------------------------
+       GRID
+    ----------------------------------- */
+
+    for (
+      let i = 0;
+      i <= 4;
+      i++
     ) {
 
-      oiChange =
+      const gy =
+        margin.top +
         (
-          (
-            latestOI /
-            previousOI
-          ) - 1
-        ) * 100;
+          i / 4
+        ) *
+        chartHeight;
+
+      svg += `
+        <line
+          class="history-grid"
+          x1="${margin.left}"
+          y1="${gy}"
+          x2="${width - margin.right}"
+          y2="${gy}">
+        </line>
+      `;
 
     }
 
 
     /* -----------------------------------
-       최근 BTC 변화
+       DATE LABELS
     ----------------------------------- */
 
-    let btcChange =
-      0;
+    const labelCount =
+      Math.min(
+        7,
+        data.length
+      );
 
-
-    const btcStart =
-      valid[0];
-
-
-    if (
-      Number(
-        btcStart.btc
-      ) > 0
+    for (
+      let i = 0;
+      i < labelCount;
+      i++
     ) {
 
-      btcChange =
-        (
+      const index =
+        Math.round(
+          i *
           (
-            Number(
-              latest.btc
-            ) /
-            Number(
-              btcStart.btc
+            (data.length - 1) /
+            Math.max(
+              1,
+              labelCount - 1
             )
-          ) - 1
-        ) * 100;
+          )
+        );
+
+      const date =
+        new Date(
+          data[index].date
+        );
+
+      const label =
+        date.toLocaleDateString(
+          "ko-KR",
+          {
+            year: "numeric",
+            month: "short"
+          }
+        );
+
+      svg += `
+        <text
+          class="history-axis"
+          x="${x(index)}"
+          y="${height - 14}"
+          text-anchor="middle">
+          ${label}
+        </text>
+      `;
 
     }
 
 
     /* -----------------------------------
-       Risk Score
+       LINES
     ----------------------------------- */
 
-    let score =
-      0;
+    series.forEach(
+      s => {
 
+        if (
+          !ranges[s.key]
+        ) {
 
-    /*
-       Funding
-    */
+          return;
 
-    if (
-      funding >= 0.05
-    ) {
+        }
 
-      score += 4;
+        const values =
+          data.map(
+            item =>
+              item[s.key]
+          );
 
-    } else if (
-      funding >= 0.02
-    ) {
+        const path =
+          makePath(
+            values,
+            ranges[s.key],
+            x,
+            y
+          );
 
-      score += 3;
+        if (
+          !path
+        ) {
 
-    } else if (
-      funding >= 0.005
-    ) {
+          return;
 
-      score += 1;
+        }
 
-    }
+        svg += `
+          <path
+            d="${path}"
+            fill="none"
+            stroke="${s.color}"
+            stroke-width="3"
+            vector-effect="non-scaling-stroke">
+          </path>
+        `;
 
-
-    /*
-       음의 Funding
-       = 숏 포지션 과열
-    */
-
-    if (
-      funding <= -0.05
-    ) {
-
-      score += 3;
-
-    } else if (
-      funding <= -0.02
-    ) {
-
-      score += 2;
-
-    } else if (
-      funding <= -0.005
-    ) {
-
-      score += 1;
-
-    }
-
-
-    /*
-       OI 증가
-    */
-
-    if (
-      oiChange >= 15
-    ) {
-
-      score += 4;
-
-    } else if (
-      oiChange >= 10
-    ) {
-
-      score += 3;
-
-    } else if (
-      oiChange >= 5
-    ) {
-
-      score += 1;
-
-    }
-
-
-    /*
-       BTC 상승 + OI 증가
-    */
-
-    if (
-      btcChange > 5 &&
-      oiChange > 10
-    ) {
-
-      score += 2;
-
-    }
+      }
+    );
 
 
     /* -----------------------------------
-       최종 Level
+       POINTS
     ----------------------------------- */
 
-    if (
-      score >= 8
-    ) {
+    series.forEach(
+      s => {
 
-      return {
+        if (
+          !ranges[s.key]
+        ) {
 
-        level:
-          "EXTREME",
+          return;
 
-        icon:
-          "🔴",
+        }
 
-        color:
-          "#ff4d5a",
+        data.forEach(
+          (item, index) => {
 
-        score,
+            const value =
+              toNumber(
+                item[s.key]
+              );
 
-        funding,
-        oiChange,
-        btcChange,
+            if (
+              value === null
+            ) {
 
-        message:
-          "레버리지와 Funding이 동시에 극단적으로 높습니다. 급격한 청산과 변동성 확대에 특히 주의해야 합니다."
+              return;
 
-      };
+            }
 
-    }
+            const py =
+              y(
+                value,
+                ranges[s.key]
+              );
 
+            if (
+              py === null
+            ) {
 
-    if (
-      score >= 5
-    ) {
+              return;
 
-      return {
+            }
 
-        level:
-          "OVERHEATED",
+            svg += `
+              <circle
+                cx="${x(index)}"
+                cy="${py}"
+                r="3"
+                fill="${s.color}"
+                data-index="${index}"
+                data-series="${s.key}">
+              </circle>
+            `;
 
-        icon:
-          "🟠",
+          }
+        );
 
-        color:
-          "#ff9f43",
-
-        score,
-
-        funding,
-        oiChange,
-        btcChange,
-
-        message:
-          "레버리지와 Funding이 높은 상태입니다. 추격매수 위험이 커지고 있습니다."
-
-      };
-
-    }
-
-
-    if (
-      score >= 2
-    ) {
-
-      return {
-
-        level:
-          "CAUTION",
-
-        icon:
-          "🟡",
-
-        color:
-          "#f3c64e",
-
-        score,
-
-        funding,
-        oiChange,
-        btcChange,
-
-        message:
-          "OI 또는 Funding이 증가하고 있습니다. 시장 레버리지 확대 여부를 관찰하세요."
-
-      };
-
-    }
+      }
+    );
 
 
-    return {
+    svg += "</svg>";
 
-      level:
-        "SAFE",
+    container.innerHTML =
+      svg;
 
-      icon:
-        "🟢",
 
-      color:
-        "#5ee6a8",
-
-      score,
-
-      funding,
-      oiChange,
-      btcChange,
-
-      message:
-        "현재 OI와 Funding 기준으로 특별한 과열 신호가 없습니다."
-
-    };
+    createTooltip(
+      container,
+      data,
+      series
+    );
 
   }
 
 
   /* ---------------------------------------
-     Risk Warning 표시
+     CHANGE
   --------------------------------------- */
 
-  function updateRiskWarning(
-    data
+  function calculateChange(
+    data,
+    key
   ) {
 
-    const box =
-      document.getElementById(
-        "riskWarning"
-      );
+    if (
+      !data.length
+    ) {
 
+      return null;
 
-    if (!box) {
-      return;
     }
 
-
-    const risk =
-      calculateRisk(
-        data
+    const first =
+      toNumber(
+        data[0][key]
       );
 
-
-    let activeBars =
-      0;
-
+    const latest =
+      toNumber(
+        data[data.length - 1][key]
+      );
 
     if (
-      risk.level ===
-      "CAUTION"
+      first === null ||
+      latest === null ||
+      first === 0
     ) {
 
-      activeBars = 2;
-
-    } else if (
-      risk.level ===
-      "OVERHEATED"
-    ) {
-
-      activeBars = 3;
-
-    } else if (
-      risk.level ===
-      "EXTREME"
-    ) {
-
-      activeBars = 4;
-
-    } else if (
-      risk.level ===
-      "SAFE"
-    ) {
-
-      activeBars = 1;
+      return null;
 
     }
 
+    return (
+      (
+        latest /
+        first
+      ) - 1
+    ) * 100;
 
-    box.innerHTML = `
-
-      <div class="risk-title">
-        🚦 BTC 파생시장 위험도
-      </div>
-
-
-      <div class="risk-main">
-
-        <div class="risk-icon">
-          ${risk.icon}
-        </div>
+  }
 
 
-        <div>
+  /* ---------------------------------------
+     CHANGE DISPLAY
+  --------------------------------------- */
 
-          <div
-            class="risk-level"
-            style="
-              color:${risk.color};
-            ">
-            ${risk.level}
-          </div>
+  function changeHtml(
+    value
+  ) {
 
+    if (
+      value === null
+    ) {
 
-          ${
-            risk.funding !== undefined
-              ? `
-                <div
-                  class="risk-data">
+      return "";
 
-                  Funding:
-                  ${
-                    risk.funding >= 0
-                      ? "+"
-                      : ""
-                  }${risk.funding.toFixed(4)}%
+    }
 
-                  ·
-
-                  OI 7일:
-                  ${
-                    risk.oiChange >= 0
-                      ? "+"
-                      : ""
-                  }${risk.oiChange.toFixed(1)}%
-
-                </div>
-              `
-              : ""
-          }
-
-        </div>
-
-      </div>
-
-
-      <div
-        class="risk-bar"
-        style="
-          color:${risk.color};
-        ">
-
-        <div
-          class="risk-bar-item
-          ${activeBars >= 1
-            ? "active"
-            : ""}">
-        </div>
-
-        <div
-          class="risk-bar-item
-          ${activeBars >= 2
-            ? "active"
-            : ""}">
-        </div>
-
-        <div
-          class="risk-bar-item
-          ${activeBars >= 3
-            ? "active"
-            : ""}">
-        </div>
-
-        <div
-          class="risk-bar-item
-          ${activeBars >= 4
-            ? "active"
-            : ""}">
-        </div>
-
-      </div>
-
-
-      <div class="risk-message">
-
-        ${risk.message}
-
+    return `
+      <span
+        style="font-size:11px">
         ${
-          risk.btcChange !== undefined
-            ? `
-              <br><br>
-              최근 BTC 변화:
-              ${
-                risk.btcChange >= 0
-                  ? "+"
-                  : ""
-              }${risk.btcChange.toFixed(1)}%
-            `
+          value >= 0
+            ? "+"
             : ""
-        }
-
-      </div>
-
+        }${value.toFixed(1)}%
+      </span>
     `;
 
   }
 
 
   /* ---------------------------------------
-     Main Draw
+     MAIN DRAW
   --------------------------------------- */
 
-  function draw(
-    period
-  ) {
+  function draw(period) {
 
     const container =
       document.getElementById(
         "historyChart"
       );
 
-
     const derivatives =
       document.getElementById(
         "derivativesChart"
       );
-
 
     const summary =
       document.getElementById(
@@ -1920,17 +1372,14 @@
       !derivatives ||
       !summary
     ) {
+
       return;
+
     }
 
 
     const data =
-      filterData(
-        period
-      );
-
-
-    removeTooltips();
+      filterData(period);
 
 
     if (
@@ -1938,35 +1387,26 @@
     ) {
 
       container.innerHTML =
-        `<div style="
-          padding:40px;
-          text-align:center;
-          color:#788496;
-        ">
-          데이터가 없습니다.
-        </div>`;
-
+        `<div class="history-empty">
+           데이터가 없습니다.
+         </div>`;
 
       derivatives.innerHTML =
-        "";
-
+        `<div class="history-empty">
+           파생상품 데이터가 없습니다.
+         </div>`;
 
       summary.innerHTML =
         "";
 
-
-      updateRiskWarning(
-        []
-      );
-
-
       return;
+
     }
 
 
-    /* --------------------------------
-       MSTR / BTC / mNAV
-    -------------------------------- */
+    /* -----------------------------------
+       MSTR / mNAV / BTC
+    ----------------------------------- */
 
     drawBaseChart(
       container,
@@ -1974,47 +1414,30 @@
       [
 
         {
-          key:
-            "mstr",
-
-          label:
-            "🔴 MSTR",
-
-          color:
-            "#ff4d5a"
+          key: "mstr",
+          label: "🔴 MSTR",
+          color: "#ff4d5a"
         },
 
-
         {
-          key:
-            "mnav",
-
-          label:
-            "🟡 mNAV",
-
-          color:
-            "#f3c64e"
+          key: "mnav",
+          label: "🟡 mNAV",
+          color: "#f3c64e"
         },
 
-
         {
-          key:
-            "btc",
-
-          label:
-            "🔵 BTC",
-
-          color:
-            "#4d9cff"
+          key: "btc",
+          label: "🔵 BTC",
+          color: "#4d9cff"
         }
 
       ]
     );
 
 
-    /* --------------------------------
-       OI / Funding
-    -------------------------------- */
+    /* -----------------------------------
+       OI / FUNDING
+    ----------------------------------- */
 
     drawBaseChart(
       derivatives,
@@ -2022,44 +1445,24 @@
       [
 
         {
-          key:
-            "oiBtc",
-
-          label:
-            "🟣 BTC OI",
-
-          color:
-            "#b56cff"
+          key: "oiBtc",
+          label: "🟣 BTC OI",
+          color: "#b56cff"
         },
 
-
         {
-          key:
-            "fundingRate",
-
-          label:
-            "🟢 Funding",
-
-          color:
-            "#5ee6a8"
+          key: "fundingRate",
+          label: "🟢 Funding",
+          color: "#5ee6a8"
         }
 
       ]
     );
 
 
-    /* --------------------------------
-       Risk Warning
-    -------------------------------- */
-
-    updateRiskWarning(
-      data
-    );
-
-
-    /* --------------------------------
-       Summary
-    -------------------------------- */
+    /* -----------------------------------
+       SUMMARY
+    ----------------------------------- */
 
     const latest =
       data[
@@ -2067,67 +1470,34 @@
       ];
 
 
-    const first =
-      data[0];
-
-
-    function change(
-      key
-    ) {
-
-      const a =
-        Number(
-          first[key]
-        );
-
-
-      const b =
-        Number(
-          latest[key]
-        );
-
-
-      if (
-        !Number.isFinite(a) ||
-        !Number.isFinite(b) ||
-        a === 0
-      ) {
-
-        return null;
-
-      }
-
-
-      return (
-        (
-          b / a
-        ) - 1
-      ) * 100;
-
-    }
-
-
     const mstrChange =
-      change(
+      calculateChange(
+        data,
         "mstr"
       );
 
-
     const btcChange =
-      change(
+      calculateChange(
+        data,
         "btc"
       );
 
-
     const mnavChange =
-      change(
+      calculateChange(
+        data,
         "mnav"
       );
 
-
     const oiChange =
-      change(
+      calculateChange(
+        data,
         "oiBtc"
+      );
+
+
+    const funding =
+      toNumber(
+        latest.fundingRate
       );
 
 
@@ -2143,32 +1513,15 @@
 
         <div
           class="history-summary-value"
-          style="
-            color:#ff4d5a;
-          ">
+          style="color:#ff4d5a">
 
           $${fmt(
             latest.mstr
           )}
 
-          ${
-            mstrChange !== null
-              ? `
-                <span
-                  style="
-                    font-size:11px;
-                  ">
-
-                  ${
-                    mstrChange >= 0
-                      ? "+"
-                      : ""
-                  }${mstrChange.toFixed(1)}%
-
-                </span>
-              `
-              : ""
-          }
+          ${changeHtml(
+            mstrChange
+          )}
 
         </div>
 
@@ -2185,40 +1538,22 @@
 
         <div
           class="history-summary-value"
-          style="
-            color:#f3c64e;
-          ">
+          style="color:#f3c64e">
 
           ${
-            Number.isFinite(
-              Number(
-                latest.mnav
-              )
-            )
-              ? Number(
+            toNumber(
+              latest.mnav
+            ) !== null
+              ? toNumber(
                   latest.mnav
-                ).toFixed(2) + "×"
+                ).toFixed(2) +
+                "×"
               : "—"
           }
 
-          ${
-            mnavChange !== null
-              ? `
-                <span
-                  style="
-                    font-size:11px;
-                  ">
-
-                  ${
-                    mnavChange >= 0
-                      ? "+"
-                      : ""
-                  }${mnavChange.toFixed(1)}%
-
-                </span>
-              `
-              : ""
-          }
+          ${changeHtml(
+            mnavChange
+          )}
 
         </div>
 
@@ -2235,32 +1570,15 @@
 
         <div
           class="history-summary-value"
-          style="
-            color:#4d9cff;
-          ">
+          style="color:#4d9cff">
 
           $${fmt(
             latest.btc
           )}
 
-          ${
-            btcChange !== null
-              ? `
-                <span
-                  style="
-                    font-size:11px;
-                  ">
-
-                  ${
-                    btcChange >= 0
-                      ? "+"
-                      : ""
-                  }${btcChange.toFixed(1)}%
-
-                </span>
-              `
-              : ""
-          }
+          ${changeHtml(
+            btcChange
+          )}
 
         </div>
 
@@ -2277,16 +1595,12 @@
 
         <div
           class="history-summary-value"
-          style="
-            color:#b56cff;
-          ">
+          style="color:#b56cff">
 
           ${
-            Number.isFinite(
-              Number(
-                latest.oiBtc
-              )
-            )
+            toNumber(
+              latest.oiBtc
+            ) !== null
               ? fmt(
                   latest.oiBtc
                 ) +
@@ -2294,24 +1608,9 @@
               : "—"
           }
 
-          ${
-            oiChange !== null
-              ? `
-                <span
-                  style="
-                    font-size:11px;
-                  ">
-
-                  ${
-                    oiChange >= 0
-                      ? "+"
-                      : ""
-                  }${oiChange.toFixed(1)}%
-
-                </span>
-              `
-              : ""
-          }
+          ${changeHtml(
+            oiChange
+          )}
 
         </div>
 
@@ -2328,26 +1627,11 @@
 
         <div
           class="history-summary-value"
-          style="
-            color:#5ee6a8;
-          ">
+          style="color:#5ee6a8">
 
           ${
-            Number.isFinite(
-              Number(
-                latest.fundingRate
-              )
-            )
-              ? (
-                  Number(
-                    latest.fundingRate
-                  ) >= 0
-                    ? "+"
-                    : ""
-                ) +
-                Number(
-                  latest.fundingRate
-                ).toFixed(4) +
+            funding !== null
+              ? funding.toFixed(4) +
                 "%"
               : "—"
           }
@@ -2362,7 +1646,7 @@
 
 
   /* ---------------------------------------
-     실행
+     START
   --------------------------------------- */
 
   document.addEventListener(
