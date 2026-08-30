@@ -2,8 +2,10 @@ name: Update MSTR market prices
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
   schedule:
-    # 5분마다
     - cron: "2-59/5 * * * *"
 
 permissions:
