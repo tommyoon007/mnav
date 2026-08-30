@@ -4,8 +4,7 @@ run-name: Market price update
 on:
   workflow_dispatch:
   schedule:
-    schedule:
-  - cron: "7,22,37,52 * * * *"
+    - cron: "7,22,37,52 * * * *"
 
 permissions:
   contents: read
