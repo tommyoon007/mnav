@@ -7,17 +7,6 @@
   "preferredUsdB": 14.966,
   "source": "Strategy.com",
   "asOf": "2026-08-31",
-  "notes": "BTC holdings and, when available, the complete capital-stack snapshot (USD Assets, Debt, Preferred Stock and Net Reserve) are refreshed from recent Strategy SEC 8-K filings. Capital-stack values are only replaced when all four figures are found in the same filing, preventing mixed-date data.",
-  "updatedAt": "2026-08-31T02:53:16.525602+00:00",
-  "strategyMnav": null,
-  "strategyNetBpsUsd": null,
-  "strategyGrossBpsUsd": null,
-  "strategyMstrPrice": null,
-  "strategyBtcReserveM": null,
-  "errors": [
-    "home: 403 Client Error: Forbidden for url: https://www.strategy.com/",
-    "btc: 403 Client Error: Forbidden for url: https://www.strategy.com/btc",
-    "ledger: 403 Client Error: Forbidden for url: https://www.strategy.com/ledger",
-    "shares: 403 Client Error: Forbidden for url: https://www.strategy.com/shares"
-  ]
+  "notes": "Strategy/SEC 공시 기준 재무 및 비트코인 보유량 데이터",
+  "updatedAt": "2026-08-31T02:53:16Z"
 }
