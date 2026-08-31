@@ -1,9 +1,15 @@
 {
-  "name": "MSTR mNAV",
-  "short_name": "MSTR mNAV",
-  "start_url": ".",
+  "name": "MSTR mNAV Tracker",
+  "short_name": "mNAV Pro",
+  "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#1a365d",
-  "icons": []
+  "background_color": "#090d16",
+  "theme_color": "#090d16",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/12114/12114233.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
 }
