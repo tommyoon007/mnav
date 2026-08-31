@@ -1,36 +1,33 @@
 // =========================================================
-// MSTR mNAV DASHBOARD - TAILORED SCRIPT FOR ORIGINAL HTML
+// MSTR mNAV DASHBOARD - FAILSAFE AUTO UPDATE SCRIPT
 // =========================================================
 
 const FINNHUB_KEY = "daaruppr01qn50rjdv2gdaaruppr01qn50rjdv30";
 
-// data.json 로드 실패 시 백업용 기본 데이터
+// 통신 장애 시에도 화면을 즉시 채워줄 안전 백업 데이터
 const DEFAULT_DATA = {
     btcHoldings: 845050,
     adso: 298.039,
     fdso: 424.479,
     usdAssetsUsdB: 6.690,
     debtUsdB: 6.754,
-    preferredUsdB: 14.966
+    preferredUsdB: 14.966,
+    fallbackBtcPrice: 95000,
+    fallbackMstrPrice: 300
 };
 
-// 요소에 안전하게 텍스트 대입
 function setText(id, text) {
     const el = document.getElementById(id);
     if (el) el.textContent = text;
 }
 
-// input 요소에 안전하게 값 대입 (사용자 입력 중 방해 안함)
 function setVal(id, val) {
     const el = document.getElementById(id);
-    if (el) {
-        if (document.activeElement !== el) {
-            el.value = val;
-        }
+    if (el && document.activeElement !== el) {
+        el.value = val;
     }
 }
 
-// 태그 종류 상관없이 숫자로 변환해 추출
 function getNum(id) {
     const el = document.getElementById(id);
     if (!el) return 0;
@@ -39,38 +36,45 @@ function getNum(id) {
     return isNaN(num) ? 0 : num;
 }
 
-// API 호출 시 무한 대기 방지용 (4초 타임아웃)
-async function fetchWithTimeout(resource, options = {}) {
-    const { timeout = 4000 } = options;
+async function fetchWithTimeout(url, timeoutMs = 3000) {
     const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), timeout);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-        const response = await fetch(resource, { ...options, signal: controller.signal });
-        clearTimeout(id);
-        return response;
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(timer);
+        return res;
     } catch (e) {
-        clearTimeout(id);
+        clearTimeout(timer);
         return null;
     }
 }
 
-// 1. 실시간 BTC 가격 수집 (코인베이스 -> 바이낸스)
+// 1. 실시간 BTC 가격 수집 (다중 교차망)
 async function fetchLiveBtcPrice() {
     try {
         const res = await fetchWithTimeout("https://api.coinbase.com/v2/prices/spot?currency=USD");
         if (res && res.ok) {
-            const json = await res.json();
-            const price = parseFloat(json?.data?.amount);
-            if (price > 0) return price;
+            const data = await res.json();
+            const p = parseFloat(data?.data?.amount);
+            if (p > 0) return p;
         }
     } catch (e) {}
 
     try {
         const res = await fetchWithTimeout("https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT");
         if (res && res.ok) {
-            const json = await res.json();
-            const price = parseFloat(json?.price);
-            if (price > 0) return price;
+            const data = await res.json();
+            const p = parseFloat(data?.price);
+            if (p > 0) return p;
+        }
+    } catch (e) {}
+
+    try {
+        const res = await fetchWithTimeout("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd");
+        if (res && res.ok) {
+            const data = await res.json();
+            const p = parseFloat(data?.bitcoin?.usd);
+            if (p > 0) return p;
         }
     } catch (e) {}
 
@@ -83,8 +87,8 @@ async function fetchLiveMstrPrice() {
     try {
         const res = await fetchWithTimeout(`https://finnhub.io/api/v1/quote?symbol=MSTR&token=${FINNHUB_KEY}`);
         if (res && res.ok) {
-            const json = await res.json();
-            if (json && json.c && json.c > 0) return parseFloat(json.c);
+            const data = await res.json();
+            if (data && data.c && data.c > 0) return parseFloat(data.c);
         }
     } catch (e) {}
     return null;
@@ -111,8 +115,8 @@ function updateScenarioTable(netBpsUsd, currentBtc) {
     tbody.innerHTML = html;
 }
 
-// 4. MSTR 목표가 예측 계산 (HTML button onclick 전역 연결)
-window.targetPrice = async function() {
+// 4. MSTR 가격 예측
+window.targetPrice = function() {
     const targetBtc = getNum("targetBtcPrice");
     const targetMnav = getNum("targetMnav");
 
@@ -121,27 +125,13 @@ window.targetPrice = async function() {
 
     if (!targetBtc || !targetMnav) return;
 
-    let fdso = getNum("fullyDilutedShares") || DEFAULT_DATA.fdso;
-    let btcHoldings = getNum("btcHoldings") || DEFAULT_DATA.btcHoldings;
-
-    let usdAssetsUsdB = DEFAULT_DATA.usdAssetsUsdB;
-    let debtUsdB = DEFAULT_DATA.debtUsdB;
-    let preferredUsdB = DEFAULT_DATA.preferredUsdB;
-
-    try {
-        const res = await fetchWithTimeout("./data.json?cache=" + Date.now(), { timeout: 2000 });
-        if (res && res.ok) {
-            const data = await res.json();
-            usdAssetsUsdB = parseFloat(data.usdAssetsUsdB) || usdAssetsUsdB;
-            debtUsdB = parseFloat(data.debtUsdB) || debtUsdB;
-            preferredUsdB = parseFloat(data.preferredUsdB) || preferredUsdB;
-        }
-    } catch (e) {}
+    const fdso = getNum("fullyDilutedShares") || DEFAULT_DATA.fdso;
+    const btcHoldings = getNum("btcHoldings") || DEFAULT_DATA.btcHoldings;
 
     const fdsoShares = fdso * 1_000_000;
-    const usdAssets = usdAssetsUsdB * 1_000_000_000;
-    const debt = debtUsdB * 1_000_000_000;
-    const preferred = preferredUsdB * 1_000_000_000;
+    const usdAssets = DEFAULT_DATA.usdAssetsUsdB * 1_000_000_000;
+    const debt = DEFAULT_DATA.debtUsdB * 1_000_000_000;
+    const preferred = DEFAULT_DATA.preferredUsdB * 1_000_000_000;
 
     const netBpsUsd = (btcHoldings * targetBtc + usdAssets - debt - preferred) / fdsoShares;
     const predictedMstr = netBpsUsd * targetMnav;
@@ -150,26 +140,85 @@ window.targetPrice = async function() {
     setText("predictedNetBps", `예상 Net BPS: $${netBpsUsd.toFixed(2)}`);
 };
 
-// 5. 메인 대시보드 업데이트 로직
+// 5. 화면 수치 계산 및 출력
+function calculateDashboard(data) {
+    let currentBtcPrice = getNum("btcPrice");
+    let currentMstrPrice = getNum("mstrPrice");
+
+    if (currentBtcPrice <= 0) currentBtcPrice = DEFAULT_DATA.fallbackBtcPrice;
+    if (currentMstrPrice <= 0) currentMstrPrice = DEFAULT_DATA.fallbackMstrPrice;
+
+    const fdsoShares = data.fdso * 1_000_000;
+    const usdAssets = data.usdAssetsUsdB * 1_000_000_000;
+    const debt = data.debtUsdB * 1_000_000_000;
+    const preferred = data.preferredUsdB * 1_000_000_000;
+
+    const btcValueUsd = data.btcHoldings * currentBtcPrice;
+    const grossBpsUsd = btcValueUsd / fdsoShares;
+    const grossBpsSats = (data.btcHoldings / fdsoShares) * 100_000_000;
+
+    const netReserveUsd = btcValueUsd + usdAssets - debt - preferred;
+    const netBpsUsd = netReserveUsd / fdsoShares;
+    const netBtcHoldings = netReserveUsd / currentBtcPrice;
+    const netBpsSats = (netBtcHoldings / fdsoShares) * 100_000_000;
+
+    setText("grossBpsSats", Math.round(grossBpsSats).toLocaleString());
+    setText("netBpsSats", Math.round(netBpsSats).toLocaleString());
+    setText("netBpsUsd", `$${netBpsUsd.toFixed(2)}`);
+    setText("btcTotalValue", `$${(btcValueUsd / 1_000_000_000).toFixed(2)}B`);
+    setText("seniorClaims", `$${((debt + preferred) / 1_000_000_000).toFixed(2)}B`);
+    setText("reserveValue", `$${(usdAssets / 1_000_000_000).toFixed(2)}B`);
+    setText("netBtc", `${Math.round(netBtcHoldings).toLocaleString()} ₿`);
+    setText("grossBpsUsd", `$${grossBpsUsd.toFixed(2)}`);
+    setText("fdsoDisplay", `${data.fdso.toFixed(3)}M`);
+
+    if (currentMstrPrice > 0 && netBpsUsd > 0) {
+        const mnav = currentMstrPrice / netBpsUsd;
+        const premiumPct = (mnav - 1) * 100;
+
+        setText("mnavMultiple", `${mnav.toFixed(2)}×`);
+        setText("premium", `프리미엄: ${premiumPct >= 0 ? '+' : ''}${premiumPct.toFixed(1)}%`);
+
+        let signalText = "🟡 중립 (적정 주가 구간)";
+        if (mnav < 1.0) signalText = "🟢 극심한 저평가 (NAV 대비 할인)";
+        else if (mnav > 2.5) signalText = "🔴 과열 주의 (높은 프리미엄)";
+        setText("signal", signalText);
+    }
+
+    updateScenarioTable(netBpsUsd, currentBtcPrice);
+    window.targetPrice();
+}
+
+// 6. 메인 업데이트 로직
 async function updateDashboard() {
+    let currentData = { ...DEFAULT_DATA };
+
+    // [1단계] 접속 즉시 화면부터 100% 채우기 (먹통 방지)
+    setVal("btcHoldings", currentData.btcHoldings);
+    setVal("assumedShares", currentData.adso.toFixed(3));
+    setVal("fullyDilutedShares", currentData.fdso.toFixed(3));
+    calculateDashboard(currentData);
+
+    // [2단계] data.json 로드 시도
     try {
-        let data = { ...DEFAULT_DATA };
+        const res = await fetchWithTimeout("./data.json?cache=" + Date.now(), 2000);
+        if (res && res.ok) {
+            const json = await res.json();
+            currentData.btcHoldings = parseFloat(json.btcHoldings) || currentData.btcHoldings;
+            currentData.adso = parseFloat(json.adso) || currentData.adso;
+            currentData.fdso = parseFloat(json.fdso) || currentData.fdso;
+            currentData.usdAssetsUsdB = parseFloat(json.usdAssetsUsdB) || currentData.usdAssetsUsdB;
+            currentData.debtUsdB = parseFloat(json.debtUsdB) || currentData.debtUsdB;
+            currentData.preferredUsdB = parseFloat(json.preferredUsdB) || currentData.preferredUsdB;
 
-        // data.json 로드
-        try {
-            const res = await fetchWithTimeout("./data.json?cache=" + Date.now(), { timeout: 2000 });
-            if (res && res.ok) {
-                const json = await res.json();
-                data.btcHoldings = parseFloat(json.btcHoldings) || data.btcHoldings;
-                data.adso = parseFloat(json.adso) || data.adso;
-                data.fdso = parseFloat(json.fdso) || data.fdso;
-                data.usdAssetsUsdB = parseFloat(json.usdAssetsUsdB) || data.usdAssetsUsdB;
-                data.debtUsdB = parseFloat(json.debtUsdB) || data.debtUsdB;
-                data.preferredUsdB = parseFloat(json.preferredUsdB) || data.preferredUsdB;
-            }
-        } catch (e) {}
+            setVal("btcHoldings", currentData.btcHoldings);
+            setVal("assumedShares", currentData.adso.toFixed(3));
+            setVal("fullyDilutedShares", currentData.fdso.toFixed(3));
+        }
+    } catch (e) {}
 
-        // 실시간 시세 로드
+    // [3단계] 실시간 시세 연동
+    try {
         const [fetchedBtc, fetchedMstr] = await Promise.all([
             fetchLiveBtcPrice(),
             fetchLiveMstrPrice()
@@ -178,69 +227,18 @@ async function updateDashboard() {
         if (fetchedBtc && fetchedBtc > 0) setVal("btcPrice", fetchedBtc.toFixed(2));
         if (fetchedMstr && fetchedMstr > 0) setVal("mstrPrice", fetchedMstr.toFixed(2));
 
-        setVal("btcHoldings", data.btcHoldings);
-        setVal("assumedShares", data.adso.toFixed(3));
-        setVal("fullyDilutedShares", data.fdso.toFixed(3));
-
-        const btcPrice = getNum("btcPrice");
-        const mstrPrice = getNum("mstrPrice");
-
-        if (btcPrice <= 0) return;
-
-        const fdsoShares = data.fdso * 1_000_000;
-        const usdAssets = data.usdAssetsUsdB * 1_000_000_000;
-        const debt = data.debtUsdB * 1_000_000_000;
-        const preferred = data.preferredUsdB * 1_000_000_000;
-
-        // 핵심 계산
-        const btcValueUsd = data.btcHoldings * btcPrice;
-        const grossBpsUsd = btcValueUsd / fdsoShares;
-        const grossBpsSats = (data.btcHoldings / fdsoShares) * 100_000_000;
-
-        const netReserveUsd = btcValueUsd + usdAssets - debt - preferred;
-        const netBpsUsd = netReserveUsd / fdsoShares;
-        const netBtcHoldings = netReserveUsd / btcPrice;
-        const netBpsSats = (netBtcHoldings / fdsoShares) * 100_000_000;
-
-        // HTML 태그와 일치하게 결과 표시
-        setText("grossBpsSats", Math.round(grossBpsSats).toLocaleString());
-        setText("netBpsSats", Math.round(netBpsSats).toLocaleString());
-        setText("netBpsUsd", `$${netBpsUsd.toFixed(2)}`);
-        setText("btcTotalValue", `$${(btcValueUsd / 1_000_000_000).toFixed(2)}B`);
-        setText("seniorClaims", `$${((debt + preferred) / 1_000_000_000).toFixed(2)}B`);
-        setText("reserveValue", `$${(usdAssets / 1_000_000_000).toFixed(2)}B`);
-        setText("netBtc", `${Math.round(netBtcHoldings).toLocaleString()} ₿`);
-        setText("grossBpsUsd", `$${grossBpsUsd.toFixed(2)}`);
-        setText("fdsoDisplay", `${data.fdso.toFixed(3)}M`);
-
-        if (mstrPrice > 0 && netBpsUsd > 0) {
-            const mnav = mstrPrice / netBpsUsd;
-            const premiumPct = (mnav - 1) * 100;
-
-            setText("mnavMultiple", `${mnav.toFixed(2)}×`);
-            setText("premium", `프리미엄: ${premiumPct >= 0 ? '+' : ''}${premiumPct.toFixed(1)}%`);
-
-            // 투자 시그널 처리
-            let signalText = "🟡 중립 (적정 주가 구간)";
-            if (mnav < 1.0) signalText = "🟢 극심한 저평가 (NAV 대비 할인)";
-            else if (mnav > 2.5) signalText = "🔴 과열 주의 (높은 프리미엄)";
-            setText("signal", signalText);
-        }
-
-        // 상태 표시 영역 갱신
         const now = new Date();
         const timeStr = now.toTimeString().split(' ')[0];
-        setText("dataStatus", `최신 데이터 연결됨 (${timeStr})`);
-
-        updateScenarioTable(netBpsUsd, btcPrice);
-        window.targetPrice();
-
+        setText("dataStatus", `최신 데이터 연동 완료 (${timeStr})`);
     } catch (e) {
-        setText("dataStatus", "데이터 동기화 재시도 중...");
+        setText("dataStatus", "실시간 시세 연결 대기 중 (기본값 동작)");
     }
+
+    // [4단계] 최종 재계산
+    calculateDashboard(currentData);
 }
 
-// 이벤트 및 자동 실행 설정
+// 이벤트 초기화
 document.addEventListener("DOMContentLoaded", () => {
     const savedBtc = localStorage.getItem("savedTargetBtc");
     const savedMnav = localStorage.getItem("savedTargetMnav");
@@ -249,16 +247,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     updateDashboard();
 
-    // 입력값 변경 시 자동 계산
     document.getElementById("targetBtcPrice")?.addEventListener("input", window.targetPrice);
     document.getElementById("targetMnav")?.addEventListener("input", window.targetPrice);
-    document.getElementById("mstrPrice")?.addEventListener("input", updateDashboard);
-    document.getElementById("btcPrice")?.addEventListener("input", updateDashboard);
+    document.getElementById("mstrPrice")?.addEventListener("input", () => calculateDashboard(DEFAULT_DATA));
+    document.getElementById("btcPrice")?.addEventListener("input", () => calculateDashboard(DEFAULT_DATA));
 
-    // 10초 주기 오토 업데이트
+    // 10초 주기 자동 갱신
     setInterval(updateDashboard, 10000);
 
-    // 모바일 탭 복귀 시 즉시 다시 불러오기
+    // 모바일 백그라운드 복귀 시 갱신
     document.addEventListener("visibilitychange", () => {
         if (!document.hidden) updateDashboard();
     });
