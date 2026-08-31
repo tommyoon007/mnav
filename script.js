@@ -1,8 +1,19 @@
 // =========================================================
-// MSTR DASHBOARD - FULL REALTIME SCRIPT (No HTML Editing Needed)
+// MSTR DASHBOARD - ERROR-SAFE REALTIME SCRIPT
 // =========================================================
 
 const FINNHUB_KEY = "daaruppr01qn50rjdv2gdaaruppr01qn50rjdv30";
+
+// 요소를 안전하게 업데이트하는 함수
+function setSafeText(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+}
+
+function setSafeHTML(id, html) {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = html;
+}
 
 // 1. 실시간 BTC 가격 수집
 async function fetchLiveBtcPrice() {
@@ -19,7 +30,7 @@ async function fetchLiveBtcPrice() {
     }
 }
 
-// 2. 바이낸스 선물 데이터 및 자동 경고등 교체
+// 2. 바이낸스 선물 데이터 및 레버리지 경고등
 async function fetchFuturesData() {
     const rawPremiumUrl = "https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT";
     const rawOiUrl = "https://fapi.binance.com/fapi/v1/openInterest?symbol=BTCUSDT";
@@ -64,56 +75,39 @@ async function fetchFuturesData() {
     const markPrice = parseFloat(premiumData.markPrice);
     const oiUsdBillion = `$${((openInterestBtc * markPrice) / 1_000_000_000).toFixed(2)}B`;
 
-    // 펀딩비 & OI 값 화면에 세팅
-    ["fundingRate", "btcFundingRate", "fundingValue", "liveFundingRate", "cardFundingRate"].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.textContent = fundingRatePct;
-    });
+    // 펀딩비 & OI 세팅
+    ["fundingRate", "btcFundingRate", "fundingValue", "liveFundingRate", "cardFundingRate"].forEach(id => setSafeText(id, fundingRatePct));
+    ["btcOpenInterest", "openInterest", "oiValue", "liveBtcOi", "cardBtcOi"].forEach(id => setSafeText(id, oiUsdBillion));
 
-    ["btcOpenInterest", "openInterest", "oiValue", "liveBtcOi", "cardBtcOi"].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.textContent = oiUsdBillion;
-    });
+    // 경고등 처리
+    let statusText = "";
+    let color = "#ffb74d";
+    if (fundingRateDecimal >= 0.0003) {
+        statusText = "🔴 <b>과열</b> (롱 포지션 과도)";
+        color = "#ff4d4d";
+    } else if (fundingRateDecimal <= -0.0001) {
+        statusText = "🟢 <b>숏 우세</b> (숏 스퀴즈 가능성)";
+        color = "#00e676";
+    } else {
+        statusText = "🟡 <b>중립</b> (적정 레버리지 유지)";
+        color = "#ffb74d";
+    }
 
-    // 🚦 DATA WAITING 박스를 찾아 실시간 경고등으로 자동 교체
-    updateLeverageWarningBox(fundingRateDecimal);
-}
-
-// 경고등 상자 자동 감지 및 실시간 업데이트
-function updateLeverageWarningBox(fundingRateDecimal) {
-    let targetEl = document.getElementById("leverageSignal") || document.getElementById("leverageWarning");
-
-    // ID로 못 찾을 경우 문구 기반으로 상자 자동 탐색
-    if (!targetEl) {
-        const elements = document.querySelectorAll("div, p, span, h3");
+    const warningEl = document.getElementById("leverageSignal") || document.getElementById("leverageWarning");
+    if (warningEl) {
+        warningEl.innerHTML = statusText;
+        warningEl.style.color = color;
+    } else {
+        const elements = document.querySelectorAll("div, p, span");
         for (const el of elements) {
             if (el.textContent.includes("DATA WAITING") || el.textContent.includes("Risk Score")) {
-                targetEl = el.closest("div");
+                const parent = el.closest("div");
+                if (parent) {
+                    parent.innerHTML = `<div style="font-size: 1.1rem; font-weight: bold; color: ${color}; padding: 12px;">${statusText}</div>`;
+                }
                 break;
             }
         }
-    }
-
-    if (targetEl) {
-        let statusText = "";
-        let color = "#ffb74d";
-
-        if (fundingRateDecimal >= 0.0003) {
-            statusText = "🔴 <b>과열</b> (롱 포지션 과도 / 펀딩비 상승)";
-            color = "#ff4d4d";
-        } else if (fundingRateDecimal <= -0.0001) {
-            statusText = "🟢 <b>숏 우세</b> (숏 스퀴즈 가능성 유효)";
-            color = "#00e676";
-        } else {
-            statusText = "🟡 <b>중립</b> (적정 레버리지 수준 유지 중)";
-            color = "#ffb74d";
-        }
-
-        targetEl.innerHTML = `
-            <div style="font-size: 1.1rem; font-weight: bold; color: ${color}; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 8px;">
-                ${statusText}
-            </div>
-        `;
     }
 }
 
@@ -147,7 +141,7 @@ async function fetchLiveMstrPrice() {
     return null;
 }
 
-// 4. 고정 시나리오 테이블
+// 4. 시나리오 테이블
 function updateScenarioTable(netBpsUsd, currentBtc) {
     const tbody = document.getElementById("scenarioTable");
     if (!tbody || !netBpsUsd) return;
@@ -168,7 +162,7 @@ function updateScenarioTable(netBpsUsd, currentBtc) {
     tbody.innerHTML = html;
 }
 
-// 5. 목표가 자동 기억 & 실시간 계산 (localStorage)
+// 5. 목표가 저장 및 계산
 async function targetPrice() {
     const targetBtcInput = document.getElementById("targetBtcPrice");
     const targetMnavInput = document.getElementById("targetMnav");
@@ -200,21 +194,20 @@ async function targetPrice() {
     const netBpsUsd = (btcHoldings * targetBtc + usdAssets - debt - preferred) / fdso;
     const predictedMstr = netBpsUsd * targetMnav;
 
-    const predMstrEl = document.getElementById("predictedMstrPrice");
-    const predNetBpsEl = document.getElementById("predictedNetBps");
-
-    if (predMstrEl) predMstrEl.textContent = `$${predictedMstr.toFixed(2)}`;
-    if (predNetBpsEl) predNetBpsEl.textContent = `예상 Net BPS: $${netBpsUsd.toFixed(2)}`;
+    setSafeText("predictedMstrPrice", `$${predictedMstr.toFixed(2)}`);
+    setSafeText("predictedNetBps", `예상 Net BPS: $${netBpsUsd.toFixed(2)}`);
 }
 
 function loadSavedTargetValues() {
     const savedBtc = localStorage.getItem("savedTargetBtc");
     const savedMnav = localStorage.getItem("savedTargetMnav");
-    if (savedBtc && document.getElementById("targetBtcPrice")) document.getElementById("targetBtcPrice").value = savedBtc;
-    if (savedMnav && document.getElementById("targetMnav")) document.getElementById("targetMnav").value = savedMnav;
+    const btcInput = document.getElementById("targetBtcPrice");
+    const mnavInput = document.getElementById("targetMnav");
+    if (savedBtc && btcInput) btcInput.value = savedBtc;
+    if (savedMnav && mnavInput) mnavInput.value = savedMnav;
 }
 
-// 6. 메인 갱신 로직
+// 6. 메인 업데이트 로직
 async function updateDashboard() {
     try {
         const dataRes = await fetch("./data.json?cache=" + Date.now());
@@ -223,9 +216,12 @@ async function updateDashboard() {
         const [btcPrice, fetchedMstrPrice] = await Promise.all([fetchLiveBtcPrice(), fetchLiveMstrPrice()]);
         fetchFuturesData();
 
-        if (btcPrice) document.getElementById("btcPrice").value = btcPrice.toFixed(2);
-        let mstrPrice = fetchedMstrPrice || (parseFloat(document.getElementById("mstrPrice").value) || 0);
-        if (fetchedMstrPrice) document.getElementById("mstrPrice").value = fetchedMstrPrice.toFixed(2);
+        const btcInput = document.getElementById("btcPrice");
+        if (btcPrice && btcInput) btcInput.value = btcPrice.toFixed(2);
+
+        const mstrInput = document.getElementById("mstrPrice");
+        let mstrPrice = fetchedMstrPrice || (parseFloat(mstrInput?.value) || 0);
+        if (fetchedMstrPrice && mstrInput) mstrInput.value = fetchedMstrPrice.toFixed(2);
 
         const rawVal1 = parseFloat(data.adso || 298.039);
         const rawVal2 = parseFloat(data.fdso || 424.479);
@@ -233,15 +229,18 @@ async function updateDashboard() {
         const fdso = Math.max(rawVal1, rawVal2);
         const fdsoShares = fdso * 1_000_000;
 
-        const currentBtcPrice = parseFloat(document.getElementById("btcPrice").value) || 0;
+        const currentBtcPrice = parseFloat(btcInput?.value) || 0;
         const btcHoldings = parseFloat(data.btcHoldings || 845050);
         const usdAssets = parseFloat(data.usdAssetsUsdB || 6.690) * 1_000_000_000;
         const debt = parseFloat(data.debtUsdB || 6.754) * 1_000_000_000;
         const preferred = parseFloat(data.preferredUsdB || 14.966) * 1_000_000_000;
 
-        document.getElementById("btcHoldings").value = btcHoldings;
-        document.getElementById("assumedShares").value = adso.toFixed(3);
-        document.getElementById("fullyDilutedShares").value = fdso.toFixed(3);
+        const hInput = document.getElementById("btcHoldings");
+        if (hInput) hInput.value = btcHoldings;
+        const aInput = document.getElementById("assumedShares");
+        if (aInput) aInput.value = adso.toFixed(3);
+        const fInput = document.getElementById("fullyDilutedShares");
+        if (fInput) fInput.value = fdso.toFixed(3);
 
         if (currentBtcPrice <= 0) return;
 
@@ -253,21 +252,21 @@ async function updateDashboard() {
         const netBtcHoldings = netReserveUsd / currentBtcPrice;
         const netBpsSats = (netBtcHoldings / fdsoShares) * 100_000_000;
 
-        document.getElementById("grossBpsSats").textContent = Math.round(grossBpsSats).toLocaleString();
-        document.getElementById("netBpsSats").textContent = Math.round(netBpsSats).toLocaleString();
-        document.getElementById("netBpsUsd").textContent = `$${netBpsUsd.toFixed(2)}`;
-        document.getElementById("btcTotalValue").textContent = `$${(btcValueUsd / 1_000_000_000).toFixed(2)}B`;
-        document.getElementById("seniorClaims").textContent = `$${((debt + preferred) / 1_000_000_000).toFixed(2)}B`;
-        document.getElementById("reserveValue").textContent = `$${(usdAssets / 1_000_000_000).toFixed(2)}B`;
-        document.getElementById("netBtc").textContent = `${Math.round(netBtcHoldings).toLocaleString()} ₿`;
-        document.getElementById("grossBpsUsd").textContent = `$${grossBpsUsd.toFixed(2)}`;
-        document.getElementById("fdsoDisplay").textContent = `${fdso.toFixed(3)}M`;
+        setSafeText("grossBpsSats", Math.round(grossBpsSats).toLocaleString());
+        setSafeText("netBpsSats", Math.round(netBpsSats).toLocaleString());
+        setSafeText("netBpsUsd", `$${netBpsUsd.toFixed(2)}`);
+        setSafeText("btcTotalValue", `$${(btcValueUsd / 1_000_000_000).toFixed(2)}B`);
+        setSafeText("seniorClaims", `$${((debt + preferred) / 1_000_000_000).toFixed(2)}B`);
+        setSafeText("reserveValue", `$${(usdAssets / 1_000_000_000).toFixed(2)}B`);
+        setSafeText("netBtc", `${Math.round(netBtcHoldings).toLocaleString()} ₿`);
+        setSafeText("grossBpsUsd", `$${grossBpsUsd.toFixed(2)}`);
+        setSafeText("fdsoDisplay", `${fdso.toFixed(3)}M`);
 
         if (mstrPrice > 0 && netBpsUsd > 0) {
             const mnav = mstrPrice / netBpsUsd;
             const premiumPct = (mnav - 1) * 100;
-            document.getElementById("mnavMultiple").textContent = `${mnav.toFixed(2)}×`;
-            document.getElementById("premium").textContent = `프리미엄: ${premiumPct >= 0 ? '+' : ''}${premiumPct.toFixed(1)}%`;
+            setSafeText("mnavMultiple", `${mnav.toFixed(2)}×`);
+            setSafeText("premium", `프리미엄: ${premiumPct >= 0 ? '+' : ''}${premiumPct.toFixed(1)}%`);
         }
 
         updateScenarioTable(netBpsUsd, currentBtcPrice);
