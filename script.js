@@ -1,5 +1,5 @@
 // =========================================================
-// MSTR mNAV DASHBOARD - TRADINGVIEW POWERED SCRIPT
+// MSTR mNAV DASHBOARD - MULTI-API POWERED SCRIPT
 // =========================================================
 
 const FINNHUB_KEY = "daaruppr01qn50rjdv2gdaaruppr01qn50rjdv30";
@@ -14,6 +14,8 @@ const DEFAULT_DATA = {
     fallbackBtcPrice: 95000,
     fallbackMstrPrice: 300
 };
+
+let currentData = { ...DEFAULT_DATA };
 
 function setText(id, text) {
     const el = document.getElementById(id);
@@ -80,21 +82,16 @@ async function fetchLiveBtcPrice() {
     return null;
 }
 
-// 2. 실시간 MSTR 주가 수집 (TradingView -> Finnhub -> Stooq)
+// 2. 실시간 MSTR 주가 수집 (Yahoo Finance -> Finnhub -> Stooq -> TradingView)
 async function fetchLiveMstrPrice() {
-    // 1차: TradingView Scanner API (CORS 및 API 키 제한 없음)
+    // 1차: Yahoo Finance API (corsproxy.io 활용)
     try {
-        const res = await fetchWithTimeout("https://scanner.tradingview.com/america/scan", 3000, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                symbols: { tickers: ["NASDAQ:MSTR"] },
-                columns: ["close"]
-            })
-        });
+        const targetUrl = "https://query1.finance.yahoo.com/v8/finance/chart/MSTR?interval=1m&range=1d";
+        const proxyUrl = "https://corsproxy.io/?" + encodeURIComponent(targetUrl);
+        const res = await fetchWithTimeout(proxyUrl, 3000);
         if (res && res.ok) {
             const data = await res.json();
-            const price = data?.data?.[0]?.d?.[0];
+            const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
             if (price && price > 0) return parseFloat(price);
         }
     } catch (e) {}
@@ -111,13 +108,30 @@ async function fetchLiveMstrPrice() {
         } catch (e) {}
     }
 
-    // 3차: Stooq API via AllOrigins Proxy
+    // 3차: Stooq API (corsproxy.io 적용)
     try {
-        const targetUrl = encodeURIComponent("https://stooq.com/q/l/?s=mstr.us&f=sdgl1vcn&e=json");
-        const res = await fetchWithTimeout(`https://api.allorigins.win/raw?url=${targetUrl}`, 3000);
+        const targetUrl = "https://stooq.com/q/l/?s=mstr.us&f=sdgl1vcn&e=json";
+        const res = await fetchWithTimeout("https://corsproxy.io/?" + encodeURIComponent(targetUrl), 3000);
         if (res && res.ok) {
             const data = await res.json();
             const price = parseFloat(data?.symbols?.[0]?.close);
+            if (price && price > 0) return parseFloat(price);
+        }
+    } catch (e) {}
+
+    // 4차: TradingView Scanner API
+    try {
+        const res = await fetchWithTimeout("https://scanner.tradingview.com/america/scan", 3000, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                symbols: { tickers: ["NASDAQ:MSTR"] },
+                columns: ["close"]
+            })
+        });
+        if (res && res.ok) {
+            const data = await res.json();
+            const price = data?.data?.[0]?.d?.[0];
             if (price && price > 0) return parseFloat(price);
         }
     } catch (e) {}
@@ -156,13 +170,13 @@ window.targetPrice = function() {
 
     if (!targetBtc || !targetMnav) return;
 
-    const fdso = getNum("fullyDilutedShares") || DEFAULT_DATA.fdso;
-    const btcHoldings = getNum("btcHoldings") || DEFAULT_DATA.btcHoldings;
+    const fdso = getNum("fullyDilutedShares") || currentData.fdso;
+    const btcHoldings = getNum("btcHoldings") || currentData.btcHoldings;
 
     const fdsoShares = fdso * 1_000_000;
-    const usdAssets = DEFAULT_DATA.usdAssetsUsdB * 1_000_000_000;
-    const debt = DEFAULT_DATA.debtUsdB * 1_000_000_000;
-    const preferred = DEFAULT_DATA.preferredUsdB * 1_000_000_000;
+    const usdAssets = currentData.usdAssetsUsdB * 1_000_000_000;
+    const debt = currentData.debtUsdB * 1_000_000_000;
+    const preferred = currentData.preferredUsdB * 1_000_000_000;
 
     const netBpsUsd = (btcHoldings * targetBtc + usdAssets - debt - preferred) / fdsoShares;
     const predictedMstr = netBpsUsd * targetMnav;
@@ -172,7 +186,7 @@ window.targetPrice = function() {
 };
 
 // 5. 대시보드 종합 계산
-function calculateDashboard(data) {
+function calculateDashboard(data = currentData) {
     let currentBtcPrice = getNum("btcPrice");
     let currentMstrPrice = getNum("mstrPrice");
 
@@ -222,8 +236,6 @@ function calculateDashboard(data) {
 
 // 6. 메인 로드 및 주기적 업데이트
 async function updateDashboard() {
-    let currentData = { ...DEFAULT_DATA };
-
     setVal("btcHoldings", currentData.btcHoldings);
     setVal("assumedShares", currentData.adso.toFixed(3));
     setVal("fullyDilutedShares", currentData.fdso.toFixed(3));
@@ -258,11 +270,21 @@ async function updateDashboard() {
 
         if (fetchedMstr && fetchedMstr > 0) {
             setVal("mstrPrice", fetchedMstr.toFixed(2));
+        } else {
+            const currentVal = getNum("mstrPrice");
+            if (currentVal <= 0) {
+                setVal("mstrPrice", DEFAULT_DATA.fallbackMstrPrice);
+            }
         }
 
         const now = new Date();
         const timeStr = now.toTimeString().split(' ')[0];
-        setText("dataStatus", `최신 데이터 연동 완료 (${timeStr})`);
+
+        if (fetchedMstr && fetchedMstr > 0) {
+            setText("dataStatus", `최신 데이터 연동 완료 (${timeStr})`);
+        } else {
+            setText("dataStatus", `BTC 연동 완료 / MSTR 기본값 적용 (${timeStr})`);
+        }
     } catch (e) {
         setText("dataStatus", "실시간 시세 연동 대기 중");
     }
@@ -280,8 +302,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     document.getElementById("targetBtcPrice")?.addEventListener("input", window.targetPrice);
     document.getElementById("targetMnav")?.addEventListener("input", window.targetPrice);
-    document.getElementById("mstrPrice")?.addEventListener("input", () => calculateDashboard(DEFAULT_DATA));
-    document.getElementById("btcPrice")?.addEventListener("input", () => calculateDashboard(DEFAULT_DATA));
+    document.getElementById("mstrPrice")?.addEventListener("input", () => calculateDashboard(currentData));
+    document.getElementById("btcPrice")?.addEventListener("input", () => calculateDashboard(currentData));
 
     setInterval(updateDashboard, 10000);
 
