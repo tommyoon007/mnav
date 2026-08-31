@@ -51,40 +51,17 @@
   },
   {
     "date": "2026-08-31",
-    "timestamp": "2026-08-31T16:41:36.382551+00:00",
-    "btc": 78605.48,
-    "mstr": 130.16,
-    "btcValueUsd": 66425560874.0,
-    "grossBpsUsd": 156.4873,
-    "netBpsUsd": 121.0792,
-    "btcPerShare": 0.0019907934,
-    "mnav": 1.075,
-    "grossMnav": 0.8318,
-    "strategyMnav": null,
-    "strategyNetBpsUsd": null,
-    "oiBtc": 27355.43,
-    "oiUsd": 2150286399.71,
-    "fundingRate": 0.0067,
-    "oiChange1dPct": 2.69,
-    "oiChange7dPct": null,
-    "btcChange1dPct": 1.09,
-    "btcChange7dPct": null,
-    "mnavChange1dPct": 1.2,
-    "mnavChange7dPct": null,
-    "btcYield1dPct": -0.54,
-    "btcYield7dPct": null,
-    "mnavPercentile": null,
-    "riskScore": 0.0,
-    "riskLevel": "SAFE",
-    "oiSources": [
-      "OKX"
-    ],
-    "fundingSources": [
-      "OKX"
-    ],
-    "capitalDataDate": "2026-08-31",
-    "capitalDataSource": "Strategy.com",
+    "timestamp": "2026-08-31T16:51:43.795434+00:00",
+    "btc": 78662.12,
+    "mstr": 130.31,
+    "btcValueUsd": 66473420280.75,
+    "grossBpsUsd": 223.036,
+    "netBpsUsd": 172.6063,
+    "btcPerShare": 0.0028353672,
+    "mnav": 0.755,
     "adso": 424.479,
-    "fdso": 424.479
+    "fdso": 298.039,
+    "capitalDataSource": "SEC XBRL API Fallback",
+    "capitalDataDate": "2026-08-31"
   }
 ]
