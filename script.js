@@ -6,14 +6,12 @@ const state = {
 
 const $ = (id) => document.getElementById(id);
 
-
 /* =========================
-   표시 함수
+   표시 포맷 함수
 ========================= */
 
 function money(value) {
   if (!Number.isFinite(value)) return "-";
-
   return "$" + value.toLocaleString("en-US", {
     maximumFractionDigits: 2
   });
@@ -21,7 +19,6 @@ function money(value) {
 
 function moneyB(value) {
   if (!Number.isFinite(value)) return "-";
-
   return "$" + value.toLocaleString("en-US", {
     maximumFractionDigits: 3
   }) + "B";
@@ -29,22 +26,18 @@ function moneyB(value) {
 
 function sats(value) {
   if (!Number.isFinite(value)) return "-";
-
   return Math.round(value).toLocaleString("en-US") + " sats";
 }
 
 function btc(value) {
   if (!Number.isFinite(value)) return "-";
-
   return value.toLocaleString("en-US", {
     maximumFractionDigits: 2
   }) + " BTC";
 }
 
-
 /* =========================
    계산 상태 메시지
-   (silent "-" 대신 원인을 알려준다)
 ========================= */
 
 function setCalcStatus(message) {
@@ -57,9 +50,7 @@ function setCalcStatus(message) {
     element.style.marginTop = "8px";
     element.style.color = "#c0392b";
 
-    const resultSection =
-      document.querySelector(".result-section");
-
+    const resultSection = document.querySelector(".result-section");
     if (resultSection) {
       resultSection.appendChild(element);
     }
@@ -69,12 +60,11 @@ function setCalcStatus(message) {
   element.style.display = message ? "block" : "none";
 }
 
-
 /* =========================
-   회사 데이터 (재시도 포함)
+   회사 데이터 (data.json)
 ========================= */
 
-const DATA_RETRY_DELAY_MS = 10000; // 10초마다 재시도
+const DATA_RETRY_DELAY_MS = 10000;
 let dataRetryTimer = null;
 
 async function loadCompanyData() {
@@ -90,7 +80,6 @@ async function loadCompanyData() {
 
     const json = await response.json();
 
-    // 필수 필드 검증: 없으면 이후 계산이 전부 NaN으로 조용히 죽는 대신 여기서 걸러낸다
     const requiredNumericFields = ["btcHoldings", "adso", "fdso"];
     const missingRequired = requiredNumericFields.filter(
       (key) => !Number.isFinite(Number(json?.[key]))
@@ -133,7 +122,6 @@ async function loadCompanyData() {
       $("dataStatus").textContent = "회사 데이터: " + companyTime;
     }
 
-    // 재시도로 데이터가 늦게 도착한 경우 대비해 즉시 재계산
     calculate();
 
   } catch (error) {
@@ -142,14 +130,13 @@ async function loadCompanyData() {
 
     if ($("dataStatus")) {
       $("dataStatus").textContent =
-        "회사 데이터 불러오기 실패 — " + DATA_RETRY_DELAY_MS / 1000 + "초마다 재시도 중";
+        "회사 데이터 불러오기 실패 — " + (DATA_RETRY_DELAY_MS / 1000) + "초마다 재시도 중";
     }
 
     setCalcStatus(
       "⚠️ 회사 데이터(data.json)를 불러오지 못해 mNAV를 계산할 수 없습니다. 재시도 중입니다."
     );
 
-    // data.json이 없으면 계산이 영구적으로 멈추는 문제 방지: 주기적으로 재시도
     if (!dataRetryTimer) {
       dataRetryTimer = setInterval(loadCompanyData, DATA_RETRY_DELAY_MS);
     }
@@ -157,7 +144,7 @@ async function loadCompanyData() {
 }
 
 /* =========================
-   실시간 가격
+   실시간 가격 (live.json)
 ========================= */
 
 async function loadLivePrices() {
@@ -187,25 +174,21 @@ async function loadLivePrices() {
     }
 
     updatePriceStatus();
-
     calculate();
 
   } catch (error) {
     console.error("Live price error:", error);
 
-    // 자동 갱신 실패 시 사용자가 직접 입력할 수 있도록 readOnly 해제
     if ($("btcPrice")) $("btcPrice").readOnly = false;
     if ($("mstrPrice")) $("mstrPrice").readOnly = false;
 
     updatePriceStatus(true);
-
     calculate();
   }
 }
 
-
 /* =========================
-   가격 상태
+   가격 상태 표시
 ========================= */
 
 function updatePriceStatus(error = false) {
@@ -218,16 +201,13 @@ function updatePriceStatus(error = false) {
     element.style.marginTop = "8px";
 
     const mstrInput = $("mstrPrice");
-
     if (mstrInput && mstrInput.parentElement) {
       mstrInput.parentElement.appendChild(element);
     }
   }
 
   if (error) {
-    element.textContent =
-      "가격 자동 업데이트 실패 — 마지막 데이터 사용 (직접 입력 가능)";
-
+    element.textContent = "가격 자동 업데이트 실패 — 수동 입력 가능";
     return;
   }
 
@@ -236,21 +216,15 @@ function updatePriceStatus(error = false) {
     : "정보 없음";
 
   const source = state.live?.mstrSource ? " · " + state.live.mstrSource : "";
-
   element.textContent = "가격 업데이트: " + updated + source;
 }
-
 
 /* =========================
    핵심 계산
 ========================= */
 
 function calculate() {
-
-  if (!state.data) {
-    // data.json이 아직 없으면 이유를 이미 setCalcStatus로 표시했으므로 조용히 리턴
-    return;
-  }
+  if (!state.data) return;
 
   const btcPrice = parseFloat($("btcPrice")?.value);
   const mstrPrice = parseFloat($("mstrPrice")?.value);
@@ -259,7 +233,6 @@ function calculate() {
   const adso = Number(state.data.adso);
   const fdso = Number(state.data.fdso);
 
-  // 선택적 재무 필드: 없거나 숫자가 아니면 0으로 취급하되, 사용자에게 알려준다
   const usdAssetsRaw = state.data.usdAssetsUsdB;
   const debtRaw = state.data.debtUsdB;
   const preferredRaw = state.data.preferredUsdB;
@@ -285,17 +258,14 @@ function calculate() {
     !Number.isFinite(fdso) || fdso <= 0
   ) {
     setCalcStatus(
-      "⚠️ BTC 가격과 회사 데이터(보유량/주식수)가 모두 0보다 커야 계산됩니다."
+      "⚠️ BTC 가격과 회사 데이터(보유량/주식수)가 설정되어야 계산됩니다."
     );
-
     return;
   }
 
   if (optionalFieldWarnings.length > 0) {
     setCalcStatus(
-      "ℹ️ data.json에 " +
-        optionalFieldWarnings.join(", ") +
-        " 값이 없어 0으로 계산했습니다. Net 지표가 실제보다 부정확할 수 있습니다."
+      "ℹ️ data.json에 " + optionalFieldWarnings.join(", ") + " 값이 없어 0으로 처리했습니다."
     );
   } else {
     setCalcStatus("");
@@ -348,10 +318,9 @@ function calculate() {
   }
 
   updateSignal(mnav);
-
   buildScenarioTable();
+  targetPrice();
 }
-
 
 /* =========================
    mNAV 시그널
@@ -359,7 +328,6 @@ function calculate() {
 
 function updateSignal(mnav) {
   const element = $("signal");
-
   if (!element) return;
 
   if (!Number.isFinite(mnav)) {
@@ -380,9 +348,8 @@ function updateSignal(mnav) {
   }
 }
 
-
 /* =========================
-   목표값 저장
+   목표값 로드/저장
 ========================= */
 
 function loadSavedTargets() {
@@ -400,44 +367,33 @@ function loadSavedTargets() {
   targetPrice();
 }
 
-
 function saveTargetBtc() {
   const value = $("targetBtcPrice")?.value;
-
   if (value !== undefined) {
     localStorage.setItem("mnav_target_btc", value);
   }
-
   targetPrice();
 }
-
 
 function saveTargetMnav() {
   const value = $("targetMnav")?.value;
-
   if (value !== undefined) {
     localStorage.setItem("mnav_target_mnav", value);
   }
-
   targetPrice();
 }
-
 
 /* =========================
    목표 BTC 가격 계산
 ========================= */
 
 function calculateNetBpsAtBtcPrice(targetBtcPrice) {
-  if (!state.data) {
-    return NaN;
-  }
+  if (!state.data) return NaN;
 
   const holdings = Number(state.data.btcHoldings);
   const fdso = Number(state.data.fdso);
 
-  if (!Number.isFinite(fdso) || fdso <= 0) {
-    return NaN;
-  }
+  if (!Number.isFinite(fdso) || fdso <= 0) return NaN;
 
   const usdAssets = Number.isFinite(Number(state.data.usdAssetsUsdB))
     ? Number(state.data.usdAssetsUsdB) * 1e9
@@ -457,15 +413,12 @@ function calculateNetBpsAtBtcPrice(targetBtcPrice) {
   return netReserve / (fdso * 1e6);
 }
 
-
 /* =========================
-   목표 MSTR 가격
+   목표 MSTR 가격 예측
 ========================= */
 
 function targetPrice() {
-  if (!$("targetBtcPrice") || !$("targetMnav")) {
-    return;
-  }
+  if (!$("targetBtcPrice") || !$("targetMnav")) return;
 
   const targetBtc = parseFloat($("targetBtcPrice").value);
   const targetMnav = parseFloat($("targetMnav").value);
@@ -496,17 +449,13 @@ function targetPrice() {
   }
 }
 
-
 /* =========================
-   시나리오
+   시나리오 테이블
 ========================= */
 
 function buildScenarioTable() {
   const tbody = $("scenarioTable");
-
-  if (!tbody || !state.data) {
-    return;
-  }
+  if (!tbody || !state.data) return;
 
   const mnavs = [1, 1.25, 1.5, 2, 2.5, 3];
   const prices = [70000, 80000, 90000, 100000, 120000, 150000];
@@ -526,54 +475,16 @@ function buildScenarioTable() {
 }
 
 /* =========================
-   빠른 시나리오 버튼
-========================= */
-
-function scenario(btcPrice) {
-  const targetBtc = $("targetBtcPrice");
-  const targetMnav = $("targetMnav");
-
-  if (!targetBtc || !targetMnav) {
-    return;
-  }
-
-  targetBtc.value = btcPrice;
-
-  const currentMnav = parseFloat(targetMnav.value);
-
-  if (!Number.isFinite(currentMnav) || currentMnav <= 0) {
-    targetMnav.value = "1.5";
-  }
-
-  localStorage.setItem("mnav_target_btc", targetBtc.value);
-  localStorage.setItem("mnav_target_mnav", targetMnav.value);
-
-  targetPrice();
-
-  const section = document.querySelector(".quick-calc-section");
-
-  if (section) {
-    window.scrollTo({
-      top: section.offsetTop - 15,
-      behavior: "smooth"
-    });
-  }
-}
-
-
-/* =========================
-   시작
+   초기화 및 이벤트 연결
 ========================= */
 
 document.addEventListener("DOMContentLoaded", async () => {
-
   await loadCompanyData();
   await loadLivePrices();
 
   $("targetBtcPrice")?.addEventListener("input", saveTargetBtc);
   $("targetMnav")?.addEventListener("input", saveTargetMnav);
 
-  // 자동 가격 로딩이 실패해 readOnly가 풀렸을 때, 사용자가 직접 입력하면 바로 재계산
   $("btcPrice")?.addEventListener("input", calculate);
   $("mstrPrice")?.addEventListener("input", calculate);
 
