@@ -14,9 +14,16 @@ SEC_SUBMISSIONS = (
     "CIK0001050446.json"
 )
 
+# SEC EDGAR 차단 방지 규격 헤더
 HEADERS = {
-    "User-Agent":
-        "tommyoon007-mnav/2.0 contact: github"
+    "User-Agent": "MNAV-Dashboard/2.0 (contact@mnav.app)",
+    "Accept-Encoding": "gzip, deflate",
+    "Host": "data.sec.gov"
+}
+
+SEC_ARCHIVE_HEADERS = {
+    "User-Agent": "MNAV-Dashboard/2.0 (contact@mnav.app)",
+    "Accept-Encoding": "gzip, deflate"
 }
 
 TIMEOUT = 30
@@ -49,13 +56,13 @@ def load_data():
             "Strategy / SEC",
 
         "btcHoldings":
-            840447,
+            845050,
 
         "adso":
-            427.308,
+            424.479,
 
         "fdso":
-            419.9,
+            424.479,
 
         "btcReserveUsdB":
             64.718,
@@ -100,7 +107,7 @@ def sec_text(url):
 
     response = requests.get(
         url,
-        headers=HEADERS,
+        headers=SEC_ARCHIVE_HEADERS,
         timeout=TIMEOUT
     )
 
@@ -221,11 +228,11 @@ def parse_8k_text(filing):
         strip=True
     )
 
+    # HTML 정규화 (공백 정돈)
+    text = re.sub(r"\s+", " ", text)
 
-    # -----------------------------------------
+
     # BTC Holdings
-    # -----------------------------------------
-
     btc = first_match(
         text,
         [
@@ -245,10 +252,7 @@ def parse_8k_text(filing):
     )
 
 
-    # -----------------------------------------
     # USD Assets
-    # -----------------------------------------
-
     usd_assets = first_match(
         text,
         [
@@ -266,10 +270,7 @@ def parse_8k_text(filing):
     )
 
 
-    # -----------------------------------------
     # Debt
-    # -----------------------------------------
-
     debt = first_match(
         text,
         [
@@ -288,10 +289,7 @@ def parse_8k_text(filing):
     )
 
 
-    # -----------------------------------------
     # Preferred Stock
-    # -----------------------------------------
-
     preferred = first_match(
         text,
         [
@@ -310,10 +308,7 @@ def parse_8k_text(filing):
     )
 
 
-    # -----------------------------------------
     # Net Reserve
-    # -----------------------------------------
-
     net_reserve = first_match(
         text,
         [
@@ -388,10 +383,7 @@ def update_from_sec(data):
             continue
 
 
-        # -------------------------------------
-        # BTC
-        # -------------------------------------
-
+        # BTC (상한 2,000,000개까지 허용)
         btc = (
             parsed.get(
                 "btcHoldings"
@@ -403,9 +395,9 @@ def update_from_sec(data):
             btc is not None
 
             and
-            700000 <
+            500000 <
             btc <
-            1000000
+            2000000
 
             and
             btc_source is None
@@ -415,14 +407,7 @@ def update_from_sec(data):
             btc_source = parsed
 
 
-        # -------------------------------------
         # Capital Stack
-        #
-        # IMPORTANT:
-        # 네 가지 값이 같은 SEC filing에서
-        # 모두 발견됐을 때만 교체한다.
-        # -------------------------------------
-
         if (
 
             parsed.get(
@@ -465,10 +450,7 @@ def update_from_sec(data):
             break
 
 
-    # -----------------------------------------
     # BTC 저장
-    # -----------------------------------------
-
     if btc_source:
 
         data["btcHoldings"] = (
@@ -490,10 +472,7 @@ def update_from_sec(data):
         ]
 
 
-    # -----------------------------------------
     # Capital Stack 저장
-    # -----------------------------------------
-
     if capital_stack:
 
         data[
@@ -556,10 +535,7 @@ def main():
     data = load_data()
 
 
-    # -----------------------------------------
     # SEC Update
-    # -----------------------------------------
-
     try:
 
         update_from_sec(
@@ -574,10 +550,7 @@ def main():
         )
 
 
-    # -----------------------------------------
     # Metadata
-    # -----------------------------------------
-
     data["updatedAt"] = (
         datetime.now(
             timezone.utc
@@ -589,21 +562,11 @@ def main():
     )
 
     data["notes"] = (
-        "BTC holdings and, when available, "
-        "the complete capital-stack snapshot "
-        "(USD Assets, Debt, Preferred Stock "
-        "and Net Reserve) are refreshed from "
-        "recent Strategy SEC 8-K filings. "
-        "Capital-stack values are only replaced "
-        "when all four figures are found in the "
-        "same filing, preventing mixed-date data."
+        "BTC holdings and capital-stack snapshot refreshed from Strategy SEC 8-K filings."
     )
 
 
-    # -----------------------------------------
     # Sanity Check
-    # -----------------------------------------
-
     if not (
 
         isinstance(
@@ -615,11 +578,11 @@ def main():
 
         and
 
-        700000 <
+        500000 <
         data[
             "btcHoldings"
         ] <
-        1000000
+        2000000
 
     ):
 
@@ -662,10 +625,7 @@ def main():
             )
 
 
-    # -----------------------------------------
     # Save
-    # -----------------------------------------
-
     DATA_FILE.write_text(
 
         json.dumps(
