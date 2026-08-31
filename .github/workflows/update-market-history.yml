@@ -1,220 +1,42 @@
 name: Update MSTR historical data
 
 on:
-  workflow_dispatch:
-
+  workflow_dispatch: # 필요할 때 수동 실행
   schedule:
-    # Every 5 minutes
-    # Used for live market data and periodic history refresh.
-    - cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"
+    - cron: "0 */3 * * *" # 3시간마다 1번만 실행
 
 permissions:
   contents: write
 
 concurrency:
   group: mnav-main-update
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
-
   update-market-data:
     runs-on: ubuntu-latest
 
     steps:
-
-      # =====================================================
-      # 1. CHECKOUT
-      # =====================================================
-
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-
-      # =====================================================
-      # 2. PYTHON
-      # =====================================================
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-
-      # =====================================================
-      # 3. DEPENDENCIES
-      # =====================================================
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install requests
 
-
-      # =====================================================
-      # 4. UPDATE HISTORY
-      # =====================================================
-
-      - name: Update historical data
+      - name: Update market history
         run: |
           python .github/update_market_history.py
 
-
-      # =====================================================
-      # 5. UPDATE LIVE
-      # =====================================================
-
-      - name: Update live market data
-        run: |
-          python .github/update_market_prices.py
-
-
-      # =====================================================
-      # 6. SHOW RESULT
-      # =====================================================
-
-      - name: Show generated data
-        run: |
-          echo "======================================"
-          echo "data.json"
-          echo "======================================"
-          cat data.json
-
-          echo ""
-          echo "======================================"
-          echo "live.json"
-          echo "======================================"
-          cat live.json
-
-          echo ""
-          echo "======================================"
-          echo "history.json"
-          echo "======================================"
-          cat history.json
-
-
-      # =====================================================
-      # 7. CONFIGURE GIT
-      # =====================================================
-
-      - name: Configure Git
+      - name: Commit and Push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-
-      # =====================================================
-      # 8. FETCH REMOTE BEFORE STAGING
-      #
-      # Important:
-      # Do not rebase with unstaged generated files.
-      # =====================================================
-
-      - name: Sync repository
-        run: |
-          git fetch origin main
-          git reset --hard origin/main
-
-
-      # =====================================================
-      # 9. RE-GENERATE AFTER SYNC
-      #
-      # This guarantees generated files are based on the
-      # newest remote main.
-      # =====================================================
-
-      - name: Re-run history update after sync
-        run: |
-          python .github/update_market_history.py
-
-      - name: Re-run live update after sync
-        run: |
-          python .github/update_market_prices.py
-
-
-      # =====================================================
-      # 10. STAGE
-      # =====================================================
-
-      - name: Stage generated data
-        run: |
-          git add data.json
-          git add history.json
-          git add live.json
-
-
-      # =====================================================
-      # 11. COMMIT
-      # =====================================================
-
-      - name: Commit generated data
-        run: |
-          if git diff --cached --quiet; then
-            echo "No changes."
-            exit 0
-          fi
-
-          git commit -m "Update MSTR market data"
-
-
-      # =====================================================
-      # 12. FINAL FETCH
-      #
-      # A second fetch protects against a remote commit
-      # arriving while the job was running.
-      # =====================================================
-
-      - name: Final remote sync
-        run: |
-          git fetch origin main
-
-          if git merge-base --is-ancestor HEAD origin/main; then
-            echo "Remote main is ahead or equal."
-          else
-            echo "Local commit is ahead of remote."
-          fi
-
-
-      # =====================================================
-      # 13. PUSH WITH RETRY
-      # =====================================================
-
-      - name: Push changes
-        run: |
-          for attempt in 1 2 3; do
-
-            echo "Push attempt: $attempt"
-
-            if git push origin HEAD:main; then
-              echo "Push succeeded."
-              exit 0
-            fi
-
-            echo "Push failed."
-
-            if [ "$attempt" -eq 3 ]; then
-              echo "Push failed after 3 attempts."
-              exit 1
-            fi
-
-            echo "Refreshing remote main..."
-
-            git fetch origin main
-
-            git reset --soft origin/main
-
-            if git diff --cached --quiet; then
-              git add data.json
-              git add history.json
-              git add live.json
-            fi
-
-            if git diff --cached --quiet; then
-              echo "Nothing left to push."
-              exit 0
-            fi
-
-            git commit -m "Update MSTR market data"
-
-          done
+          git add data.json history.json live.json
+          git diff --staged --quiet || (git commit -m "Update MSTR market data" && git push)
