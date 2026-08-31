@@ -1,9 +1,10 @@
-name: Update MSTR historical data
+name: Update MSTR Fundamentals & History
 
 on:
-  workflow_dispatch: # 필요할 때 수동 실행
+  workflow_dispatch:
   schedule:
-    - cron: "0 */3 * * *" # 3시간마다 1번만 실행
+    # 3시간마다 실행 (기초 데이터 및 일별 히스토리 수집)
+    - cron: "0 */3 * * *"
 
 permissions:
   contents: write
@@ -27,7 +28,6 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
           pip install requests
 
       - name: Update market history
@@ -38,5 +38,5 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data.json history.json live.json
-          git diff --staged --quiet || (git commit -m "Update MSTR market data" && git push)
+          git add data.json history.json
+          git diff --staged --quiet || (git commit -m "Chore: Update fundamentals & history" && git push)
