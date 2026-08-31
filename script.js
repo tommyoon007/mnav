@@ -24,7 +24,7 @@ async function fetchLiveBtcPrice() {
 async function fetchLiveMstrPrice() {
     // 💡 Finnhub 무료 API 키가 있다면 아래 큰따옴표 안에 넣으세요 (예: "c12345678...")
     // 발급받아 넣으시면 MSTR 주가가 100% 끊김 없이 자동 업데이트됩니다.
-    const FINNHUB_KEY = ""; 
+    const FINNHUB_KEY = "daarqqhr01qn50rjdhtgdaarqqhr01qn50rjdhu0"; 
 
     if (FINNHUB_KEY) {
         try {
