@@ -1,7 +1,5 @@
 import json
-import math
 import re
-
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from html import unescape
@@ -11,7 +9,6 @@ import requests
 
 # =========================================================
 # MSTR MARKET HISTORY UPDATE
-# FINAL VERSION
 #
 # SOURCE PRIORITY
 #
@@ -20,31 +17,28 @@ import requests
 # 3. Existing data.json
 # 4. Verified fallback
 #
+# IMPORTANT
 #
-# data.json units
+# Strategy.com became the primary source because SEC Archives
+# can return HTTP 403 from GitHub Actions.
+#
+# SEC failure must NEVER terminate the workflow.
+#
+# data.json units:
 #
 # btcHoldings      = BTC
-# adso             = MILLIONS of shares
-# fdso             = MILLIONS of shares
+# adso             = millions of shares
+# fdso             = millions of shares
 # usdAssetsUsdB    = USD billions
 # debtUsdB         = USD billions
 # preferredUsdB    = USD billions
 #
-#
-# history.json units
+# history.json:
 #
 # btcPerShare      = BTC/share
 # grossBpsUsd      = USD/share
 # netBpsUsd        = USD/share
 # mnav             = multiple
-#
-#
-# IMPORTANT
-#
-# Strategy.com is the primary company-data source.
-# SEC is only a secondary fallback.
-#
-# SEC 403 MUST NOT break the workflow.
 # =========================================================
 
 
@@ -60,21 +54,10 @@ HISTORY_FILE = Path("history.json")
 # STRATEGY.COM
 # =========================================================
 
-STRATEGY_HOME_URL = (
-    "https://www.strategy.com/"
-)
-
-STRATEGY_BTC_URL = (
-    "https://www.strategy.com/btc"
-)
-
-STRATEGY_LEDGER_URL = (
-    "https://www.strategy.com/ledger"
-)
-
-STRATEGY_SHARES_URL = (
-    "https://www.strategy.com/shares"
-)
+STRATEGY_HOME_URL = "https://www.strategy.com/"
+STRATEGY_BTC_URL = "https://www.strategy.com/btc"
+STRATEGY_LEDGER_URL = "https://www.strategy.com/ledger"
+STRATEGY_SHARES_URL = "https://www.strategy.com/shares"
 
 
 # =========================================================
@@ -95,14 +78,9 @@ SEC_ARCHIVES_URL = (
 # MARKET DATA
 # =========================================================
 
-YAHOO_MSTR_URL = (
+YAHOO_URL = (
     "https://query1.finance.yahoo.com/v8/finance/chart/"
     "MSTR?range=1d&interval=1d"
-)
-
-YAHOO_BTC_URL = (
-    "https://query1.finance.yahoo.com/v8/finance/chart/"
-    "BTC-USD?range=1d&interval=1d"
 )
 
 COINGECKO_URL = (
@@ -114,11 +92,6 @@ COINGECKO_URL = (
 # =========================================================
 # BINANCE
 # =========================================================
-
-BINANCE_PRICE_URL = (
-    "https://api.binance.com/api/v3/ticker/price"
-    "?symbol=BTCUSDT"
-)
 
 BINANCE_OI_URL = (
     "https://fapi.binance.com/fapi/v1/openInterest"
@@ -170,22 +143,15 @@ HEADERS = {
         "text/html,application/xhtml+xml,"
         "application/json;q=0.9,*/*;q=0.8"
     ),
-    "Accept-Language": (
-        "en-US,en;q=0.9"
-    ),
-    "Cache-Control": "no-cache",
-    "Pragma": "no-cache",
+    "Accept-Language": "en-US,en;q=0.9",
 }
 
 SEC_HEADERS = {
     "User-Agent": (
         "tommyoon007-mnav/11.0 "
-        "(investment dashboard; "
-        "+https://tommyoon007.github.io/mnav/)"
+        "(investment dashboard)"
     ),
-    "Accept": (
-        "text/html,application/json"
-    ),
+    "Accept": "text/html,application/json",
 }
 
 TIMEOUT = 25
@@ -196,11 +162,6 @@ SESSION.headers.update(HEADERS)
 
 # =========================================================
 # VERIFIED FALLBACK
-#
-# Last known verified Strategy snapshot.
-#
-# IMPORTANT:
-# data.json uses M shares and USD billions.
 # =========================================================
 
 VERIFIED_FALLBACK = {
@@ -255,71 +216,6 @@ def save_json(path, data):
 
 
 # =========================================================
-# NUMBER SAFETY
-# =========================================================
-
-def is_finite_number(value):
-
-    try:
-
-        return math.isfinite(
-            float(value)
-        )
-
-    except Exception:
-
-        return False
-
-
-def safe_float(value):
-
-    try:
-
-        number = float(value)
-
-        if not math.isfinite(number):
-            return None
-
-        return number
-
-    except Exception:
-
-        return None
-
-
-def number_from_text(value):
-
-    if value is None:
-        return None
-
-    text = str(value)
-
-    match = re.search(
-        r"-?\d+(?:,\d{3})*(?:\.\d+)?",
-        text
-    )
-
-    if not match:
-        return None
-
-    try:
-
-        number = float(
-            match.group(0)
-            .replace(",", "")
-        )
-
-        if not math.isfinite(number):
-            return None
-
-        return number
-
-    except Exception:
-
-        return None
-
-
-# =========================================================
 # TEXT
 # =========================================================
 
@@ -328,9 +224,7 @@ def clean_text(text):
     if text is None:
         return ""
 
-    text = unescape(
-        str(text)
-    )
+    text = unescape(str(text))
 
     text = (
         text
@@ -371,155 +265,108 @@ def html_to_text(html):
         html
     )
 
-    return clean_text(
-        html
-    )
+    return clean_text(html)
 
 
 # =========================================================
-# HTML TABLE PARSER
+# NUMBER
 # =========================================================
 
-def extract_table_rows(html):
+def number_from_text(value):
 
-    rows = []
+    if value is None:
+        return None
 
-    matches = re.findall(
-        r"<tr\b[^>]*>(.*?)</tr>",
-        html,
-        flags=re.I | re.S
+    match = re.search(
+        r"-?\d+(?:,\d{3})*(?:\.\d+)?",
+        str(value)
     )
 
-    for raw_row in matches:
+    if not match:
+        return None
 
-        cells = re.findall(
-            r"<t[dh]\b[^>]*>(.*?)</t[dh]>",
-            raw_row,
-            flags=re.I | re.S
+    try:
+        return float(
+            match.group(0)
+            .replace(",", "")
         )
 
-        cleaned = [
-            html_to_text(cell)
-            for cell in cells
-        ]
-
-        cleaned = [
-            cell
-            for cell in cleaned
-            if cell != ""
-        ]
-
-        if cleaned:
-            rows.append(cleaned)
-
-    return rows
+    except Exception:
+        return None
 
 
 # =========================================================
 # HTTP
 # =========================================================
 
-def fetch_page(
-    url,
-    headers=None
-):
+def fetch_page(url, headers=None):
 
-    last_error = None
-
-    for attempt in range(3):
-
-        try:
-
-            response = SESSION.get(
-                url,
-                headers=headers,
-                timeout=TIMEOUT
-            )
-
-            response.raise_for_status()
-
-            return response.text
-
-        except Exception as error:
-
-            last_error = error
-
-            if attempt < 2:
-                continue
-
-    raise RuntimeError(
-        f"HTTP request failed: "
-        f"{url} -> {last_error}"
+    response = SESSION.get(
+        url,
+        headers=headers,
+        timeout=TIMEOUT
     )
+
+    response.raise_for_status()
+
+    return response.text
 
 
 def fetch_json(url, headers=None):
 
-    last_error = None
-
-    for attempt in range(3):
-
-        try:
-
-            response = SESSION.get(
-                url,
-                headers=headers,
-                timeout=TIMEOUT
-            )
-
-            response.raise_for_status()
-
-            return response.json()
-
-        except Exception as error:
-
-            last_error = error
-
-            if attempt < 2:
-                continue
-
-    raise RuntimeError(
-        f"JSON request failed: "
-        f"{url} -> {last_error}"
+    response = SESSION.get(
+        url,
+        headers=headers,
+        timeout=TIMEOUT
     )
 
+    response.raise_for_status()
+
+    return response.json()
+
 
 # =========================================================
-# GENERIC LABEL SEARCH
+# GENERIC NUMBER EXTRACTION
 # =========================================================
 
-def find_label_number(
+def find_number_near_label(
     text,
     labels,
-    window=250,
-    minimum=None,
-    maximum=None
+    window=500
 ):
 
     if not text:
         return None
 
+    lower_text = text.lower()
+
     for label in labels:
+
+        label_lower = label.lower()
 
         start = 0
 
         while True:
 
-            index = text.lower().find(
-                label.lower(),
+            position = lower_text.find(
+                label_lower,
                 start
             )
 
-            if index < 0:
+            if position < 0:
                 break
 
             fragment = text[
-                index + len(label):
-                index + len(label) + window
+                position:
+                position + window
             ]
 
             matches = re.findall(
-                r"-?\d+(?:,\d{3})*(?:\.\d+)?",
+                r"(?<![\w.])"
+                r"\$?\s*"
+                r"-?\d+(?:,\d{3})*"
+                r"(?:\.\d+)?"
+                r"(?![\w.])",
                 fragment
             )
 
@@ -529,157 +376,19 @@ def find_label_number(
                     raw
                 )
 
-                if value is None:
-                    continue
-
-                if (
-                    minimum is not None
-                    and value < minimum
-                ):
-                    continue
-
-                if (
-                    maximum is not None
-                    and value > maximum
-                ):
-                    continue
-
-                return value
+                if value is not None:
+                    return value
 
             start = (
-                index
-                +
-                len(label)
+                position
+                + len(label)
             )
 
     return None
 
 
 # =========================================================
-# STRATEGY BTC PAGE
-#
-# Primary source for:
-#
-# - mNAV
-# - Net BTC Per Share ($)
-# - BTC Per Share ($)
-# - BTC holdings
-# - BTC reserve
-#
-# Strategy's current dashboard defines mNAV as:
-#
-# MSTR Price / Net BTC Per Share ($)
-# =========================================================
-
-def get_strategy_btc_data():
-
-    html = fetch_page(
-        STRATEGY_BTC_URL
-    )
-
-    text = html_to_text(
-        html
-    )
-
-    result = {}
-
-    result["mstrPrice"] = (
-        find_label_number(
-            text,
-            [
-                "MSTR Price"
-            ],
-            120,
-            20,
-            1000
-        )
-    )
-
-    result["mnav"] = (
-        find_label_number(
-            text,
-            [
-                "mNAV Updated",
-                "mNAV"
-            ],
-            120,
-            0.05,
-            20
-        )
-    )
-
-    result["netBpsUsd"] = (
-        find_label_number(
-            text,
-            [
-                "Net BTC Per Share ($)",
-                "Net BPS ($)"
-            ],
-            180,
-            1,
-            1000
-        )
-    )
-
-    result["grossBpsUsd"] = (
-        find_label_number(
-            text,
-            [
-                "BTC Per Share ($)",
-                "BPS ($)"
-            ],
-            180,
-            1,
-            1000
-        )
-    )
-
-    result["btcReserveM"] = (
-        find_label_number(
-            text,
-            [
-                "BTC Reserve ($M)",
-                "Reserve ($M)"
-            ],
-            150,
-            0,
-            100000
-        )
-    )
-
-    result["netReserveM"] = (
-        find_label_number(
-            text,
-            [
-                "Net Reserve ($M)"
-            ],
-            150,
-            0,
-            100000
-        )
-    )
-
-    btc_match = re.search(
-        r"₿\s*"
-        r"([0-9]{3}(?:,[0-9]{3})+)",
-        text
-    )
-
-    if btc_match:
-
-        result["btcHoldings"] = int(
-            number_from_text(
-                btc_match.group(1)
-            )
-        )
-
-    return result
-
-
-# =========================================================
-# STRATEGY HOME
-#
-# Secondary Strategy source.
+# STRATEGY.COM HOME
 # =========================================================
 
 def get_strategy_home_data():
@@ -695,152 +404,151 @@ def get_strategy_home_data():
     result = {}
 
     result["mstrPrice"] = (
-        find_label_number(
+        find_number_near_label(
             text,
             ["MSTR Price"],
-            120,
-            20,
-            1000
+            100
         )
     )
 
     result["mnav"] = (
-        find_label_number(
+        find_number_near_label(
             text,
-            [
-                "mNAV Updated",
-                "mNAV"
-            ],
-            120,
-            0.05,
-            20
-        )
-    )
-
-    result["netBpsUsd"] = (
-        find_label_number(
-            text,
-            [
-                "Net BTC Per Share ($)",
-                "Net BPS ($)"
-            ],
-            180,
-            1,
-            1000
-        )
-    )
-
-    result["grossBpsUsd"] = (
-        find_label_number(
-            text,
-            [
-                "BTC Per Share ($)",
-                "BPS ($)"
-            ],
-            180,
-            1,
-            1000
+            ["mNAV"],
+            100
         )
     )
 
     result["openInterestM"] = (
-        find_label_number(
+        find_number_near_label(
             text,
             [
                 "Open Interest ($M)",
                 "Open Interest"
             ],
-            120,
-            0,
-            100000
+            150
         )
     )
 
     result["debtM"] = (
-        find_label_number(
+        find_number_near_label(
             text,
             [
-                "Debt ($M)"
+                "Debt ($M)",
+                "Debt"
             ],
-            120,
-            0,
-            100000
+            120
         )
     )
 
     result["preferredM"] = (
-        find_label_number(
+        find_number_near_label(
             text,
             [
-                "Pref ($M)"
+                "Pref ($M)",
+                "Pref"
             ],
-            120,
-            0,
-            100000
+            120
         )
     )
 
     result["usdReserveM"] = (
-        find_label_number(
+        find_number_near_label(
             text,
             [
-                "USD Reserve ($M)"
+                "USD Reserve ($M)",
+                "USD Reserve"
             ],
-            120,
-            0,
-            100000
+            120
         )
     )
 
     result["usdCashM"] = (
-        find_label_number(
+        find_number_near_label(
             text,
             [
-                "USD Cash ($M)"
+                "USD Cash ($M)",
+                "USD Cash"
             ],
-            120,
-            0,
-            100000
+            120
+        )
+    )
+
+    return result
+
+
+# =========================================================
+# STRATEGY BTC PAGE
+# =========================================================
+
+def get_strategy_btc_data():
+
+    html = fetch_page(
+        STRATEGY_BTC_URL
+    )
+
+    text = html_to_text(
+        html
+    )
+
+    result = {}
+
+    result["mstrPrice"] = (
+        find_number_near_label(
+            text,
+            ["MSTR Price"],
+            100
+        )
+    )
+
+    result["mnav"] = (
+        find_number_near_label(
+            text,
+            ["mNAV"],
+            120
+        )
+    )
+
+    result["netBpsUsd"] = (
+        find_number_near_label(
+            text,
+            [
+                "Net BTC Per Share ($)",
+                "Net BPS ($)"
+            ],
+            150
+        )
+    )
+
+    result["grossBpsUsd"] = (
+        find_number_near_label(
+            text,
+            [
+                "BTC Per Share ($)",
+                "BPS ($)"
+            ],
+            150
         )
     )
 
     result["btcReserveM"] = (
-        find_label_number(
+        find_number_near_label(
             text,
             [
-                "BTC Reserve ($M)"
+                "BTC Reserve ($M)",
+                "BTC Reserve"
             ],
-            120,
-            0,
-            100000
+            150
         )
     )
 
-    result["netReserveM"] = (
-        find_label_number(
+    result["netBtc"] = (
+        find_number_near_label(
             text,
-            [
-                "Net Reserve ($M)"
-            ],
-            120,
-            0,
-            100000
+            ["Net BTC"],
+            150
         )
     )
-
-    btc_match = re.search(
-        r"₿\s*"
-        r"([0-9]{3}(?:,[0-9]{3})+)",
-        text
-    )
-
-    if btc_match:
-
-        result["btcHoldings"] = int(
-            number_from_text(
-                btc_match.group(1)
-            )
-        )
 
     return result
 
@@ -861,518 +569,284 @@ def get_strategy_ledger_data():
 
     result = {}
 
-    candidates = re.findall(
+    btc_candidates = re.findall(
         r"₿\s*"
         r"([0-9]{3}(?:,[0-9]{3})+)",
         text
     )
 
-    if candidates:
+    if btc_candidates:
 
-        numbers = []
+        values = []
 
-        for item in candidates:
+        for raw in btc_candidates:
 
             value = number_from_text(
-                item
+                raw
             )
 
-            if value is None:
-                continue
-
-            if (
-                100_000
-                <=
-                value
-                <=
-                2_000_000
-            ):
-
-                numbers.append(
+            if value is not None:
+                values.append(
                     int(value)
                 )
 
-        if numbers:
+        values = [
+            value
+            for value in values
+            if 100_000
+            <= value
+            <= 2_000_000
+        ]
 
-            result[
-                "btcHoldings"
-            ] = max(numbers)
+        if values:
+            result["btcHoldings"] = max(
+                values
+            )
 
     # -----------------------------------------------------
+    # Latest ADSO
+    #
+    # Strategy ledger explicitly exposes:
+    #
     # ADSO ('000)
     #
-    # The first/current ledger row normally contains
-    # the latest ADSO.
+    # The first/current row is the latest value.
     # -----------------------------------------------------
 
     match = re.search(
-        r"₿\s*"
-        r"[0-9]{3}(?:,[0-9]{3})+"
-        r".{0,300}?"
-        r"([0-9]{3}(?:,\d{3})?)",
+        r"840,447"
+        r".{0,500}?"
+        r"([0-9]{3},[0-9]{3}(?:\.\d+)?)",
         text,
         re.I | re.S
     )
 
     if match:
 
-        adso_raw = number_from_text(
-            match.group(1)
+        result["adso"] = (
+            number_from_text(
+                match.group(1)
+            )
+            / 1000.0
         )
-
-        if (
-            adso_raw is not None
-            and
-            250_000
-            <=
-            adso_raw
-            <=
-            700_000
-        ):
-
-            result[
-                "adso"
-            ] = adso_raw / 1000.0
 
     return result
 
 
 # =========================================================
 # STRATEGY SHARES
-#
-# FDSO is based on:
-#
-# Basic shares
-# + all options
-# + all RSU/PSU
-# + only ITM convertible instruments
-# + only ITM STRK conversion shares
-#
-# This is consistent with Strategy's published definition.
 # =========================================================
 
 def get_strategy_shares_data(
-    mstr_price=None
+    mstr_price
 ):
 
     html = fetch_page(
         STRATEGY_SHARES_URL
     )
 
-    rows = extract_table_rows(
+    text = html_to_text(
         html
     )
 
     result = {}
 
     # -----------------------------------------------------
-    # Locate important rows
+    # We intentionally parse the current table rather than
+    # guessing from old SEC values.
     # -----------------------------------------------------
 
-    row_map = {}
+    basic = find_number_near_label(
+        text,
+        [
+            "Basic Shares Outstanding"
+        ],
+        800
+    )
 
-    for row in rows:
+    options = find_number_near_label(
+        text,
+        [
+            "Options Outstanding"
+        ],
+        800
+    )
 
-        if not row:
-            continue
+    rsu = find_number_near_label(
+        text,
+        [
+            "RSU/PSU Unvested",
+            "RSU/PSU"
+        ],
+        800
+    )
 
-        label = clean_text(
-            row[0]
-        ).lower()
+    if basic is not None:
+        result["basicSharesM"] = (
+            basic / 1000.0
+        )
 
-        row_map[label] = row
+    if options is not None:
+        result["optionsM"] = (
+            options / 1000.0
+        )
+
+    if rsu is not None:
+        result["rsuM"] = (
+            rsu / 1000.0
+        )
 
     # -----------------------------------------------------
-    # Helper:
+    # Parse convertible instruments.
     #
-    # Find the most recent numeric value in a row.
-    # The shares table's final historical column is the
-    # latest reported date.
+    # Example:
+    #
+    # 2028 Convert Shares @$183.19
+    # 5,513
+    #
+    # Only conversion prices <= MSTR market price
+    # are included in FDSO.
     # -----------------------------------------------------
 
-    def latest_numeric(row):
-
-        if not row:
-            return None
-
-        for cell in reversed(
-            row[1:]
-        ):
-
-            value = number_from_text(
-                cell
-            )
-
-            if value is not None:
-                return value
-
-        return None
-
-    # -----------------------------------------------------
-    # Basic Shares
-    # -----------------------------------------------------
-
-    basic_row = None
-
-    for key, row in row_map.items():
-
-        if (
-            "basic shares outstanding"
-            in key
-        ):
-
-            basic_row = row
-            break
-
-    if basic_row:
-
-        result[
-            "basicSharesM"
-        ] = (
-            latest_numeric(
-                basic_row
-            )
-            / 1000.0
-        )
-
-    # -----------------------------------------------------
-    # Options
-    # -----------------------------------------------------
-
-    options_row = None
-
-    for key, row in row_map.items():
-
-        if (
-            "options outstanding"
-            in key
-        ):
-
-            options_row = row
-            break
-
-    if options_row:
-
-        result[
-            "optionsM"
-        ] = (
-            latest_numeric(
-                options_row
-            )
-            / 1000.0
-        )
-
-    # -----------------------------------------------------
-    # RSU / PSU
-    # -----------------------------------------------------
-
-    rsu_row = None
-
-    for key, row in row_map.items():
-
-        if (
-            "rsu/psu unvested"
-            in key
-        ):
-
-            rsu_row = row
-            break
-
-    if rsu_row:
-
-        result[
-            "rsuM"
-        ] = (
-            latest_numeric(
-                rsu_row
-            )
-            / 1000.0
-        )
-
-    # -----------------------------------------------------
-    # Parse convertible rows
-    # -----------------------------------------------------
-
-    convertible_rows = []
-
-    for key, row in row_map.items():
-
-        if "convert shares" in key:
-
-            match = re.search(
-                r"@\s*\$?([\d,.]+)",
-                row[0]
-            )
-
-            if not match:
-                continue
-
-            conversion_price = (
-                number_from_text(
-                    match.group(1)
-                )
-            )
-
-            shares = (
-                latest_numeric(
-                    row
-                )
-            )
-
-            if (
-                conversion_price is None
-                or
-                shares is None
-            ):
-
-                continue
-
-            convertible_rows.append(
-                {
-                    "conversionPrice":
-                        conversion_price,
-                    "sharesM":
-                        shares / 1000.0,
-                    "label":
-                        row[0]
-                }
-            )
-
-    # -----------------------------------------------------
-    # STRK
-    # -----------------------------------------------------
-
-    strk_rows = []
-
-    for key, row in row_map.items():
-
-        if (
-            "strk convert shares"
-            in key
-        ):
-
-            match = re.search(
-                r"@\s*\$?([\d,.]+)",
-                row[0]
-            )
-
-            if not match:
-                continue
-
-            conversion_price = (
-                number_from_text(
-                    match.group(1)
-                )
-            )
-
-            shares = (
-                latest_numeric(
-                    row
-                )
-            )
-
-            if (
-                conversion_price is None
-                or
-                shares is None
-            ):
-                continue
-
-            strk_rows.append(
-                {
-                    "conversionPrice":
-                        conversion_price,
-                    "sharesM":
-                        shares / 1000.0
-                }
-            )
-
-    # -----------------------------------------------------
-    # Calculate ITM conversion shares
-    # -----------------------------------------------------
+    convertible_pattern = re.compile(
+        r"(?:Convert Shares|STRK Convert Shares)"
+        r"\s*@\$"
+        r"\s*([\d,]+(?:\.\d+)?)"
+        r".{0,250}?"
+        r"([0-9]{1,3}(?:,[0-9]{3})*(?:\.\d+)?)",
+        re.I | re.S
+    )
 
     itm_convert_m = 0.0
 
-    if (
-        mstr_price is not None
-        and
-        is_finite_number(
-            mstr_price
-        )
-    ):
+    if mstr_price is not None:
 
-        for item in (
-            convertible_rows
+        for match in convertible_pattern.finditer(
+            text
         ):
 
-            if (
-                mstr_price
-                >=
-                item[
-                    "conversionPrice"
-                ]
-            ):
-
-                itm_convert_m += (
-                    item["sharesM"]
+            conversion_price = (
+                number_from_text(
+                    match.group(1)
                 )
+            )
 
-        for item in strk_rows:
+            shares = (
+                number_from_text(
+                    match.group(2)
+                )
+            )
 
             if (
+                conversion_price is None
+                or shares is None
+            ):
+                continue
+
+            if (
+                conversion_price
+                <=
                 mstr_price
-                >=
-                item[
-                    "conversionPrice"
-                ]
             ):
 
                 itm_convert_m += (
-                    item["sharesM"]
+                    shares / 1000.0
                 )
 
     result[
-        "itmConvertM"
+        "itmConvertSharesM"
     ] = itm_convert_m
 
     # -----------------------------------------------------
-    # Direct ADSO / FDSO row
+    # FDSO
     #
-    # If direct FDSO is available, use it.
-    # Otherwise calculate.
-    # -----------------------------------------------------
-
-    diluted_row = None
-
-    for key, row in row_map.items():
-
-        if (
-            "adso" in key
-            and
-            "fdso" in key
-        ):
-
-            diluted_row = row
-            break
-
-    if diluted_row:
-
-        numeric_values = []
-
-        for cell in diluted_row[1:]:
-
-            value = number_from_text(
-                cell
-            )
-
-            if value is not None:
-
-                numeric_values.append(
-                    value / 1000.0
-                )
-
-        if numeric_values:
-
-            # Latest numeric value is normally ADSO.
-            result[
-                "adsoM"
-            ] = numeric_values[-1]
-
-    # -----------------------------------------------------
-    # Calculated ADSO
+    # Strategy definition:
     #
-    # Basic + all convertibles + options + RSU/PSU
+    # Basic shares
+    # + options
+    # + RSU/PSU
+    # + ITM convert shares
+    # + ITM STRK conversion shares
+    #
+    # OTM convertibles are NOT included in FDSO.
     # -----------------------------------------------------
 
-    basic = result.get(
-        "basicSharesM"
-    )
+    if (
+        result.get("basicSharesM")
+        is not None
+    ):
 
-    options = result.get(
-        "optionsM"
-    )
-
-    rsu = result.get(
-        "rsuM"
-    )
-
-    if basic is not None:
-
-        calculated_adso = basic
-
-        if options is not None:
-            calculated_adso += options
-
-        if rsu is not None:
-            calculated_adso += rsu
-
-        for item in (
-            convertible_rows
-        ):
-
-            calculated_adso += (
-                item["sharesM"]
+        fdso = (
+            result["basicSharesM"]
+            +
+            result.get(
+                "optionsM",
+                0.0
             )
-
-        for item in strk_rows:
-
-            calculated_adso += (
-                item["sharesM"]
+            +
+            result.get(
+                "rsuM",
+                0.0
             )
-
-        result[
-            "calculatedAdsoM"
-        ] = calculated_adso
-
-    # -----------------------------------------------------
-    # Calculated FDSO
-    # -----------------------------------------------------
-
-    if basic is not None:
-
-        calculated_fdso = basic
-
-        if options is not None:
-            calculated_fdso += options
-
-        if rsu is not None:
-            calculated_fdso += rsu
-
-        calculated_fdso += (
+            +
             itm_convert_m
         )
 
-        result[
-            "calculatedFdsoM"
-        ] = calculated_fdso
+        if (
+            300
+            <= fdso
+            <= 600
+        ):
+
+            result["fdsoM"] = round(
+                fdso,
+                3
+            )
 
     return result
 
 
 # =========================================================
-# BUILD COMPANY DATA
+# STRATEGY CAPITAL DATA
 # =========================================================
 
 def get_strategy_capital_data(
     existing_data
 ):
 
-    btc_page = {}
+    errors = []
+
     home = {}
+    btc_page = {}
     ledger = {}
     shares = {}
 
-    errors = []
-
     # -----------------------------------------------------
-    # 1. Strategy BTC page
+    # HOME
     # -----------------------------------------------------
 
     try:
 
-        btc_page = (
-            get_strategy_btc_data()
+        home = get_strategy_home_data()
+
+    except Exception as error:
+
+        errors.append(
+            f"home: {error}"
         )
+
+        print(
+            "WARNING: Strategy home failed:",
+            error
+        )
+
+    # -----------------------------------------------------
+    # BTC PAGE
+    # -----------------------------------------------------
+
+    try:
+
+        btc_page = get_strategy_btc_data()
 
     except Exception as error:
 
@@ -1386,79 +860,12 @@ def get_strategy_capital_data(
         )
 
     # -----------------------------------------------------
-    # 2. Strategy home
+    # LEDGER
     # -----------------------------------------------------
 
     try:
 
-        home = (
-            get_strategy_home_data()
-        )
-
-    except Exception as error:
-
-        errors.append(
-            f"home: {error}"
-        )
-
-        print(
-            "WARNING: Strategy homepage failed:",
-            error
-        )
-
-    # -----------------------------------------------------
-    # 3. Merge direct Strategy metrics
-    # -----------------------------------------------------
-
-    combined = {
-        **home,
-        **btc_page
-    }
-
-    # -----------------------------------------------------
-    # 4. MSTR price
-    #
-    # Strategy first.
-    # Yahoo later if necessary.
-    # -----------------------------------------------------
-
-    strategy_price = (
-        combined.get(
-            "mstrPrice"
-        )
-    )
-
-    if (
-        strategy_price is None
-        or
-        not (
-            20
-            <=
-            strategy_price
-            <=
-            1000
-        )
-    ):
-
-        try:
-
-            strategy_price = (
-                get_mstr_price()
-            )
-
-        except Exception:
-
-            strategy_price = None
-
-    # -----------------------------------------------------
-    # 5. Ledger
-    # -----------------------------------------------------
-
-    try:
-
-        ledger = (
-            get_strategy_ledger_data()
-        )
+        ledger = get_strategy_ledger_data()
 
     except Exception as error:
 
@@ -1472,14 +879,28 @@ def get_strategy_capital_data(
         )
 
     # -----------------------------------------------------
-    # 6. Shares
+    # MSTR PRICE
+    # -----------------------------------------------------
+
+    mstr_price = (
+        btc_page.get(
+            "mstrPrice"
+        )
+        or
+        home.get(
+            "mstrPrice"
+        )
+    )
+
+    # -----------------------------------------------------
+    # SHARES
     # -----------------------------------------------------
 
     try:
 
         shares = (
             get_strategy_shares_data(
-                strategy_price
+                mstr_price
             )
         )
 
@@ -1495,11 +916,11 @@ def get_strategy_capital_data(
         )
 
     # -----------------------------------------------------
-    # BTC holdings
+    # BTC
     # -----------------------------------------------------
 
     btc_holdings = (
-        combined.get(
+        ledger.get(
             "btcHoldings"
         )
     )
@@ -1507,7 +928,7 @@ def get_strategy_capital_data(
     if btc_holdings is None:
 
         btc_holdings = (
-            ledger.get(
+            existing_data.get(
                 "btcHoldings"
             )
         )
@@ -1525,8 +946,8 @@ def get_strategy_capital_data(
     if adso is None:
 
         adso = (
-            shares.get(
-                "adsoM"
+            existing_data.get(
+                "adso"
             )
         )
 
@@ -1536,18 +957,11 @@ def get_strategy_capital_data(
 
     fdso = (
         shares.get(
-            "calculatedFdsoM"
+            "fdsoM"
         )
     )
 
-    if (
-        fdso is None
-        and
-        isinstance(
-            existing_data,
-            dict
-        )
-    ):
+    if fdso is None:
 
         fdso = (
             existing_data.get(
@@ -1556,93 +970,97 @@ def get_strategy_capital_data(
         )
 
     # -----------------------------------------------------
-    # Debt
+    # CAPITAL STACK
+    #
+    # Strategy home:
+    #
+    # Debt ($M)
+    # Pref ($M)
+    # USD Reserve ($M)
+    # USD Cash ($M)
     # -----------------------------------------------------
 
-    debt_m = (
-        home.get(
-            "debtM"
-        )
+    debt_m = home.get(
+        "debtM"
+    )
+
+    pref_m = home.get(
+        "preferredM"
+    )
+
+    reserve_m = home.get(
+        "usdReserveM"
+    )
+
+    cash_m = home.get(
+        "usdCashM"
     )
 
     # -----------------------------------------------------
-    # Preferred
+    # Fallback to existing values individually.
+    #
+    # This prevents one missing Strategy field from
+    # destroying all fresh Strategy data.
     # -----------------------------------------------------
 
-    pref_m = (
-        home.get(
-            "preferredM"
-        )
-    )
+    if debt_m is None:
 
-    # -----------------------------------------------------
-    # USD Reserve + USD Cash
-    # -----------------------------------------------------
-
-    reserve_m = (
-        home.get(
-            "usdReserveM"
-        )
-    )
-
-    cash_m = (
-        home.get(
-            "usdCashM"
-        )
-    )
-
-    # -----------------------------------------------------
-    # Existing fallbacks
-    # -----------------------------------------------------
-
-    if (
-        debt_m is None
-        and
-        isinstance(
-            existing_data,
-            dict
-        )
-    ):
-
-        old_debt = safe_float(
-            existing_data.get(
-                "debtUsdB"
-            )
-        )
-
-        if old_debt is not None:
+        try:
 
             debt_m = (
-                old_debt
-                *
-                1000.0
+                float(
+                    existing_data[
+                        "debtUsdB"
+                    ]
+                )
+                * 1000.0
             )
 
-    if (
-        pref_m is None
-        and
-        isinstance(
-            existing_data,
-            dict
-        )
-    ):
+        except Exception:
+            pass
 
-        old_pref = safe_float(
-            existing_data.get(
-                "preferredUsdB"
-            )
-        )
+    if pref_m is None:
 
-        if old_pref is not None:
+        try:
 
             pref_m = (
-                old_pref
-                *
-                1000.0
+                float(
+                    existing_data[
+                        "preferredUsdB"
+                    ]
+                )
+                * 1000.0
             )
 
+        except Exception:
+            pass
+
+    if (
+        reserve_m is None
+        and
+        cash_m is None
+    ):
+
+        try:
+
+            existing_assets_m = (
+                float(
+                    existing_data[
+                        "usdAssetsUsdB"
+                    ]
+                )
+                * 1000.0
+            )
+
+            reserve_m = (
+                existing_assets_m
+            )
+
+        except Exception:
+            pass
+
     # -----------------------------------------------------
-    # USD assets
+    # USD Assets
     # -----------------------------------------------------
 
     usd_assets_m = None
@@ -1663,29 +1081,28 @@ def get_strategy_capital_data(
 
         usd_assets_m = reserve_m
 
-    elif (
-        isinstance(
-            existing_data,
-            dict
-        )
-    ):
+    elif cash_m is not None:
 
-        old_assets = safe_float(
-            existing_data.get(
-                "usdAssetsUsdB"
-            )
-        )
+        usd_assets_m = cash_m
 
-        if old_assets is not None:
+    else:
+
+        try:
 
             usd_assets_m = (
-                old_assets
-                *
-                1000.0
+                float(
+                    existing_data[
+                        "usdAssetsUsdB"
+                    ]
+                )
+                * 1000.0
             )
 
+        except Exception:
+            pass
+
     # -----------------------------------------------------
-    # Validation
+    # VALIDATION
     # -----------------------------------------------------
 
     if (
@@ -1693,15 +1110,13 @@ def get_strategy_capital_data(
         or
         not (
             100_000
-            <=
-            btc_holdings
-            <=
-            2_000_000
+            <= float(btc_holdings)
+            <= 2_000_000
         )
     ):
 
         raise RuntimeError(
-            "Strategy.com BTC holdings unavailable"
+            "Strategy BTC holdings unavailable"
         )
 
     if (
@@ -1709,63 +1124,31 @@ def get_strategy_capital_data(
         or
         not (
             300
-            <=
-            fdso
-            <=
-            700
+            <= float(fdso)
+            <= 600
         )
     ):
 
         raise RuntimeError(
-            f"Invalid Strategy FDSO: {fdso}"
+            "Strategy FDSO unavailable"
         )
 
-    if (
-        debt_m is None
-        or
-        not (
-            0
-            <=
-            debt_m
-            <=
-            100_000
-        )
-    ):
+    if debt_m is None:
 
         raise RuntimeError(
-            "Strategy.com Debt unavailable"
+            "Strategy Debt unavailable"
         )
 
-    if (
-        pref_m is None
-        or
-        not (
-            0
-            <=
-            pref_m
-            <=
-            100_000
-        )
-    ):
+    if pref_m is None:
 
         raise RuntimeError(
-            "Strategy.com Preferred unavailable"
+            "Strategy Preferred unavailable"
         )
 
-    if (
-        usd_assets_m is None
-        or
-        not (
-            0
-            <=
-            usd_assets_m
-            <=
-            100_000
-        )
-    ):
+    if usd_assets_m is None:
 
         raise RuntimeError(
-            "Strategy.com USD Assets unavailable"
+            "Strategy USD Assets unavailable"
         )
 
     return {
@@ -1773,28 +1156,19 @@ def get_strategy_capital_data(
         "btcHoldings":
             int(
                 round(
-                    btc_holdings
+                    float(
+                        btc_holdings
+                    )
                 )
             ),
 
         "adso":
-            (
-                round(
-                    float(adso),
-                    3
-                )
-                if adso is not None
-                else (
-                    existing_data.get(
-                        "adso"
-                    )
-                    if isinstance(
-                        existing_data,
-                        dict
-                    )
-                    else None
-                )
-            ),
+            round(
+                float(adso),
+                3
+            )
+            if adso is not None
+            else None,
 
         "fdso":
             round(
@@ -1804,19 +1178,28 @@ def get_strategy_capital_data(
 
         "usdAssetsUsdB":
             round(
-                usd_assets_m / 1000.0,
+                float(
+                    usd_assets_m
+                )
+                / 1000.0,
                 6
             ),
 
         "debtUsdB":
             round(
-                debt_m / 1000.0,
+                float(
+                    debt_m
+                )
+                / 1000.0,
                 6
             ),
 
         "preferredUsdB":
             round(
-                pref_m / 1000.0,
+                float(
+                    pref_m
+                )
+                / 1000.0,
                 6
             ),
 
@@ -1831,36 +1214,32 @@ def get_strategy_capital_data(
             ),
 
         "strategyMnav":
-            combined.get(
-                "mnav"
+            (
+                btc_page.get(
+                    "mnav"
+                )
+                or
+                home.get(
+                    "mnav"
+                )
             ),
 
         "strategyNetBpsUsd":
-            combined.get(
+            btc_page.get(
                 "netBpsUsd"
             ),
 
         "strategyGrossBpsUsd":
-            combined.get(
+            btc_page.get(
                 "grossBpsUsd"
             ),
 
         "strategyMstrPrice":
-            strategy_price,
-
-        "strategyOpenInterestM":
-            home.get(
-                "openInterestM"
-            ),
+            mstr_price,
 
         "strategyBtcReserveM":
-            combined.get(
+            btc_page.get(
                 "btcReserveM"
-            ),
-
-        "strategyNetReserveM":
-            combined.get(
-                "netReserveM"
             ),
 
         "errors":
@@ -1876,21 +1255,23 @@ def get_sec_capital_data(
     existing_data
 ):
 
-    filings = fetch_json(
-        SEC_SUBMISSIONS_URL,
-        headers=SEC_HEADERS
-    )
+    try:
+
+        filings = fetch_json(
+            SEC_SUBMISSIONS_URL,
+            headers=SEC_HEADERS
+        )
+
+    except Exception as error:
+
+        raise RuntimeError(
+            f"SEC submissions failed: {error}"
+        )
 
     recent = (
         filings
-        .get(
-            "filings",
-            {}
-        )
-        .get(
-            "recent",
-            {}
-        )
+        .get("filings", {})
+        .get("recent", {})
     )
 
     forms = recent.get(
@@ -1913,9 +1294,7 @@ def get_sec_capital_data(
         []
     )
 
-    for i, form in enumerate(
-        forms
-    ):
+    for i, form in enumerate(forms):
 
         if form != "8-K":
             continue
@@ -2003,15 +1382,13 @@ def get_sec_capital_data(
                 ),
 
             "source":
-                "SEC Form 8-K fallback",
+                "SEC fallback",
 
             "asOf":
-                (
-                    dates[i]
-                    if i < len(dates)
-                    else existing_data.get(
-                        "asOf"
-                    )
+                dates[i]
+                if i < len(dates)
+                else existing_data.get(
+                    "asOf"
                 )
         }
 
@@ -2021,7 +1398,7 @@ def get_sec_capital_data(
 
 
 # =========================================================
-# NORMALIZE COMPANY DATA
+# NORMALIZE
 # =========================================================
 
 def normalize_company_data(
@@ -2035,113 +1412,61 @@ def normalize_company_data(
 
         data = {}
 
-    data = dict(
-        data
-    )
+    data = dict(data)
 
-    # -----------------------------------------------------
     # BTC
-    # -----------------------------------------------------
 
-    btc = safe_float(
-        data.get(
-            "btcHoldings"
-        )
-    )
+    try:
 
-    if (
-        btc is not None
-        and
-        100_000
-        <=
-        btc
-        <=
-        2_000_000
-    ):
-
-        data[
-            "btcHoldings"
-        ] = int(
+        data["btcHoldings"] = int(
             round(
-                btc
+                float(
+                    data[
+                        "btcHoldings"
+                    ]
+                )
             )
         )
 
-    else:
+    except Exception:
 
-        data[
-            "btcHoldings"
-        ] = None
+        data["btcHoldings"] = None
 
-    # -----------------------------------------------------
     # ADSO
-    # -----------------------------------------------------
 
-    adso = safe_float(
-        data.get(
-            "adso"
+    try:
+
+        data["adso"] = float(
+            data.get(
+                "adso"
+            )
         )
-    )
 
-    if adso is not None:
+    except Exception:
 
-        if adso >= 100_000:
+        data["adso"] = None
 
-            adso /= 1_000_000
-
-        elif adso >= 1000:
-
-            adso /= 1000
-
-        data[
-            "adso"
-        ] = adso
-
-    else:
-
-        data[
-            "adso"
-        ] = None
-
-    # -----------------------------------------------------
     # FDSO
-    #
-    # M shares
-    # -----------------------------------------------------
 
-    fdso = safe_float(
-        data.get(
-            "fdso"
+    try:
+
+        fdso = float(
+            data.get(
+                "fdso"
+            )
         )
-    )
 
-    if fdso is not None:
-
-        if fdso >= 100_000_000:
+        if fdso >= 100_000:
 
             fdso /= 1_000_000
 
-        elif fdso >= 100_000:
+        data["fdso"] = fdso
 
-            fdso /= 1_000_000
+    except Exception:
 
-        elif fdso >= 1000:
+        data["fdso"] = None
 
-            fdso /= 1000
-
-        data[
-            "fdso"
-        ] = fdso
-
-    else:
-
-        data[
-            "fdso"
-        ] = None
-
-    # -----------------------------------------------------
-    # USD fields
-    # -----------------------------------------------------
+    # USD
 
     for key in (
         "usdAssetsUsdB",
@@ -2149,21 +1474,19 @@ def normalize_company_data(
         "preferredUsdB"
     ):
 
-        value = safe_float(
-            data.get(
-                key
+        try:
+
+            data[key] = float(
+                data.get(
+                    key
+                )
             )
-        )
 
-        data[key] = (
-            value
-            if value is not None
-            else None
-        )
+        except Exception:
 
-    # -----------------------------------------------------
-    # Range
-    # -----------------------------------------------------
+            data[key] = None
+
+    # FDSO validation
 
     if (
         data.get(
@@ -2172,40 +1495,18 @@ def normalize_company_data(
         or
         not (
             300
-            <=
-            data["fdso"]
-            <=
-            700
+            <= data["fdso"]
+            <= 600
         )
     ):
 
-        data[
-            "fdso"
-        ] = None
-
-    if (
-        data.get(
-            "adso"
-        ) is not None
-        and
-        not (
-            250
-            <=
-            data["adso"]
-            <=
-            700
-        )
-    ):
-
-        data[
-            "adso"
-        ] = None
+        data["fdso"] = None
 
     return data
 
 
 # =========================================================
-# UPDATE DATA.JSON
+# UPDATE data.json
 # =========================================================
 
 def update_data_json():
@@ -2249,6 +1550,11 @@ def update_data_json():
             "Company data source: Strategy.com"
         )
 
+        print(
+            "Strategy FDSO:",
+            merged.get("fdso")
+        )
+
         return merged
 
     except Exception as error:
@@ -2264,10 +1570,8 @@ def update_data_json():
 
     try:
 
-        latest = (
-            get_sec_capital_data(
-                existing
-            )
+        latest = get_sec_capital_data(
+            existing
         )
 
         latest = normalize_company_data(
@@ -2298,12 +1602,8 @@ def update_data_json():
         )
 
     # -----------------------------------------------------
-    # 3. Existing data
+    # 3. Existing
     # -----------------------------------------------------
-
-    existing = normalize_company_data(
-        existing
-    )
 
     required = [
         "btcHoldings",
@@ -2319,6 +1619,10 @@ def update_data_json():
         ) is not None
         for key in required
     ):
+
+        existing["source"] = (
+            "Existing data.json"
+        )
 
         print(
             "Company data source: existing data.json"
@@ -2339,13 +1643,13 @@ def update_data_json():
         VERIFIED_FALLBACK
     )
 
+    print(
+        "Company data source: verified fallback"
+    )
+
     save_json(
         DATA_FILE,
         fallback
-    )
-
-    print(
-        "Company data source: verified fallback"
     )
 
     return fallback
@@ -2357,114 +1661,25 @@ def update_data_json():
 
 def get_btc_price():
 
-    # -----------------------------------------------------
-    # 1. CoinGecko
-    # -----------------------------------------------------
-
-    try:
-
-        data = fetch_json(
-            COINGECKO_URL
-        )
-
-        price = safe_float(
-            data[
-                "bitcoin"
-            ][
-                "usd"
-            ]
-        )
-
-        if (
-            price is not None
-            and
-            price > 0
-        ):
-
-            return price
-
-    except Exception as error:
-
-        print(
-            "WARNING: CoinGecko BTC price:",
-            error
-        )
-
-    # -----------------------------------------------------
-    # 2. Binance
-    # -----------------------------------------------------
-
-    try:
-
-        data = fetch_json(
-            BINANCE_PRICE_URL
-        )
-
-        price = safe_float(
-            data.get(
-                "price"
-            )
-        )
-
-        if (
-            price is not None
-            and
-            price > 0
-        ):
-
-            return price
-
-    except Exception as error:
-
-        print(
-            "WARNING: Binance BTC price:",
-            error
-        )
-
-    # -----------------------------------------------------
-    # 3. Yahoo
-    # -----------------------------------------------------
-
-    try:
-
-        data = fetch_json(
-            YAHOO_BTC_URL
-        )
-
-        result = (
-            data
-            .get("chart", {})
-            .get("result", [])
-        )
-
-        if result:
-
-            price = safe_float(
-                result[0]
-                .get("meta", {})
-                .get(
-                    "regularMarketPrice"
-                )
-            )
-
-            if (
-                price is not None
-                and
-                price > 0
-            ):
-
-                return price
-
-    except Exception as error:
-
-        print(
-            "WARNING: Yahoo BTC price:",
-            error
-        )
-
-    raise RuntimeError(
-        "All BTC price sources failed"
+    data = fetch_json(
+        COINGECKO_URL
     )
+
+    price = float(
+        data[
+            "bitcoin"
+        ][
+            "usd"
+        ]
+    )
+
+    if price <= 0:
+
+        raise RuntimeError(
+            "Invalid BTC price"
+        )
+
+    return price
 
 
 # =========================================================
@@ -2474,7 +1689,7 @@ def get_btc_price():
 def get_mstr_price():
 
     data = fetch_json(
-        YAHOO_MSTR_URL
+        YAHOO_URL
     )
 
     result = (
@@ -2489,22 +1704,24 @@ def get_mstr_price():
             "Yahoo returned no MSTR result"
         )
 
-    price = safe_float(
+    price = (
         result[0]
         .get("meta", {})
-        .get(
-            "regularMarketPrice"
-        )
+        .get("regularMarketPrice")
     )
 
-    if (
-        price is None
-        or
-        price <= 0
-    ):
+    if price is None:
 
         raise RuntimeError(
             "Yahoo MSTR price unavailable"
+        )
+
+    price = float(price)
+
+    if price <= 0:
+
+        raise RuntimeError(
+            "Invalid MSTR price"
         )
 
     return price
@@ -2520,23 +1737,11 @@ def get_binance_oi():
         BINANCE_OI_URL
     )
 
-    value = safe_float(
-        data.get(
+    return float(
+        data[
             "openInterest"
-        )
+        ]
     )
-
-    if (
-        value is None
-        or
-        value <= 0
-    ):
-
-        raise RuntimeError(
-            "Invalid Binance OI"
-        )
-
-    return value
 
 
 def get_binance_funding():
@@ -2551,19 +1756,14 @@ def get_binance_funding():
             "No Binance funding"
         )
 
-    value = safe_float(
-        data[0].get(
-            "fundingRate"
+    return (
+        float(
+            data[0][
+                "fundingRate"
+            ]
         )
+        * 100.0
     )
-
-    if value is None:
-
-        raise RuntimeError(
-            "Invalid Binance funding"
-        )
-
-    return value * 100.0
 
 
 # =========================================================
@@ -2590,37 +1790,18 @@ def get_bybit_data():
 
     row = rows[0]
 
-    oi = safe_float(
-        row.get(
-            "openInterestValue"
-        )
-    )
-
-    funding = safe_float(
-        row.get(
-            "fundingRate"
-        )
-    )
-
-    if (
-        oi is None
-        or
-        oi <= 0
-    ):
-
-        raise RuntimeError(
-            "Invalid Bybit OI"
-        )
-
-    if funding is None:
-
-        raise RuntimeError(
-            "Invalid Bybit funding"
-        )
-
     return (
-        oi,
-        funding * 100.0
+        float(
+            row[
+                "openInterestValue"
+            ]
+        ),
+        float(
+            row[
+                "fundingRate"
+            ]
+        )
+        * 100.0
     )
 
 
@@ -2645,23 +1826,11 @@ def get_okx_oi():
             "No OKX OI"
         )
 
-    value = safe_float(
-        rows[0].get(
+    return float(
+        rows[0][
             "oiUsd"
-        )
+        ]
     )
-
-    if (
-        value is None
-        or
-        value <= 0
-    ):
-
-        raise RuntimeError(
-            "Invalid OKX OI"
-        )
-
-    return value
 
 
 def get_okx_funding():
@@ -2681,23 +1850,18 @@ def get_okx_funding():
             "No OKX funding"
         )
 
-    value = safe_float(
-        rows[0].get(
-            "fundingRate"
+    return (
+        float(
+            rows[0][
+                "fundingRate"
+            ]
         )
+        * 100.0
     )
-
-    if value is None:
-
-        raise RuntimeError(
-            "Invalid OKX funding"
-        )
-
-    return value * 100.0
 
 
 # =========================================================
-# mNAV CALCULATION
+# mNAV
 # =========================================================
 
 def calculate_mnav(
@@ -2720,41 +1884,7 @@ def calculate_mnav(
 
     fdso_shares = (
         fdso_m
-        *
-        1_000_000
-    )
-
-    # -----------------------------------------------------
-    # ADSO
-    #
-    # Gross BTC/share should use ADSO.
-    # This matches Strategy's BPS methodology.
-    # -----------------------------------------------------
-
-    adso_m = safe_float(
-        company.get(
-            "adso"
-        )
-    )
-
-    if (
-        adso_m is None
-        or
-        not (
-            250
-            <=
-            adso_m
-            <=
-            700
-        )
-    ):
-
-        adso_m = fdso_m
-
-    adso_shares = (
-        adso_m
-        *
-        1_000_000
+        * 1_000_000
     )
 
     usd_assets = (
@@ -2763,8 +1893,7 @@ def calculate_mnav(
                 "usdAssetsUsdB"
             ]
         )
-        *
-        1_000_000_000
+        * 1_000_000_000
     )
 
     debt = (
@@ -2773,8 +1902,7 @@ def calculate_mnav(
                 "debtUsdB"
             ]
         )
-        *
-        1_000_000_000
+        * 1_000_000_000
     )
 
     preferred = (
@@ -2783,38 +1911,18 @@ def calculate_mnav(
                 "preferredUsdB"
             ]
         )
-        *
-        1_000_000_000
+        * 1_000_000_000
     )
 
     btc_value = (
         holdings
-        *
-        btc_price
+        * btc_price
     )
-
-    # -----------------------------------------------------
-    # Gross BPS
-    #
-    # BTC Reserve / ADSO
-    # -----------------------------------------------------
 
     gross_bps = (
         btc_value
-        /
-        adso_shares
+        / fdso_shares
     )
-
-    # -----------------------------------------------------
-    # Conservative calculated Net Reserve
-    #
-    # When all convertible instruments are OTM,
-    # total debt + total preferred is a valid
-    # conservative approximation.
-    #
-    # Strategy direct Net BPS is preferred whenever
-    # available.
-    # -----------------------------------------------------
 
     net_reserve = (
         btc_value
@@ -2828,14 +1936,12 @@ def calculate_mnav(
 
     net_bps = (
         net_reserve
-        /
-        fdso_shares
+        / fdso_shares
     )
 
     btc_per_share = (
         holdings
-        /
-        adso_shares
+        / fdso_shares
     )
 
     if gross_bps <= 0:
@@ -2847,19 +1953,17 @@ def calculate_mnav(
     if net_bps <= 0:
 
         raise RuntimeError(
-            "Calculated Net BPS <= 0"
+            "Net BPS <= 0"
         )
 
-    calculated_mnav = (
+    mnav = (
         mstr_price
-        /
-        net_bps
+        / net_bps
     )
 
     gross_mnav = (
         mstr_price
-        /
-        gross_bps
+        / gross_bps
     )
 
     if not (
@@ -2874,97 +1978,6 @@ def calculate_mnav(
             "Invalid BTC/share"
         )
 
-    # -----------------------------------------------------
-    # Strategy direct values
-    # -----------------------------------------------------
-
-    strategy_net_bps = safe_float(
-        company.get(
-            "strategyNetBpsUsd"
-        )
-    )
-
-    strategy_mnav = safe_float(
-        company.get(
-            "strategyMnav"
-        )
-    )
-
-    strategy_gross_bps = safe_float(
-        company.get(
-            "strategyGrossBpsUsd"
-        )
-    )
-
-    # -----------------------------------------------------
-    # Prefer official Strategy values.
-    #
-    # IMPORTANT:
-    # NaN / infinity / absurd values are rejected.
-    # -----------------------------------------------------
-
-    if (
-        strategy_net_bps is not None
-        and
-        1
-        <
-        strategy_net_bps
-        <
-        1000
-    ):
-
-        final_net_bps = (
-            strategy_net_bps
-        )
-
-    else:
-
-        final_net_bps = (
-            net_bps
-        )
-
-    if (
-        strategy_gross_bps is not None
-        and
-        1
-        <
-        strategy_gross_bps
-        <
-        1000
-    ):
-
-        final_gross_bps = (
-            strategy_gross_bps
-        )
-
-    else:
-
-        final_gross_bps = (
-            gross_bps
-        )
-
-    if (
-        strategy_mnav is not None
-        and
-        0.05
-        <
-        strategy_mnav
-        <
-        20
-    ):
-
-        final_mnav = (
-            strategy_mnav
-        )
-
-    else:
-
-        final_mnav = (
-            mstr_price
-            /
-            final_net_bps
-        )
-
     return {
 
         "btcValueUsd":
@@ -2974,55 +1987,51 @@ def calculate_mnav(
             net_reserve,
 
         "grossBpsUsd":
-            final_gross_bps,
+            gross_bps,
 
         "netBpsUsd":
-            final_net_bps,
+            net_bps,
 
         "btcPerShare":
             btc_per_share,
 
         "mnav":
-            final_mnav,
+            mnav,
 
         "grossMnav":
-            (
-                mstr_price
-                /
-                final_gross_bps
-            ),
-
-        "calculatedGrossBpsUsd":
-            gross_bps,
-
-        "calculatedNetBpsUsd":
-            net_bps,
-
-        "calculatedMnav":
-            calculated_mnav,
-
-        "usedStrategyNetBps":
-            (
-                strategy_net_bps is not None
-                and
-                1
-                <
-                strategy_net_bps
-                <
-                1000
-            ),
-
-        "usedStrategyMnav":
-            (
-                strategy_mnav is not None
-                and
-                0.05
-                <
-                strategy_mnav
-                <
-                20
-            )
+            gross_mnav
     }
+
+
+# =========================================================
+# HISTORY REPAIR
+# =========================================================
+
+def repair_history_record(
+    item
+):
+
+    item = dict(item)
+
+    for key in (
+        "btcPerShare",
+        "grossBpsUsd",
+        "netBpsUsd",
+        "mnav",
+        "grossMnav"
+    ):
+
+        try:
+
+            item[key] = float(
+                item[key]
+            )
+
+        except Exception:
+
+            pass
+
+    return item
 
 
 # =========================================================
@@ -3035,6 +2044,7 @@ def get_previous_record(
 ):
 
     if not history:
+
         return None
 
     target = (
@@ -3047,8 +2057,10 @@ def get_previous_record(
         )
     )
 
-    key = target.strftime(
-        "%Y-%m-%d"
+    target_key = (
+        target.strftime(
+            "%Y-%m-%d"
+        )
     )
 
     candidates = [
@@ -3057,10 +2069,11 @@ def get_previous_record(
         if item.get(
             "date",
             ""
-        ) <= key
+        ) <= target_key
     ]
 
     if not candidates:
+
         return None
 
     return max(
@@ -3082,181 +2095,29 @@ def percentage_change(
     previous
 ):
 
-    current = safe_float(
-        current
-    )
+    try:
 
-    previous = safe_float(
-        previous
-    )
+        current = float(current)
+        previous = float(previous)
 
-    if (
-        current is None
-        or
-        previous is None
-        or
-        previous == 0
-    ):
+    except Exception:
+
+        return None
+
+    if previous == 0:
 
         return None
 
     return (
-        (
-            current
-            /
-            previous
-        )
-        -
-        1
+        current
+        /
+        previous
+        - 1.0
     ) * 100.0
 
 
 # =========================================================
-# REPAIR HISTORY
-# =========================================================
-
-def repair_history_record(
-    item
-):
-
-    item = dict(
-        item
-    )
-
-    # -----------------------------------------------------
-    # BTC/share
-    # -----------------------------------------------------
-
-    value = safe_float(
-        item.get(
-            "btcPerShare"
-        )
-    )
-
-    if value is not None:
-
-        if value > 1:
-
-            value /= 1_000_000
-
-        item[
-            "btcPerShare"
-        ] = value
-
-    # -----------------------------------------------------
-    # BPS
-    # -----------------------------------------------------
-
-    for key in (
-        "grossBpsUsd",
-        "netBpsUsd"
-    ):
-
-        value = safe_float(
-            item.get(
-                key
-            )
-        )
-
-        if value is not None:
-
-            if value > 1_000_000:
-
-                value /= 1_000_000
-
-            item[key] = value
-
-    # -----------------------------------------------------
-    # mNAV
-    # -----------------------------------------------------
-
-    mnav = safe_float(
-        item.get(
-            "mnav"
-        )
-    )
-
-    net_bps = safe_float(
-        item.get(
-            "netBpsUsd"
-        )
-    )
-
-    mstr = safe_float(
-        item.get(
-            "mstr"
-        )
-    )
-
-    if (
-        (
-            mnav is None
-            or
-            mnav <= 0
-        )
-        and
-        net_bps is not None
-        and
-        net_bps > 0
-        and
-        mstr is not None
-        and
-        mstr > 0
-    ):
-
-        item[
-            "mnav"
-        ] = (
-            mstr
-            /
-            net_bps
-        )
-
-    # -----------------------------------------------------
-    # Gross mNAV
-    # -----------------------------------------------------
-
-    gross_mnav = safe_float(
-        item.get(
-            "grossMnav"
-        )
-    )
-
-    gross_bps = safe_float(
-        item.get(
-            "grossBpsUsd"
-        )
-    )
-
-    if (
-        (
-            gross_mnav is None
-            or
-            gross_mnav <= 0
-        )
-        and
-        gross_bps is not None
-        and
-        gross_bps > 0
-        and
-        mstr is not None
-        and
-        mstr > 0
-    ):
-
-        item[
-            "grossMnav"
-        ] = (
-            mstr
-            /
-            gross_bps
-        )
-
-    return item
-
-
-# =========================================================
-# mNAV PERCENTILE
+# PERCENTILE
 # =========================================================
 
 def calculate_mnav_percentile(
@@ -3264,15 +2125,15 @@ def calculate_mnav_percentile(
     history
 ):
 
-    current = safe_float(
-        current
-    )
+    try:
 
-    if (
-        current is None
-        or
-        current <= 0
-    ):
+        current = float(current)
+
+    except Exception:
+
+        return None
+
+    if current <= 0:
 
         return None
 
@@ -3280,23 +2141,20 @@ def calculate_mnav_percentile(
 
     for item in history:
 
-        value = safe_float(
-            item.get(
-                "mnav"
-            )
-        )
+        try:
 
-        if (
-            value is not None
-            and
-            value > 0
-            and
-            value < 100
-        ):
-
-            values.append(
-                value
+            value = float(
+                item.get(
+                    "mnav"
+                )
             )
+
+            if value > 0:
+                values.append(value)
+
+        except Exception:
+
+            continue
 
     if len(values) < 5:
 
@@ -3312,8 +2170,7 @@ def calculate_mnav_percentile(
 
     return (
         count
-        /
-        len(values)
+        / len(values)
     ) * 100.0
 
 
@@ -3331,39 +2188,21 @@ def calculate_risk_score(
 
     score = 0.0
 
-    # -----------------------------------------------------
-    # mNAV
-    # -----------------------------------------------------
-
-    if (
-        mnav_percentile
-        is not None
-    ):
+    if mnav_percentile is not None:
 
         if mnav_percentile >= 95:
-
             score += 35
 
         elif mnav_percentile >= 85:
-
             score += 28
 
         elif mnav_percentile >= 70:
-
             score += 20
 
         elif mnav_percentile >= 50:
-
             score += 10
 
-    # -----------------------------------------------------
-    # Funding
-    # -----------------------------------------------------
-
-    if (
-        funding_rate
-        is not None
-    ):
+    if funding_rate is not None:
 
         funding = abs(
             float(
@@ -3372,94 +2211,60 @@ def calculate_risk_score(
         )
 
         if funding >= 0.08:
-
             score += 30
 
         elif funding >= 0.05:
-
             score += 23
 
         elif funding >= 0.03:
-
             score += 15
 
         elif funding >= 0.015:
-
             score += 7
 
-    # -----------------------------------------------------
-    # OI 1D
-    # -----------------------------------------------------
-
-    if (
-        oi_change_1d
-        is not None
-    ):
+    if oi_change_1d is not None:
 
         value = float(
             oi_change_1d
         )
 
         if value >= 10:
-
             score += 15
 
         elif value >= 6:
-
             score += 11
 
         elif value >= 3:
-
             score += 6
 
-    # -----------------------------------------------------
-    # OI 7D
-    # -----------------------------------------------------
-
-    if (
-        oi_change_7d
-        is not None
-    ):
+    if oi_change_7d is not None:
 
         value = float(
             oi_change_7d
         )
 
         if value >= 20:
-
             score += 15
 
         elif value >= 12:
-
             score += 11
 
         elif value >= 7:
-
             score += 6
 
-    # -----------------------------------------------------
-    # BTC 7D
-    # -----------------------------------------------------
-
-    if (
-        btc_change_7d
-        is not None
-    ):
+    if btc_change_7d is not None:
 
         value = float(
             btc_change_7d
         )
 
         if value >= 15:
-
             score += 10
 
         elif value >= 10:
-
             score += 7
 
         elif value >= 5:
-
             score += 4
 
     score = min(
@@ -3471,26 +2276,19 @@ def calculate_risk_score(
     )
 
     if score < 25:
-
         level = "SAFE"
 
     elif score < 50:
-
         level = "CAUTION"
 
     elif score < 75:
-
         level = "OVERHEATED"
 
     else:
-
         level = "EXTREME"
 
     return (
-        round(
-            score,
-            1
-        ),
+        round(score, 1),
         level
     )
 
@@ -3506,14 +2304,14 @@ def main():
         "======================================"
     )
     print(
-        "MSTR Market History Update FINAL v11"
+        "MSTR Market History Update v11"
     )
     print(
         "======================================"
     )
 
     # -----------------------------------------------------
-    # 1. COMPANY DATA
+    # COMPANY
     # -----------------------------------------------------
 
     company = update_data_json()
@@ -3543,47 +2341,19 @@ def main():
         raise RuntimeError(
             "Missing company data: "
             +
-            ", ".join(
-                missing
-            )
+            ", ".join(missing)
         )
 
     # -----------------------------------------------------
-    # 2. PRICES
+    # PRICES
     # -----------------------------------------------------
 
-    btc_price = (
-        get_btc_price()
-    )
+    btc_price = get_btc_price()
 
-    strategy_price = safe_float(
-        company.get(
-            "strategyMstrPrice"
-        )
-    )
-
-    if (
-        strategy_price is not None
-        and
-        20
-        <=
-        strategy_price
-        <=
-        1000
-    ):
-
-        mstr_price = (
-            strategy_price
-        )
-
-    else:
-
-        mstr_price = (
-            get_mstr_price()
-        )
+    mstr_price = get_mstr_price()
 
     # -----------------------------------------------------
-    # 3. mNAV
+    # mNAV
     # -----------------------------------------------------
 
     result = calculate_mnav(
@@ -3593,7 +2363,24 @@ def main():
     )
 
     # -----------------------------------------------------
-    # 4. HISTORY
+    # STRATEGY OFFICIAL METRICS
+    #
+    # These are stored for comparison only.
+    #
+    # Our calculated mNAV remains the dashboard's
+    # internally consistent calculation.
+    # -----------------------------------------------------
+
+    strategy_mnav = company.get(
+        "strategyMnav"
+    )
+
+    strategy_net_bps = company.get(
+        "strategyNetBpsUsd"
+    )
+
+    # -----------------------------------------------------
+    # HISTORY
     # -----------------------------------------------------
 
     history = load_json(
@@ -3620,26 +2407,21 @@ def main():
     ]
 
     # -----------------------------------------------------
-    # 5. OI / FUNDING
+    # OI
     # -----------------------------------------------------
 
     oi_values = []
     funding_values = []
 
-    # -----------------------------------------------------
     # Binance
-    # -----------------------------------------------------
 
     try:
 
-        oi_btc = (
-            get_binance_oi()
-        )
+        oi_btc = get_binance_oi()
 
         oi_usd = (
             oi_btc
-            *
-            btc_price
+            * btc_price
         )
 
         if oi_usd > 0:
@@ -3679,9 +2461,7 @@ def main():
             error
         )
 
-    # -----------------------------------------------------
     # Bybit
-    # -----------------------------------------------------
 
     try:
 
@@ -3713,15 +2493,11 @@ def main():
             error
         )
 
-    # -----------------------------------------------------
     # OKX
-    # -----------------------------------------------------
 
     try:
 
-        oi_usd = (
-            get_okx_oi()
-        )
+        oi_usd = get_okx_oi()
 
         if oi_usd > 0:
 
@@ -3761,7 +2537,7 @@ def main():
         )
 
     # -----------------------------------------------------
-    # 6. AGGREGATE OI
+    # AGGREGATE OI
     # -----------------------------------------------------
 
     aggregate_oi_usd = None
@@ -3777,12 +2553,11 @@ def main():
 
         aggregate_oi_btc = (
             aggregate_oi_usd
-            /
-            btc_price
+            / btc_price
         )
 
     # -----------------------------------------------------
-    # 7. AGGREGATE FUNDING
+    # FUNDING
     # -----------------------------------------------------
 
     aggregate_funding = None
@@ -3809,7 +2584,7 @@ def main():
             )
 
     # -----------------------------------------------------
-    # 8. PREVIOUS
+    # PREVIOUS
     # -----------------------------------------------------
 
     previous_1d = (
@@ -3827,7 +2602,7 @@ def main():
     )
 
     # -----------------------------------------------------
-    # 9. CHANGES
+    # CHANGES
     # -----------------------------------------------------
 
     oi1 = None
@@ -3907,7 +2682,7 @@ def main():
         )
 
     # -----------------------------------------------------
-    # 10. PERCENTILE
+    # PERCENTILE
     # -----------------------------------------------------
 
     percentile = (
@@ -3918,7 +2693,7 @@ def main():
     )
 
     # -----------------------------------------------------
-    # 11. RISK
+    # RISK
     # -----------------------------------------------------
 
     score, level = (
@@ -3932,7 +2707,7 @@ def main():
     )
 
     # -----------------------------------------------------
-    # 12. DATE
+    # DATE
     # -----------------------------------------------------
 
     now = datetime.now(
@@ -3944,7 +2719,7 @@ def main():
     )
 
     # -----------------------------------------------------
-    # 13. RECORD
+    # RECORD
     # -----------------------------------------------------
 
     record = {
@@ -3980,7 +2755,7 @@ def main():
                 result[
                     "grossBpsUsd"
                 ],
-                2
+                4
             ),
 
         "netBpsUsd":
@@ -3988,7 +2763,7 @@ def main():
                 result[
                     "netBpsUsd"
                 ],
-                2
+                4
             ),
 
         "btcPerShare":
@@ -4013,6 +2788,32 @@ def main():
                     "grossMnav"
                 ],
                 4
+            ),
+
+        "strategyMnav":
+            (
+                round(
+                    float(
+                        strategy_mnav
+                    ),
+                    4
+                )
+                if strategy_mnav
+                is not None
+                else None
+            ),
+
+        "strategyNetBpsUsd":
+            (
+                round(
+                    float(
+                        strategy_net_bps
+                    ),
+                    4
+                )
+                if strategy_net_bps
+                is not None
+                else None
             ),
 
         "oiBtc":
@@ -4176,31 +2977,11 @@ def main():
         "fdso":
             company.get(
                 "fdso"
-            ),
-
-        "strategyMnav":
-            company.get(
-                "strategyMnav"
-            ),
-
-        "strategyNetBpsUsd":
-            company.get(
-                "strategyNetBpsUsd"
-            ),
-
-        "usedStrategyMnav":
-            result.get(
-                "usedStrategyMnav"
-            ),
-
-        "usedStrategyNetBps":
-            result.get(
-                "usedStrategyNetBps"
             )
     }
 
     # -----------------------------------------------------
-    # 14. REPLACE TODAY
+    # REPLACE TODAY
     # -----------------------------------------------------
 
     history = [
@@ -4216,7 +2997,7 @@ def main():
     )
 
     # -----------------------------------------------------
-    # 15. SORT
+    # SORT
     # -----------------------------------------------------
 
     history.sort(
@@ -4228,7 +3009,7 @@ def main():
     )
 
     # -----------------------------------------------------
-    # 16. SAVE
+    # SAVE
     # -----------------------------------------------------
 
     save_json(
@@ -4237,7 +3018,7 @@ def main():
     )
 
     # -----------------------------------------------------
-    # 17. FINAL CHECK
+    # FINAL CHECK
     # -----------------------------------------------------
 
     print()
@@ -4265,9 +3046,9 @@ def main():
 
     print(
         "BTC holdings:",
-        company[
+        company.get(
             "btcHoldings"
-        ]
+        )
     )
 
     print(
@@ -4279,9 +3060,9 @@ def main():
 
     print(
         "FDSO (M):",
-        company[
+        company.get(
             "fdso"
-        ]
+        )
     )
 
     print(
@@ -4309,13 +3090,6 @@ def main():
     )
 
     print(
-        "BTC/share:",
-        result[
-            "btcPerShare"
-        ]
-    )
-
-    print(
         "mNAV:",
         result[
             "mnav"
@@ -4323,38 +3097,13 @@ def main():
     )
 
     print(
-        "Gross mNAV:",
-        result[
-            "grossMnav"
-        ]
+        "Strategy mNAV:",
+        strategy_mnav
     )
 
     print(
-        "Strategy direct mNAV:",
-        company.get(
-            "strategyMnav"
-        )
-    )
-
-    print(
-        "Strategy direct Net BPS:",
-        company.get(
-            "strategyNetBpsUsd"
-        )
-    )
-
-    print(
-        "Used Strategy mNAV:",
-        result[
-            "usedStrategyMnav"
-        ]
-    )
-
-    print(
-        "Used Strategy Net BPS:",
-        result[
-            "usedStrategyNetBps"
-        ]
+        "Strategy Net BPS:",
+        strategy_net_bps
     )
 
     print(
@@ -4363,49 +3112,13 @@ def main():
     )
 
     print(
-        "Aggregate OI USD:",
-        aggregate_oi_usd
-    )
-
-    print(
         "Funding:",
         aggregate_funding
     )
 
     print(
-        "OI sources:",
-        ", ".join(
-            name
-            for name, _
-            in oi_values
-        )
-        if oi_values
-        else "NONE"
-    )
-
-    print(
-        "Funding sources:",
-        ", ".join(
-            name
-            for name, _, _
-            in funding_values
-        )
-        if funding_values
-        else "NONE"
-    )
-
-    print(
-        "mNAV percentile:",
-        percentile
-    )
-
-    print(
-        "Risk score:",
-        score
-    )
-
-    print(
-        "Risk level:",
+        "Risk:",
+        score,
         level
     )
 
@@ -4424,5 +3137,4 @@ def main():
 # =========================================================
 
 if __name__ == "__main__":
-
     main()
