@@ -5,13 +5,8 @@
   "usdAssetsUsdB": 6.69,
   "debtUsdB": 6.754,
   "preferredUsdB": 14.966,
-  "source": "Strategy Investor Briefing / SEC Form 8-K",
+  "source": "Strategy / SEC",
   "asOf": "2026-08-23",
-  "notes": {
-    "btcHoldings": "840,447 BTC as of Aug. 23, 2026",
-    "usdAssets": "USD Reserve $5.10B + USD Cash $1.59B",
-    "debt": "Debt notional $6.754B",
-    "preferred": "Preferred stock notional $14.966B",
-    "fdso": "Approximately 419.9M fully diluted shares implied by Strategy Net BPS framework"
-  }
+  "notes": "BTC holdings and, when available, the complete capital-stack snapshot (USD Assets, Debt, Preferred Stock and Net Reserve) are refreshed from recent Strategy SEC 8-K filings. Capital-stack values are only replaced when all four figures are found in the same filing, preventing mixed-date data.",
+  "updatedAt": "2026-08-31T02:53:16.525602+00:00"
 }
