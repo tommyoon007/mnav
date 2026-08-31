@@ -3,172 +3,181 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MSTR mNAV Tracker</title>
+    <title>MSTR mNAV</title>
+    <link rel="stylesheet" href="style.css?v=4">
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#121212">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body { background-color: #121212; color: #e0e0e0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        .card { background-color: #1e1e1e; border: 1px solid #2d2d2d; }
-    </style>
+    <meta name="theme-color" content="#1a365d">
 </head>
-<body class="p-4 max-w-md mx-auto min-h-screen flex flex-col justify-between">
+<body>
 
-    <div>
-        <!-- 헤더 -->
-        <div class="flex justify-between items-center mb-4 pb-2 border-b border-gray-800">
-            <h1 class="text-base font-bold text-white">MSTR mNAV Tracker</h1>
-            <button onclick="fetchPrices()" class="bg-gray-800 hover:bg-gray-700 text-xs text-gray-200 px-3 py-1.5 rounded border border-gray-700 transition">
-                🔄 갱신
-            </button>
-        </div>
+    <div class="container">
 
-        <!-- 메인 mNAV 배수 카드 -->
-        <div class="card rounded-xl p-4 mb-3 text-center">
-            <div class="text-xs text-gray-400 mb-1">mNAV Multiple (프리미엄 배수)</div>
-            <div class="text-3xl font-bold text-white my-1" id="mnav-multiple">0.00x</div>
-            <div class="inline-block text-xs font-semibold px-2 py-0.5 rounded mt-1" id="premium-badge">0.0%</div>
-        </div>
+        <header>
+            <h1>₿ MSTR mNAV</h1>
+            <p>Strategy 공식 Net Reserve 기반</p>
+        </header>
 
-        <!-- 주가 및 NAV 상세 정보 -->
-        <div class="grid grid-cols-2 gap-2 mb-3">
-            <div class="card p-3 rounded-xl">
-                <div class="text-xs text-gray-400">비트코인 (BTC)</div>
-                <div class="text-lg font-bold text-white mt-1" id="btc-price">$0</div>
-            </div>
-            <div class="card p-3 rounded-xl">
-                <div class="text-xs text-gray-400">MSTR 현재가</div>
-                <div class="text-lg font-bold text-white mt-1" id="mstr-price">$0.00</div>
-            </div>
-            <div class="card p-3 rounded-xl">
-                <div class="text-xs text-gray-400">주당 NAV</div>
-                <div class="text-lg font-bold text-white mt-1" id="nav-per-share">$0.00</div>
-            </div>
-            <div class="card p-3 rounded-xl">
-                <div class="text-xs text-gray-400">BTC 총 자산가치</div>
-                <div class="text-lg font-bold text-white mt-1" id="total-nav">$0.00B</div>
-            </div>
-        </div>
+        <section class="input-section">
+            <h2>⚡ 자동 데이터</h2>
 
-        <!-- 내 포트폴리오 -->
-        <div class="card rounded-xl p-4 mb-3">
-            <div class="text-xs font-bold text-gray-400 mb-2">내 포트폴리오 (97주 @ $173.65)</div>
-            <div class="flex justify-between items-baseline mb-1">
-                <span class="text-xs text-gray-400">평가 금액</span>
-                <span class="text-base font-bold text-white" id="port-val">$0.00</span>
+            <div class="notice">
+                <strong>자동 업데이트</strong><br>
+                Strategy / SEC 기준 데이터를 사용합니다.<br>
+                <span id="dataStatus">데이터 불러오는 중...</span>
             </div>
-            <div class="flex justify-between items-baseline">
-                <span class="text-xs text-gray-400">수익률 / 손익</span>
-                <span class="text-sm font-bold" id="port-pnl">0.00%</span>
-            </div>
-        </div>
 
-        <!-- 설정 패널 -->
-        <details class="card rounded-xl p-3 mb-3">
-            <summary class="text-xs font-bold text-gray-400 cursor-pointer">⚙️ 입력값 수정 (수동 설정)</summary>
-            <div class="mt-3 space-y-2 text-xs border-t border-gray-800 pt-3">
-                <div class="flex justify-between items-center">
-                    <span class="text-gray-400">MSTR 수동 주가 ($)</span>
-                    <input type="number" id="cfg-mstr" class="w-28 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-right text-white" value="130.00" onchange="calculate()">
+            <div class="input-grid">
+                <div class="input-group">
+                    <label for="btcPrice">BTC 가격 ($)</label>
+                    <input id="btcPrice" type="number" inputmode="decimal" step="any" placeholder="0">
                 </div>
-                <div class="flex justify-between items-center">
-                    <span class="text-gray-400">보유 BTC 수량 (개)</span>
-                    <input type="number" id="cfg-btc" class="w-28 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-right text-white" value="428120" onchange="calculate()">
+
+                <div class="input-group">
+                    <label for="mstrPrice">MSTR 주가 ($)</label>
+                    <input id="mstrPrice" type="number" inputmode="decimal" step="any" placeholder="0">
                 </div>
-                <div class="flex justify-between items-center">
-                    <span class="text-gray-400">희석 주식수</span>
-                    <input type="number" id="cfg-shares" class="w-28 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-right text-white" value="285000000" onchange="calculate()">
+
+                <div class="input-group">
+                    <label for="btcHoldings">BTC 보유량</label>
+                    <input id="btcHoldings" type="number" readonly>
                 </div>
-                <div class="flex justify-between items-center">
-                    <span class="text-gray-400">순채무 ($)</span>
-                    <input type="number" id="cfg-debt" class="w-28 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-right text-white" value="4000000000" onchange="calculate()">
+
+                <div class="input-group">
+                    <label for="assumedShares">ADSO (M)</label>
+                    <input id="assumedShares" type="number" readonly>
                 </div>
-                <div class="flex justify-between items-center">
-                    <span class="text-gray-400">내 주식수 (주)</span>
-                    <input type="number" id="cfg-my-shares" class="w-28 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-right text-white" value="97" onchange="calculate()">
-                </div>
-                <div class="flex justify-between items-center">
-                    <span class="text-gray-400">내 매수 평단가 ($)</span>
-                    <input type="number" id="cfg-my-avg" class="w-28 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-right text-white" value="173.65" onchange="calculate()">
+
+                <div class="input-group">
+                    <label for="fullyDilutedShares">FDSO (M)</label>
+                    <input id="fullyDilutedShares" type="number" readonly>
                 </div>
             </div>
-        </details>
+        </section>
+
+        <section class="result-section">
+            <h2>📊 핵심 결과</h2>
+
+            <div class="result-grid">
+                <div class="result-card">
+                    <div class="result-label">Gross BTC / Share</div>
+                    <div class="result-value" id="grossBpsSats">-</div>
+                    <div class="small">Sats</div>
+                </div>
+
+                <div class="result-card">
+                    <div class="result-label">Net BTC / Share</div>
+                    <div class="result-value" id="netBpsSats">-</div>
+                    <div class="small">Sats</div>
+                </div>
+
+                <div class="result-card highlight">
+                    <div class="result-label">Net BTC / Share</div>
+                    <div class="result-value" id="netBpsUsd">-</div>
+                    <div class="small">mNAV 분모</div>
+                </div>
+
+                <div class="result-card highlight">
+                    <div class="result-label">현재 mNAV</div>
+                    <div class="result-value large" id="mnavMultiple">-</div>
+                    <div class="small" id="premium">-</div>
+                </div>
+            </div>
+
+            <div class="signal" id="signal">-</div>
+        </section>
+
+        <section class="detail-section">
+            <h2>🔎 계산 내역</h2>
+
+            <div class="detail-grid">
+                <div>
+                    <span>BTC 총 가치</span>
+                    <strong id="btcTotalValue">-</strong>
+                </div>
+                <div>
+                    <span>Debt + Preferred</span>
+                    <strong id="seniorClaims">-</strong>
+                </div>
+                <div>
+                    <span>USD Reserve</span>
+                    <strong id="reserveValue">-</strong>
+                </div>
+                <div>
+                    <span>Net BTC</span>
+                    <strong id="netBtc">-</strong>
+                </div>
+                <div>
+                    <span>Gross BPS ($)</span>
+                    <strong id="grossBpsUsd">-</strong>
+                </div>
+                <div>
+                    <span>FDSO</span>
+                    <strong id="fdsoDisplay">-</strong>
+                </div>
+            </div>
+        </section>
+
+        <section class="quick-calc-section">
+            <h2>🧮 BTC 가격별 MSTR 목표가</h2>
+
+            <div class="quick-calc-card">
+                <div class="input-grid">
+                    <div class="input-group">
+                        <label for="targetBtcPrice">목표 BTC 가격</label>
+                        <input id="targetBtcPrice" type="number" inputmode="decimal" value="100000" step="any">
+                    </div>
+
+                    <div class="input-group">
+                        <label for="targetMnav">목표 mNAV</label>
+                        <input id="targetMnav" type="number" inputmode="decimal" value="1.5" step="0.05">
+                    </div>
+                </div>
+
+                <button onclick="targetPrice()" class="btn-primary">
+                    MSTR 가격 예측
+                </button>
+
+                <div class="prediction-result">
+                    <div class="result-label">예상 MSTR 가격</div>
+                    <div class="result-value" id="predictedMstrPrice">-</div>
+                    <div class="small" id="predictedNetBps">-</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="scenario-section">
+            <h2>📈 빠른 시나리오</h2>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>BTC</th>
+                            <th>1×</th>
+                            <th>1.25×</th>
+                            <th>1.5×</th>
+                            <th>2×</th>
+                            <th>2.5×</th>
+                            <th>3×</th>
+                        </tr>
+                    </thead>
+                    <tbody id="scenarioTable"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <footer>
+            <p><strong>⚠️ 나는 반드시 백만장자가 된다^^</strong></p>
+            <p>Strategy 공식 자료 기반 mNAV 보조 계산기</p>
+            <a href="https://www.strategy.com/notes" target="_blank">Strategy Notes</a>
+            ·
+            <a href="https://github.com/tommyoon007/mnav" target="_blank">GitHub</a>
+        </footer>
+
     </div>
 
-    <script>
-        let btcPrice = 0;
-
-        function loadCfg() {
-            const saved = localStorage.getItem('mnav_cfg');
-            if (saved) {
-                const c = JSON.parse(saved);
-                document.getElementById('cfg-mstr').value = c.mstr || 130;
-                document.getElementById('cfg-btc').value = c.btc || 428120;
-                document.getElementById('cfg-shares').value = c.shares || 285000000;
-                document.getElementById('cfg-debt').value = c.debt || 4000000000;
-                document.getElementById('cfg-my-shares').value = c.myShares || 97;
-                document.getElementById('cfg-my-avg').value = c.myAvg || 173.65;
-            }
-        }
-
-        function saveCfg() {
-            const c = {
-                mstr: parseFloat(document.getElementById('cfg-mstr').value),
-                btc: parseFloat(document.getElementById('cfg-btc').value),
-                shares: parseFloat(document.getElementById('cfg-shares').value),
-                debt: parseFloat(document.getElementById('cfg-debt').value),
-                myShares: parseFloat(document.getElementById('cfg-my-shares').value),
-                myAvg: parseFloat(document.getElementById('cfg-my-avg').value)
-            };
-            localStorage.setItem('mnav_cfg', JSON.stringify(c));
-        }
-
-        async function fetchPrices() {
-            try {
-                const res = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT');
-                const data = await res.json();
-                btcPrice = parseFloat(data.price);
-            } catch (e) {}
-            calculate();
-        }
-
-        function calculate() {
-            saveCfg();
-            const mstrPrice = parseFloat(document.getElementById('cfg-mstr').value) || 0;
-            const btcHoldings = parseFloat(document.getElementById('cfg-btc').value) || 0;
-            const shares = parseFloat(document.getElementById('cfg-shares').value) || 1;
-            const debt = parseFloat(document.getElementById('cfg-debt').value) || 0;
-            const myShares = parseFloat(document.getElementById('cfg-my-shares').value) || 0;
-            const myAvg = parseFloat(document.getElementById('cfg-my-avg').value) || 0;
-
-            const btcVal = btcHoldings * (btcPrice || 90000);
-            const netNav = btcVal - debt;
-            const navPerShare = netNav / shares;
-            const mnav = navPerShare > 0 ? (mstrPrice / navPerShare) : 0;
-            const prem = (mnav - 1) * 100;
-
-            document.getElementById('mnav-multiple').innerText = `${mnav.toFixed(2)}x`;
-            const badge = document.getElementById('premium-badge');
-            badge.innerText = `${prem >= 0 ? '+' : ''}${prem.toFixed(1)}% ${prem >= 0 ? '프리미엄' : '할인'}`;
-            badge.className = `inline-block text-xs font-semibold px-2 py-0.5 rounded mt-1 ${prem >= 0 ? 'bg-red-900/50 text-red-300' : 'bg-green-900/50 text-green-300'}`;
-
-            document.getElementById('btc-price').innerText = `$${(btcPrice || 0).toLocaleString()}`;
-            document.getElementById('mstr-price').innerText = `$${mstrPrice.toFixed(2)}`;
-            document.getElementById('nav-per-share').innerText = `$${navPerShare.toFixed(2)}`;
-            document.getElementById('total-nav').innerText = `$${(netNav / 1e9).toFixed(2)}B`;
-
-            const myVal = myShares * mstrPrice;
-            const myCost = myShares * myAvg;
-            const myPnl = myVal - myCost;
-            const myPnlPct = myCost > 0 ? (myPnl / myCost) * 100 : 0;
-
-            document.getElementById('port-val').innerText = `$${myVal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-            const pnlEl = document.getElementById('port-pnl');
-            pnlEl.innerText = `${myPnlPct >= 0 ? '+' : ''}${myPnlPct.toFixed(2)}% ($${myPnl.toFixed(0)})`;
-            pnlEl.className = `text-sm font-bold ${myPnlPct >= 0 ? 'text-red-400' : 'text-blue-400'}`;
-        }
-
-        window.onload = () => { loadCfg(); fetchPrices(); };
-    </script>
+    <script src="warning.js"></script>
+    <script src="script.js"></script>
+    <script src="history.js"></script>
 </body>
 </html>
