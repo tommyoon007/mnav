@@ -1,18 +1,19 @@
 // =========================================================
-// MSTR mNAV DASHBOARD - MULTI-API POWERED SCRIPT
+// MSTR mNAV DASHBOARD - FIXED & OPTIMIZED SCRIPT
 // =========================================================
 
 const FINNHUB_KEY = "daaruppr01qn50rjdv2gdaaruppr01qn50rjdv30";
 
+// 올바른 표준 재무 데이터 (ADSO: ~298M, FDSO: ~424M)
 const DEFAULT_DATA = {
     btcHoldings: 845050,
-    adso: 298.039,
-    fdso: 424.479,
+    adso: 298.039,      // Assumed Diluted Shares
+    fdso: 424.479,      // Fully Diluted Shares (항상 ADSO보다 큼)
     usdAssetsUsdB: 6.690,
     debtUsdB: 6.754,
     preferredUsdB: 14.966,
     fallbackBtcPrice: 95000,
-    fallbackMstrPrice: 300
+    fallbackMstrPrice: 130
 };
 
 let currentData = { ...DEFAULT_DATA };
@@ -82,48 +83,13 @@ async function fetchLiveBtcPrice() {
     return null;
 }
 
-// 2. 실시간 MSTR 주가 수집 (Yahoo Finance -> Finnhub -> Stooq -> TradingView)
+// 2. 실시간 MSTR 주가 수집 (TradingView 우회 -> CodeTabs -> AllOrigins -> Finnhub)
 async function fetchLiveMstrPrice() {
-    // 1차: Yahoo Finance API (corsproxy.io 활용)
-    try {
-        const targetUrl = "https://query1.finance.yahoo.com/v8/finance/chart/MSTR?interval=1m&range=1d";
-        const proxyUrl = "https://corsproxy.io/?" + encodeURIComponent(targetUrl);
-        const res = await fetchWithTimeout(proxyUrl, 3000);
-        if (res && res.ok) {
-            const data = await res.json();
-            const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
-            if (price && price > 0) return parseFloat(price);
-        }
-    } catch (e) {}
-
-    // 2차: Finnhub API
-    if (FINNHUB_KEY) {
-        try {
-            const res = await fetchWithTimeout(`https://finnhub.io/api/v1/quote?symbol=MSTR&token=${FINNHUB_KEY}`, 3000);
-            if (res && res.ok) {
-                const data = await res.json();
-                const price = (data?.c > 0) ? data.c : data?.pc;
-                if (price && price > 0) return parseFloat(price);
-            }
-        } catch (e) {}
-    }
-
-    // 3차: Stooq API (corsproxy.io 적용)
-    try {
-        const targetUrl = "https://stooq.com/q/l/?s=mstr.us&f=sdgl1vcn&e=json";
-        const res = await fetchWithTimeout("https://corsproxy.io/?" + encodeURIComponent(targetUrl), 3000);
-        if (res && res.ok) {
-            const data = await res.json();
-            const price = parseFloat(data?.symbols?.[0]?.close);
-            if (price && price > 0) return parseFloat(price);
-        }
-    } catch (e) {}
-
-    // 4차: TradingView Scanner API
+    // 1차: TradingView Scanner (Preflight 우회를 위해 text/plain 헤더 사용)
     try {
         const res = await fetchWithTimeout("https://scanner.tradingview.com/america/scan", 3000, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "text/plain" },
             body: JSON.stringify({
                 symbols: { tickers: ["NASDAQ:MSTR"] },
                 columns: ["close"]
@@ -135,6 +101,40 @@ async function fetchLiveMstrPrice() {
             if (price && price > 0) return parseFloat(price);
         }
     } catch (e) {}
+
+    // 2차: Yahoo Finance via CodeTabs Proxy
+    try {
+        const targetUrl = "https://query1.finance.yahoo.com/v8/finance/chart/MSTR?interval=1m&range=1d";
+        const res = await fetchWithTimeout("https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(targetUrl), 3000);
+        if (res && res.ok) {
+            const data = await res.json();
+            const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
+            if (price && price > 0) return parseFloat(price);
+        }
+    } catch (e) {}
+
+    // 3차: Yahoo Finance via AllOrigins Proxy
+    try {
+        const targetUrl = "https://query1.finance.yahoo.com/v8/finance/chart/MSTR?interval=1m&range=1d";
+        const res = await fetchWithTimeout("https://api.allorigins.win/raw?url=" + encodeURIComponent(targetUrl), 3000);
+        if (res && res.ok) {
+            const data = await res.json();
+            const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
+            if (price && price > 0) return parseFloat(price);
+        }
+    } catch (e) {}
+
+    // 4차: Finnhub API
+    if (FINNHUB_KEY) {
+        try {
+            const res = await fetchWithTimeout(`https://finnhub.io/api/v1/quote?symbol=MSTR&token=${FINNHUB_KEY}`, 3000);
+            if (res && res.ok) {
+                const data = await res.json();
+                const price = (data?.c > 0) ? data.c : data?.pc;
+                if (price && price > 0) return parseFloat(price);
+            }
+        } catch (e) {}
+    }
 
     return null;
 }
@@ -193,6 +193,7 @@ function calculateDashboard(data = currentData) {
     if (currentBtcPrice <= 0) currentBtcPrice = DEFAULT_DATA.fallbackBtcPrice;
     if (currentMstrPrice <= 0) currentMstrPrice = DEFAULT_DATA.fallbackMstrPrice;
 
+    // FDSO 사용 (완전 희석 주식 수)
     const fdsoShares = data.fdso * 1_000_000;
     const usdAssets = data.usdAssetsUsdB * 1_000_000_000;
     const debt = data.debtUsdB * 1_000_000_000;
@@ -236,11 +237,7 @@ function calculateDashboard(data = currentData) {
 
 // 6. 메인 로드 및 주기적 업데이트
 async function updateDashboard() {
-    setVal("btcHoldings", currentData.btcHoldings);
-    setVal("assumedShares", currentData.adso.toFixed(3));
-    setVal("fullyDilutedShares", currentData.fdso.toFixed(3));
-    calculateDashboard(currentData);
-
+    // 외부 data.json 로드 시도
     try {
         const res = await fetchWithTimeout("./data.json?cache=" + Date.now(), 2000);
         if (res && res.ok) {
@@ -251,12 +248,19 @@ async function updateDashboard() {
             currentData.usdAssetsUsdB = parseFloat(json.usdAssetsUsdB) || currentData.usdAssetsUsdB;
             currentData.debtUsdB = parseFloat(json.debtUsdB) || currentData.debtUsdB;
             currentData.preferredUsdB = parseFloat(json.preferredUsdB) || currentData.preferredUsdB;
-
-            setVal("btcHoldings", currentData.btcHoldings);
-            setVal("assumedShares", currentData.adso.toFixed(3));
-            setVal("fullyDilutedShares", currentData.fdso.toFixed(3));
         }
     } catch (e) {}
+
+    // 주식 수 검증 및 자동 위치 교정 (ADSO는 항상 FDSO보다 작음)
+    if (currentData.adso > currentData.fdso) {
+        const temp = currentData.adso;
+        currentData.adso = currentData.fdso;
+        currentData.fdso = temp;
+    }
+
+    setVal("btcHoldings", currentData.btcHoldings);
+    setVal("assumedShares", currentData.adso.toFixed(3));
+    setVal("fullyDilutedShares", currentData.fdso.toFixed(3));
 
     try {
         const [fetchedBtc, fetchedMstr] = await Promise.all([
@@ -270,11 +274,6 @@ async function updateDashboard() {
 
         if (fetchedMstr && fetchedMstr > 0) {
             setVal("mstrPrice", fetchedMstr.toFixed(2));
-        } else {
-            const currentVal = getNum("mstrPrice");
-            if (currentVal <= 0) {
-                setVal("mstrPrice", DEFAULT_DATA.fallbackMstrPrice);
-            }
         }
 
         const now = new Date();
@@ -283,7 +282,7 @@ async function updateDashboard() {
         if (fetchedMstr && fetchedMstr > 0) {
             setText("dataStatus", `최신 데이터 연동 완료 (${timeStr})`);
         } else {
-            setText("dataStatus", `BTC 연동 완료 / MSTR 기본값 적용 (${timeStr})`);
+            setText("dataStatus", `BTC 연동 완료 / MSTR 실시간 수집 실패 (수동 입력 필요)`);
         }
     } catch (e) {
         setText("dataStatus", "실시간 시세 연동 대기 중");
