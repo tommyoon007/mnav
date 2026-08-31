@@ -1,5 +1,5 @@
 // =========================================================
-// MSTR REAL-TIME DATA FETCH & MNAV CALCULATOR
+// MSTR REAL-TIME DATA FETCH & MNAV CALCULATOR (CORS Fixed)
 // =========================================================
 
 // 1. 실시간 BTC 가격 수집 (Coinbase -> Binance Fallback)
@@ -20,16 +20,21 @@ async function fetchLiveBtcPrice() {
     }
 }
 
-// 2. 실시간 MSTR 주가 수집 (Yahoo Finance API Proxy)
+// 2. 실시간 MSTR 주가 수집 (CORS 우회 프록시 + 프리/애프터마켓 대응)
 async function fetchLiveMstrPrice() {
-    const url = "https://query1.finance.yahoo.com/v8/finance/chart/MSTR?range=1d&interval=1m";
+    const rawUrl = "https://query1.finance.yahoo.com/v8/finance/chart/MSTR?range=1d&interval=1m";
+    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(rawUrl)}`;
+
     try {
-        const res = await fetch(url);
+        const res = await fetch(proxyUrl);
         const json = await res.json();
-        const price = json.chart.result[0].meta.regularMarketPrice;
-        return parseFloat(price);
+        const meta = json.chart.result[0].meta;
+        
+        // 시간대별 가장 최신 시세(장후/장전/정규장) 적용
+        const currentPrice = meta.postMarketPrice || meta.preMarketPrice || meta.regularMarketPrice;
+        return parseFloat(currentPrice);
     } catch (e) {
-        console.warn("MSTR 주가 수집 실패:", e);
+        console.warn("MSTR 주가 수집 실패 (기본 입력값 유지):", e);
         return null;
     }
 }
@@ -94,8 +99,9 @@ async function updateDashboard() {
         document.getElementById("fdsoDisplay").textContent = `${fdso}M`;
 
         // G. mNAV 및 프리미엄 산출
-        if (mstrPrice && netBpsUsd > 0) {
-            const mnav = mstrPrice / netBpsUsd;
+        const activeMstrPrice = mstrPrice || parseFloat(document.getElementById("mstrPrice").value);
+        if (activeMstrPrice && netBpsUsd > 0) {
+            const mnav = activeMstrPrice / netBpsUsd;
             const premiumPct = (mnav - 1) * 100;
 
             document.getElementById("mnavMultiple").textContent = `${mnav.toFixed(2)}×`;
@@ -113,7 +119,7 @@ async function updateDashboard() {
 
         if (statusEl) {
             const now = new Date();
-            statusEl.textContent = `연동 완료 (${data.source || 'Strategy'} 기준) - ${now.toLocaleTimeString()}`;
+            statusEl.textContent = `실시간 연동 완료 (${data.source || 'Strategy'} 데이터 기준) - ${now.toLocaleTimeString()}`;
         }
 
         // 시나리오 테이블 자동 업데이트
@@ -149,8 +155,8 @@ function updateScenarioTable(netBpsUsd, currentBtc) {
     tbody.innerHTML = html;
 }
 
-// 5. 목표가 계산 버튼 함수
-function targetPrice() {
+// 5. 목표가 계산 버튼 함수 (data.json 동적 연동)
+async function targetPrice() {
     const targetBtc = parseFloat(document.getElementById("targetBtcPrice").value);
     const targetMnav = parseFloat(document.getElementById("targetMnav").value);
     const fdso = parseFloat(document.getElementById("fullyDilutedShares").value || 424.479) * 1_000_000;
@@ -158,11 +164,20 @@ function targetPrice() {
 
     if (!targetBtc || !targetMnav) return;
 
-    const btcValueUsd = btcHoldings * targetBtc;
-    const usdAssets = 6.690 * 1_000_000_000;
-    const debt = 6.754 * 1_000_000_000;
-    const preferred = 14.966 * 1_000_000_000;
+    // data.json에서 최신 자본 정보 불러오기
+    let usdAssets = 6.690 * 1_000_000_000;
+    let debt = 6.754 * 1_000_000_000;
+    let preferred = 14.966 * 1_000_000_000;
 
+    try {
+        const dataRes = await fetch("./data.json?cache=" + Date.now());
+        const data = await dataRes.json();
+        usdAssets = parseFloat(data.usdAssetsUsdB || 6.690) * 1_000_000_000;
+        debt = parseFloat(data.debtUsdB || 6.754) * 1_000_000_000;
+        preferred = parseFloat(data.preferredUsdB || 14.966) * 1_000_000_000;
+    } catch (e) {}
+
+    const btcValueUsd = btcHoldings * targetBtc;
     const netReserveUsd = btcValueUsd + usdAssets - debt - preferred;
     const netBpsUsd = netReserveUsd / fdso;
     const predictedMstr = netBpsUsd * targetMnav;
@@ -174,5 +189,5 @@ function targetPrice() {
 // 6. 페이지 진입 시 실행 및 10초 주기 실시간 갱신
 document.addEventListener("DOMContentLoaded", () => {
     updateDashboard();
-    setInterval(updateDashboard, 10000); // 10초마다 실시간 시세 반영
+    setInterval(updateDashboard, 10000);
 });
