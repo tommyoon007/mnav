@@ -1,10 +1,9 @@
 // =========================================================
-// MSTR mNAV DASHBOARD - COMPLETE FAILSAFE SCRIPT
+// MSTR mNAV DASHBOARD - TRADINGVIEW POWERED SCRIPT
 // =========================================================
 
 const FINNHUB_KEY = "daaruppr01qn50rjdv2gdaaruppr01qn50rjdv30";
 
-// 통신 장애 시에도 화면을 즉시 채워줄 백업 데이터
 const DEFAULT_DATA = {
     btcHoldings: 845050,
     adso: 298.039,
@@ -36,11 +35,11 @@ function getNum(id) {
     return isNaN(num) ? 0 : num;
 }
 
-async function fetchWithTimeout(url, timeoutMs = 3000) {
+async function fetchWithTimeout(url, timeoutMs = 3000, options = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-        const res = await fetch(url, { signal: controller.signal });
+        const res = await fetch(url, { ...options, signal: controller.signal });
         clearTimeout(timer);
         return res;
     } catch (e) {
@@ -49,11 +48,10 @@ async function fetchWithTimeout(url, timeoutMs = 3000) {
     }
 }
 
-// 1. 실시간 BTC 가격 수집 (3중 교차망)
+// 1. 실시간 BTC 가격 수집 (Coinbase -> Binance -> CoinGecko)
 async function fetchLiveBtcPrice() {
-    // 1차: Coinbase
     try {
-        const res = await fetchWithTimeout("https://api.coinbase.com/v2/prices/spot?currency=USD");
+        const res = await fetchWithTimeout("https://api.coinbase.com/v2/prices/spot?currency=USD", 3000);
         if (res && res.ok) {
             const data = await res.json();
             const p = parseFloat(data?.data?.amount);
@@ -61,9 +59,8 @@ async function fetchLiveBtcPrice() {
         }
     } catch (e) {}
 
-    // 2차: Binance
     try {
-        const res = await fetchWithTimeout("https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT");
+        const res = await fetchWithTimeout("https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT", 3000);
         if (res && res.ok) {
             const data = await res.json();
             const p = parseFloat(data?.price);
@@ -71,9 +68,8 @@ async function fetchLiveBtcPrice() {
         }
     } catch (e) {}
 
-    // 3차: CoinGecko
     try {
-        const res = await fetchWithTimeout("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd");
+        const res = await fetchWithTimeout("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd", 3000);
         if (res && res.ok) {
             const data = await res.json();
             const p = parseFloat(data?.bitcoin?.usd);
@@ -84,12 +80,29 @@ async function fetchLiveBtcPrice() {
     return null;
 }
 
-// 2. 실시간 MSTR 주가 수집 (3중 교차망: Finnhub + Yahoo Finance 다중 프록시)
+// 2. 실시간 MSTR 주가 수집 (TradingView -> Finnhub -> Stooq)
 async function fetchLiveMstrPrice() {
-    // 1차: Finnhub API (현재가 c > 0 이면 c 사용, 장 마감 시 전일종가 pc 사용)
+    // 1차: TradingView Scanner API (CORS 및 API 키 제한 없음)
+    try {
+        const res = await fetchWithTimeout("https://scanner.tradingview.com/america/scan", 3000, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                symbols: { tickers: ["NASDAQ:MSTR"] },
+                columns: ["close"]
+            })
+        });
+        if (res && res.ok) {
+            const data = await res.json();
+            const price = data?.data?.[0]?.d?.[0];
+            if (price && price > 0) return parseFloat(price);
+        }
+    } catch (e) {}
+
+    // 2차: Finnhub API
     if (FINNHUB_KEY) {
         try {
-            const res = await fetchWithTimeout(`https://finnhub.io/api/v1/quote?symbol=MSTR&token=${FINNHUB_KEY}`);
+            const res = await fetchWithTimeout(`https://finnhub.io/api/v1/quote?symbol=MSTR&token=${FINNHUB_KEY}`, 3000);
             if (res && res.ok) {
                 const data = await res.json();
                 const price = (data?.c > 0) ? data.c : data?.pc;
@@ -98,25 +111,13 @@ async function fetchLiveMstrPrice() {
         } catch (e) {}
     }
 
-    // 2차: Yahoo Finance API (AllOrigins 우회 프록시)
+    // 3차: Stooq API via AllOrigins Proxy
     try {
-        const targetUrl = encodeURIComponent("https://query1.finance.yahoo.com/v8/finance/chart/MSTR");
-        const res = await fetchWithTimeout(`https://api.allorigins.win/raw?url=${targetUrl}`);
+        const targetUrl = encodeURIComponent("https://stooq.com/q/l/?s=mstr.us&f=sdgl1vcn&e=json");
+        const res = await fetchWithTimeout(`https://api.allorigins.win/raw?url=${targetUrl}`, 3000);
         if (res && res.ok) {
             const data = await res.json();
-            const meta = data?.chart?.result?.[0]?.meta;
-            const price = meta?.regularMarketPrice || meta?.chartPreviousClose;
-            if (price && price > 0) return parseFloat(price);
-        }
-    } catch (e) {}
-
-    // 3차: Yahoo Finance API (Corsproxy 우회 프록시)
-    try {
-        const res = await fetchWithTimeout("https://corsproxy.io/?https://query1.finance.yahoo.com/v8/finance/chart/MSTR");
-        if (res && res.ok) {
-            const data = await res.json();
-            const meta = data?.chart?.result?.[0]?.meta;
-            const price = meta?.regularMarketPrice || meta?.chartPreviousClose;
+            const price = parseFloat(data?.symbols?.[0]?.close);
             if (price && price > 0) return parseFloat(price);
         }
     } catch (e) {}
@@ -145,7 +146,7 @@ function updateScenarioTable(netBpsUsd, currentBtc) {
     tbody.innerHTML = html;
 }
 
-// 4. MSTR 가격 예측
+// 4. MSTR 목표가 예측
 window.targetPrice = function() {
     const targetBtc = getNum("targetBtcPrice");
     const targetMnav = getNum("targetMnav");
@@ -170,7 +171,7 @@ window.targetPrice = function() {
     setText("predictedNetBps", `예상 Net BPS: $${netBpsUsd.toFixed(2)}`);
 };
 
-// 5. 화면 수치 계산 및 출력
+// 5. 대시보드 종합 계산
 function calculateDashboard(data) {
     let currentBtcPrice = getNum("btcPrice");
     let currentMstrPrice = getNum("mstrPrice");
@@ -219,17 +220,15 @@ function calculateDashboard(data) {
     window.targetPrice();
 }
 
-// 6. 메인 업데이트 로직
+// 6. 메인 로드 및 주기적 업데이트
 async function updateDashboard() {
     let currentData = { ...DEFAULT_DATA };
 
-    // [1단계] 화면 기본 데이터 채우기
     setVal("btcHoldings", currentData.btcHoldings);
     setVal("assumedShares", currentData.adso.toFixed(3));
     setVal("fullyDilutedShares", currentData.fdso.toFixed(3));
     calculateDashboard(currentData);
 
-    // [2단계] data.json 로드
     try {
         const res = await fetchWithTimeout("./data.json?cache=" + Date.now(), 2000);
         if (res && res.ok) {
@@ -247,7 +246,6 @@ async function updateDashboard() {
         }
     } catch (e) {}
 
-    // [3단계] 실시간 BTC 및 MSTR 시세 연동
     try {
         const [fetchedBtc, fetchedMstr] = await Promise.all([
             fetchLiveBtcPrice(),
@@ -260,23 +258,18 @@ async function updateDashboard() {
 
         if (fetchedMstr && fetchedMstr > 0) {
             setVal("mstrPrice", fetchedMstr.toFixed(2));
-        } else if (getNum("mstrPrice") <= 0) {
-            // 주가를 못 불러오고 기존 입력값도 0이면 백업 기본값 적용
-            setVal("mstrPrice", DEFAULT_DATA.fallbackMstrPrice);
         }
 
         const now = new Date();
         const timeStr = now.toTimeString().split(' ')[0];
         setText("dataStatus", `최신 데이터 연동 완료 (${timeStr})`);
     } catch (e) {
-        setText("dataStatus", "실시간 시세 연결 대기 중");
+        setText("dataStatus", "실시간 시세 연동 대기 중");
     }
 
-    // [4단계] 최종 재계산
     calculateDashboard(currentData);
 }
 
-// 이벤트 초기화
 document.addEventListener("DOMContentLoaded", () => {
     const savedBtc = localStorage.getItem("savedTargetBtc");
     const savedMnav = localStorage.getItem("savedTargetMnav");
@@ -290,10 +283,8 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("mstrPrice")?.addEventListener("input", () => calculateDashboard(DEFAULT_DATA));
     document.getElementById("btcPrice")?.addEventListener("input", () => calculateDashboard(DEFAULT_DATA));
 
-    // 10초 주기 자동 갱신
     setInterval(updateDashboard, 10000);
 
-    // 모바일 백그라운드 복귀 시 갱신
     document.addEventListener("visibilitychange", () => {
         if (!document.hidden) updateDashboard();
     });
