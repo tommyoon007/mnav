@@ -1,5 +1,5 @@
 // =========================================================
-// MSTR REAL-TIME DATA FETCH & MNAV CALCULATOR (Auto Swap Fixed)
+// MSTR REAL-TIME DATA FETCH & MNAV CALCULATOR (Multi-Proxy Fixed)
 // =========================================================
 
 // 1. 실시간 BTC 가격 수집 (Coinbase -> Binance Fallback)
@@ -20,24 +20,33 @@ async function fetchLiveBtcPrice() {
     }
 }
 
-// 2. 실시간 MSTR 주가 수집 (CORS 우회 프록시 + 프리/애프터마켓 대응)
+// 2. 실시간 MSTR 주가 수집 (다중 CORS 프록시 회선 적용)
 async function fetchLiveMstrPrice() {
     const rawUrl = "https://query1.finance.yahoo.com/v8/finance/chart/MSTR?range=1d&interval=1m";
-    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(rawUrl)}`;
+    
+    // 프록시 목록 (1번 실패 시 2번, 3번 시도)
+    const proxies = [
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(rawUrl)}`,
+        `https://corsproxy.io/?${encodeURIComponent(rawUrl)}`,
+        `https://thingproxy.freeboard.io/fetch/${rawUrl}`
+    ];
 
-    try {
-        const res = await fetch(proxyUrl);
-        const json = await res.json();
-        const meta = json.chart.result[0].meta;
-        const currentPrice = meta.postMarketPrice || meta.preMarketPrice || meta.regularMarketPrice;
-        return parseFloat(currentPrice);
-    } catch (e) {
-        console.warn("MSTR 주가 수집 실패:", e);
-        return null;
+    for (const proxyUrl of proxies) {
+        try {
+            const res = await fetch(proxyUrl);
+            if (!res.ok) continue;
+            const json = await res.json();
+            const meta = json.chart.result[0].meta;
+            const price = meta.postMarketPrice || meta.preMarketPrice || meta.regularMarketPrice;
+            if (price) return parseFloat(price);
+        } catch (e) {
+            console.warn(`프록시 시도 실패 (${proxyUrl}):`, e);
+        }
     }
+    return null;
 }
 
-// 3. mNAV 및 지표 계산 메인 로직
+// 3. 지표 실시간 계산 메인 로직
 async function updateDashboard() {
     const statusEl = document.getElementById("dataStatus");
     if (statusEl) statusEl.textContent = "실시간 시세 업데이트 중...";
@@ -48,45 +57,53 @@ async function updateDashboard() {
         const data = await dataRes.json();
 
         // B. 실시간 시세 병렬 수집
-        const [btcPrice, mstrPrice] = await Promise.all([
+        const [btcPrice, fetchedMstrPrice] = await Promise.all([
             fetchLiveBtcPrice(),
             fetchLiveMstrPrice()
         ]);
 
-        if (!btcPrice) {
-            if (statusEl) statusEl.textContent = "시세 수집 오류 발생";
-            return;
+        if (btcPrice) {
+            document.getElementById("btcPrice").value = btcPrice.toFixed(2);
         }
 
-        // C. 주식수 교정 (FDSO는 항상 ADSO보다 큼)
+        // MSTR 주가 수집 실패 시 사용자가 직접 입력한 값 유지
+        let mstrPrice = fetchedMstrPrice;
+        if (mstrPrice) {
+            document.getElementById("mstrPrice").value = mstrPrice.toFixed(2);
+        } else {
+            mstrPrice = parseFloat(document.getElementById("mstrPrice").value) || 0;
+        }
+
+        // C. 주식수 위치 교정 (ADSO: 작은 값, FDSO: 큰 값)
         const rawVal1 = parseFloat(data.adso || 298.039);
         const rawVal2 = parseFloat(data.fdso || 424.479);
         
-        const adso = Math.min(rawVal1, rawVal2); // 작은 수치 (298.039M)
-        const fdso = Math.max(rawVal1, rawVal2); // 큰 수치 (424.479M)
+        const adso = Math.min(rawVal1, rawVal2); // ~298.039M
+        const fdso = Math.max(rawVal1, rawVal2); // ~424.479M
         const fdsoShares = fdso * 1_000_000;
 
         // 자본 항목 파싱
+        const currentBtcPrice = parseFloat(document.getElementById("btcPrice").value) || 0;
         const btcHoldings = parseFloat(data.btcHoldings || 845050);
         const usdAssets = parseFloat(data.usdAssetsUsdB || 6.690) * 1_000_000_000;
         const debt = parseFloat(data.debtUsdB || 6.754) * 1_000_000_000;
         const preferred = parseFloat(data.preferredUsdB || 14.966) * 1_000_000_000;
 
-        // D. HTML 입력창 값 채우기
-        document.getElementById("btcPrice").value = btcPrice.toFixed(2);
-        if (mstrPrice) document.getElementById("mstrPrice").value = mstrPrice.toFixed(2);
+        // D. HTML 입력창 세팅
         document.getElementById("btcHoldings").value = btcHoldings;
         document.getElementById("assumedShares").value = adso.toFixed(3);
         document.getElementById("fullyDilutedShares").value = fdso.toFixed(3);
 
+        if (currentBtcPrice <= 0) return;
+
         // E. 핵심 지표 계산
-        const btcValueUsd = btcHoldings * btcPrice;
+        const btcValueUsd = btcHoldings * currentBtcPrice;
         const grossBpsUsd = btcValueUsd / fdsoShares;
         const grossBpsSats = (btcHoldings / fdsoShares) * 100_000_000;
 
         const netReserveUsd = btcValueUsd + usdAssets - debt - preferred;
         const netBpsUsd = netReserveUsd / fdsoShares;
-        const netBtcHoldings = netReserveUsd / btcPrice;
+        const netBtcHoldings = netReserveUsd / currentBtcPrice;
         const netBpsSats = (netBtcHoldings / fdsoShares) * 100_000_000;
 
         // F. 화면 수치 반영
@@ -101,16 +118,14 @@ async function updateDashboard() {
         document.getElementById("grossBpsUsd").textContent = `$${grossBpsUsd.toFixed(2)}`;
         document.getElementById("fdsoDisplay").textContent = `${fdso.toFixed(3)}M`;
 
-        // G. mNAV 및 프리미엄 산출
-        const activeMstrPrice = mstrPrice || parseFloat(document.getElementById("mstrPrice").value);
-        if (activeMstrPrice && netBpsUsd > 0) {
-            const mnav = activeMstrPrice / netBpsUsd;
+        // G. mNAV 계산
+        if (mstrPrice > 0 && netBpsUsd > 0) {
+            const mnav = mstrPrice / netBpsUsd;
             const premiumPct = (mnav - 1) * 100;
 
             document.getElementById("mnavMultiple").textContent = `${mnav.toFixed(2)}×`;
             document.getElementById("premium").textContent = `프리미엄: ${premiumPct >= 0 ? '+' : ''}${premiumPct.toFixed(1)}%`;
 
-            // 신호 문구
             const signalEl = document.getElementById("signal");
             if (signalEl) {
                 if (mnav < 1.0) signalEl.textContent = "🟢 저평가 구간 (mNAV < 1.0)";
@@ -118,15 +133,17 @@ async function updateDashboard() {
                 else if (mnav < 2.2) signalEl.textContent = "🟠 주의 구간 (mNAV 1.5 ~ 2.2)";
                 else signalEl.textContent = "🔴 과열 구간 (mNAV 2.2+)";
             }
+        } else {
+            document.getElementById("mnavMultiple").textContent = "-";
+            document.getElementById("premium").textContent = "MSTR 주가를 입력해 주세요";
         }
 
         if (statusEl) {
             const now = new Date();
-            statusEl.textContent = `실시간 연동 완료 (${data.source || 'Strategy'} 기준) - ${now.toLocaleTimeString()}`;
+            statusEl.textContent = `연동 완료 (${data.source || 'Strategy'} 기준) - ${now.toLocaleTimeString()}`;
         }
 
-        // 시나리오 테이블 자동 업데이트
-        updateScenarioTable(netBpsUsd, btcPrice);
+        updateScenarioTable(netBpsUsd, currentBtcPrice);
 
     } catch (error) {
         console.error("대시보드 업데이트 오류:", error);
@@ -134,7 +151,7 @@ async function updateDashboard() {
     }
 }
 
-// 4. 빠른 시나리오 테이블 작성
+// 4. 시나리오 테이블 작성
 function updateScenarioTable(netBpsUsd, currentBtc) {
     const tbody = document.getElementById("scenarioTable");
     if (!tbody || !netBpsUsd) return;
@@ -158,7 +175,7 @@ function updateScenarioTable(netBpsUsd, currentBtc) {
     tbody.innerHTML = html;
 }
 
-// 5. 목표가 계산 버튼 함수
+// 5. 목표가 계산 함수
 async function targetPrice() {
     const targetBtc = parseFloat(document.getElementById("targetBtcPrice").value);
     const targetMnav = parseFloat(document.getElementById("targetMnav").value);
@@ -188,8 +205,13 @@ async function targetPrice() {
     document.getElementById("predictedNetBps").textContent = `예상 Net BPS: $${netBpsUsd.toFixed(2)}`;
 }
 
-// 6. 페이지 진입 시 실행 및 10초 주기 실시간 갱신
+// 6. 이벤트 리스너 등록 (수동 입력 시 즉시 recalculate)
 document.addEventListener("DOMContentLoaded", () => {
     updateDashboard();
+    
+    // 사용자가 MSTR 주가나 BTC 가격을 수동으로 입력할 때 즉시 계산
+    document.getElementById("mstrPrice")?.addEventListener("input", updateDashboard);
+    document.getElementById("btcPrice")?.addEventListener("input", updateDashboard);
+
     setInterval(updateDashboard, 10000);
 });
