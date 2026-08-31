@@ -3,413 +3,172 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MSTR Dashboard</title>
+    <title>MSTR mNAV Tracker</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#121212">
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        :root {
-            --bg-color: #0f172a;
-            --card-bg: #1e293b;
-            --text-main: #f8fafc;
-            --text-sub: #94a3b8;
-            --accent: #38bdf8;
-            --border: #334155;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            margin: 0;
-            padding: 16px;
-            box-sizing: border-box;
-        }
-
-        .container {
-            max-width: 600px;
-            margin: 0 auto;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-
-        .card {
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 20px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        }
-
-        h2, h3 {
-            margin: 0 0 12px 0;
-            font-size: 1.1rem;
-            color: var(--accent);
-        }
-
-        .input-group {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-bottom: 12px;
-        }
-
-        .field {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        label {
-            font-size: 0.8rem;
-            color: var(--text-sub);
-        }
-
-        input {
-            background: #0f172a;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            color: #fff;
-            padding: 10px;
-            font-size: 1rem;
-            width: 100%;
-            box-sizing: border-box;
-        }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-        }
-
-        .stat-item {
-            background: rgba(255,255,255,0.02);
-            padding: 12px;
-            border-radius: 8px;
-            border: 1px solid rgba(255,255,255,0.05);
-        }
-
-        .stat-label {
-            font-size: 0.75rem;
-            color: var(--text-sub);
-        }
-
-        .stat-value {
-            font-size: 1.1rem;
-            font-weight: bold;
-            margin-top: 4px;
-        }
-
-        /* 🚦 레버리지 경고등 스타일 */
-        .warning-box {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 16px;
-            text-align: center;
-        }
-
-        #leverageSignal {
-            font-size: 1.1rem;
-            font-weight: bold;
-            color: #ffb74d;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.85rem;
-            text-align: center;
-        }
-
-        th, td {
-            padding: 8px 4px;
-            border-bottom: 1px solid var(--border);
-        }
-
-        th {
-            color: var(--text-sub);
-            font-weight: 500;
-        }
+        body { background-color: #121212; color: #e0e0e0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        .card { background-color: #1e1e1e; border: 1px solid #2d2d2d; }
     </style>
 </head>
-<body>
+<body class="p-4 max-w-md mx-auto min-h-screen flex flex-col justify-between">
 
-<div class="container">
-    <!-- 1. 실시간 가격 및 입력 -->
-    <div class="card">
-        <h2>📊 MSTR & BTC 실시간 시세</h2>
-        <div class="input-group">
-            <div class="field">
-                <label>BTC 가격 ($)</label>
-                <input type="number" id="btcPrice" placeholder="수집 중...">
+    <div>
+        <!-- 헤더 -->
+        <div class="flex justify-between items-center mb-4 pb-2 border-b border-gray-800">
+            <h1 class="text-base font-bold text-white">MSTR mNAV Tracker</h1>
+            <button onclick="fetchPrices()" class="bg-gray-800 hover:bg-gray-700 text-xs text-gray-200 px-3 py-1.5 rounded border border-gray-700 transition">
+                🔄 갱신
+            </button>
+        </div>
+
+        <!-- 메인 mNAV 배수 카드 -->
+        <div class="card rounded-xl p-4 mb-3 text-center">
+            <div class="text-xs text-gray-400 mb-1">mNAV Multiple (프리미엄 배수)</div>
+            <div class="text-3xl font-bold text-white my-1" id="mnav-multiple">0.00x</div>
+            <div class="inline-block text-xs font-semibold px-2 py-0.5 rounded mt-1" id="premium-badge">0.0%</div>
+        </div>
+
+        <!-- 주가 및 NAV 상세 정보 -->
+        <div class="grid grid-cols-2 gap-2 mb-3">
+            <div class="card p-3 rounded-xl">
+                <div class="text-xs text-gray-400">비트코인 (BTC)</div>
+                <div class="text-lg font-bold text-white mt-1" id="btc-price">$0</div>
             </div>
-            <div class="field">
-                <label>MSTR 주가 ($)</label>
-                <input type="number" id="mstrPrice" placeholder="수집 중...">
+            <div class="card p-3 rounded-xl">
+                <div class="text-xs text-gray-400">MSTR 현재가</div>
+                <div class="text-lg font-bold text-white mt-1" id="mstr-price">$0.00</div>
+            </div>
+            <div class="card p-3 rounded-xl">
+                <div class="text-xs text-gray-400">주당 NAV</div>
+                <div class="text-lg font-bold text-white mt-1" id="nav-per-share">$0.00</div>
+            </div>
+            <div class="card p-3 rounded-xl">
+                <div class="text-xs text-gray-400">BTC 총 자산가치</div>
+                <div class="text-lg font-bold text-white mt-1" id="total-nav">$0.00B</div>
             </div>
         </div>
-        <div class="stats-grid">
-            <div class="stat-item">
-                <div class="stat-label">mNAV 배수</div>
-                <div class="stat-value" id="mnavMultiple">-</div>
+
+        <!-- 내 포트폴리오 -->
+        <div class="card rounded-xl p-4 mb-3">
+            <div class="text-xs font-bold text-gray-400 mb-2">내 포트폴리오 (97주 @ $173.65)</div>
+            <div class="flex justify-between items-baseline mb-1">
+                <span class="text-xs text-gray-400">평가 금액</span>
+                <span class="text-base font-bold text-white" id="port-val">$0.00</span>
             </div>
-            <div class="stat-item">
-                <div class="stat-label">프리미엄</div>
-                <div class="stat-value" id="premium">-</div>
+            <div class="flex justify-between items-baseline">
+                <span class="text-xs text-gray-400">수익률 / 손익</span>
+                <span class="text-sm font-bold" id="port-pnl">0.00%</span>
             </div>
         </div>
+
+        <!-- 설정 패널 -->
+        <details class="card rounded-xl p-3 mb-3">
+            <summary class="text-xs font-bold text-gray-400 cursor-pointer">⚙️ 입력값 수정 (수동 설정)</summary>
+            <div class="mt-3 space-y-2 text-xs border-t border-gray-800 pt-3">
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-400">MSTR 수동 주가 ($)</span>
+                    <input type="number" id="cfg-mstr" class="w-28 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-right text-white" value="130.00" onchange="calculate()">
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-400">보유 BTC 수량 (개)</span>
+                    <input type="number" id="cfg-btc" class="w-28 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-right text-white" value="428120" onchange="calculate()">
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-400">희석 주식수</span>
+                    <input type="number" id="cfg-shares" class="w-28 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-right text-white" value="285000000" onchange="calculate()">
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-400">순채무 ($)</span>
+                    <input type="number" id="cfg-debt" class="w-28 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-right text-white" value="4000000000" onchange="calculate()">
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-400">내 주식수 (주)</span>
+                    <input type="number" id="cfg-my-shares" class="w-28 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-right text-white" value="97" onchange="calculate()">
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-400">내 매수 평단가 ($)</span>
+                    <input type="number" id="cfg-my-avg" class="w-28 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-right text-white" value="173.65" onchange="calculate()">
+                </div>
+            </div>
+        </details>
     </div>
 
-    <!-- 2. 실시간 레버리지 경고등 -->
-    <div class="card warning-box">
-        <h3>🚦 BTC 레버리지 상태 (바이낸스 연동)</h3>
-        <div id="leverageSignal">⏳ 바이낸스 실시간 데이터 분석 중...</div>
-    </div>
+    <script>
+        let btcPrice = 0;
 
-    <!-- 3. 주당 자산 가치 (BPS) -->
-    <div class="card">
-        <h2>💡 Net BPS / 지표</h2>
-        <div class="stats-grid">
-            <div class="stat-item">
-                <div class="stat-label">Net BPS ($)</div>
-                <div class="stat-value" id="netBpsUsd">-</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">Net BPS (Sats)</div>
-                <div class="stat-value" id="netBpsSats">-</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">BTC 총 보유량</div>
-                <div class="stat-value" id="btcTotalValue">-</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">순 BTC 보유</div>
-                <div class="stat-value" id="netBtc">-</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 4. 시뮬레이터 -->
-    <div class="card">
-        <h2>🎯 목표가 예측 시뮬레이터</h2>
-        <div class="input-group">
-            <div class="field">
-                <label>목표 BTC 가격 ($)</label>
-                <input type="number" id="targetBtcPrice" placeholder="예: 100000">
-            </div>
-            <div class="field">
-                <label>목표 mNAV 배수</label>
-                <input type="number" id="targetMnav" step="0.1" placeholder="예: 2.0">
-            </div>
-        </div>
-        <div class="stats-grid">
-            <div class="stat-item" style="grid-column: span 2;">
-                <div class="stat-label">예상 MSTR 주가</div>
-                <div class="stat-value" id="predictedMstrPrice" style="color:#00e676; font-size: 1.4rem;">$0.00</div>
-                <div class="stat-label" id="predictedNetBps" style="margin-top: 4px;">예상 Net BPS: $0.00</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 5. 고정 시나리오 테이블 -->
-    <div class="card">
-        <h2>📈 BTC 가격별 MSTR 시나리오</h2>
-        <div style="overflow-x: auto;">
-            <table>
-                <thead>
-                    <tr>
-                        <th>BTC</th>
-                        <th>1.0x</th>
-                        <th>1.25x</th>
-                        <th>1.5x</th>
-                        <th>2.0x</th>
-                        <th>2.5x</th>
-                        <th>3.0x</th>
-                    </tr>
-                </thead>
-                <tbody id="scenarioTable">
-                    <tr><td colspan="7">계산 중...</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-
-<script>
-const FINNHUB_KEY = "daaruppr01qn50rjdv2gdaaruppr01qn50rjdv30";
-
-// 기본 보유량 데이터 (data.json 없이 기본값 탑재)
-const DEFAULT_DATA = {
-    btcHoldings: 845050,
-    adso: 298.039,
-    fdso: 424.479,
-    usdAssetsUsdB: 6.690,
-    debtUsdB: 6.754,
-    preferredUsdB: 14.966
-};
-
-function setSafeText(id, text) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = text;
-}
-
-// 1. 실시간 BTC 가격
-async function fetchLiveBtcPrice() {
-    try {
-        const res = await fetch("https://api.coinbase.com/v2/prices/spot?currency=USD");
-        const json = await res.json();
-        return parseFloat(json.data.amount);
-    } catch (e) {
-        try {
-            const res = await fetch("https://data-api.binance.vision/api/v3/ticker/price?symbol=BTCUSDT");
-            const json = await res.json();
-            return parseFloat(json.price);
-        } catch (err) { return null; }
-    }
-}
-
-// 2. 바이낸스 선물 (경고등 및 펀딩비)
-async function fetchFuturesData() {
-    const rawPremiumUrl = "https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT";
-    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(rawPremiumUrl)}`;
-
-    let fundingRateDecimal = 0.0001; // 기본 중립값
-
-    try {
-        const res = await fetch(proxyUrl);
-        if (res.ok) {
-            const data = await res.json();
-            fundingRateDecimal = parseFloat(data.lastFundingRate);
+        function loadCfg() {
+            const saved = localStorage.getItem('mnav_cfg');
+            if (saved) {
+                const c = JSON.parse(saved);
+                document.getElementById('cfg-mstr').value = c.mstr || 130;
+                document.getElementById('cfg-btc').value = c.btc || 428120;
+                document.getElementById('cfg-shares').value = c.shares || 285000000;
+                document.getElementById('cfg-debt').value = c.debt || 4000000000;
+                document.getElementById('cfg-my-shares').value = c.myShares || 97;
+                document.getElementById('cfg-my-avg').value = c.myAvg || 173.65;
+            }
         }
-    } catch (e) {}
 
-    const leverageEl = document.getElementById("leverageSignal");
-    if (leverageEl) {
-        if (fundingRateDecimal >= 0.0003) {
-            leverageEl.innerHTML = "🔴 <b>과열</b> (롱 포지션 과도)";
-            leverageEl.style.color = "#ff4d4d";
-        } else if (fundingRateDecimal <= -0.0001) {
-            leverageEl.innerHTML = "🟢 <b>숏 우세</b> (숏 스퀴즈 가능성 유효)";
-            leverageEl.style.color = "#00e676";
-        } else {
-            leverageEl.innerHTML = "🟡 <b>중립</b> (적정 레버리지 수준 유지 중)";
-            leverageEl.style.color = "#ffb74d";
+        function saveCfg() {
+            const c = {
+                mstr: parseFloat(document.getElementById('cfg-mstr').value),
+                btc: parseFloat(document.getElementById('cfg-btc').value),
+                shares: parseFloat(document.getElementById('cfg-shares').value),
+                debt: parseFloat(document.getElementById('cfg-debt').value),
+                myShares: parseFloat(document.getElementById('cfg-my-shares').value),
+                myAvg: parseFloat(document.getElementById('cfg-my-avg').value)
+            };
+            localStorage.setItem('mnav_cfg', JSON.stringify(c));
         }
-    }
-}
 
-// 3. MSTR 주가
-async function fetchLiveMstrPrice() {
-    if (FINNHUB_KEY) {
-        try {
-            const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=MSTR&token=${FINNHUB_KEY}`);
-            const data = await res.json();
-            if (data && data.c && data.c > 0) return parseFloat(data.c);
-        } catch (e) {}
-    }
-    return null;
-}
+        async function fetchPrices() {
+            try {
+                const res = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT');
+                const data = await res.json();
+                btcPrice = parseFloat(data.price);
+            } catch (e) {}
+            calculate();
+        }
 
-// 4. 시나리오 테이블
-function updateScenarioTable(netBpsUsd, currentBtc) {
-    const tbody = document.getElementById("scenarioTable");
-    if (!tbody || !netBpsUsd || !currentBtc) return;
+        function calculate() {
+            saveCfg();
+            const mstrPrice = parseFloat(document.getElementById('cfg-mstr').value) || 0;
+            const btcHoldings = parseFloat(document.getElementById('cfg-btc').value) || 0;
+            const shares = parseFloat(document.getElementById('cfg-shares').value) || 1;
+            const debt = parseFloat(document.getElementById('cfg-debt').value) || 0;
+            const myShares = parseFloat(document.getElementById('cfg-my-shares').value) || 0;
+            const myAvg = parseFloat(document.getElementById('cfg-my-avg').value) || 0;
 
-    const fixedBtcTargets = [70000, 80000, 90000, 100000, 120000, 150000, 200000];
-    const mnavMultipliers = [1.0, 1.25, 1.5, 2.0, 2.5, 3.0];
+            const btcVal = btcHoldings * (btcPrice || 90000);
+            const netNav = btcVal - debt;
+            const navPerShare = netNav / shares;
+            const mnav = navPerShare > 0 ? (mstrPrice / navPerShare) : 0;
+            const prem = (mnav - 1) * 100;
 
-    let html = "";
-    fixedBtcTargets.forEach(targetBtc => {
-        const ratio = targetBtc / currentBtc;
-        const targetNetBps = netBpsUsd * ratio;
-        html += `<tr><td>$${(targetBtc / 1000).toFixed(0)}k</td>`;
-        mnavMultipliers.forEach(nav => {
-            html += `<td>$${(targetNetBps * nav).toFixed(0)}</td>`;
-        });
-        html += `</tr>`;
-    });
-    tbody.innerHTML = html;
-}
+            document.getElementById('mnav-multiple').innerText = `${mnav.toFixed(2)}x`;
+            const badge = document.getElementById('premium-badge');
+            badge.innerText = `${prem >= 0 ? '+' : ''}${prem.toFixed(1)}% ${prem >= 0 ? '프리미엄' : '할인'}`;
+            badge.className = `inline-block text-xs font-semibold px-2 py-0.5 rounded mt-1 ${prem >= 0 ? 'bg-red-900/50 text-red-300' : 'bg-green-900/50 text-green-300'}`;
 
-// 5. 목표가 시뮬레이션
-function targetPrice() {
-    const targetBtc = parseFloat(document.getElementById("targetBtcPrice")?.value);
-    const targetMnav = parseFloat(document.getElementById("targetMnav")?.value);
+            document.getElementById('btc-price').innerText = `$${(btcPrice || 0).toLocaleString()}`;
+            document.getElementById('mstr-price').innerText = `$${mstrPrice.toFixed(2)}`;
+            document.getElementById('nav-per-share').innerText = `$${navPerShare.toFixed(2)}`;
+            document.getElementById('total-nav').innerText = `$${(netNav / 1e9).toFixed(2)}B`;
 
-    if (!isNaN(targetBtc)) localStorage.setItem("savedTargetBtc", targetBtc);
-    if (!isNaN(targetMnav)) localStorage.setItem("savedTargetMnav", targetMnav);
+            const myVal = myShares * mstrPrice;
+            const myCost = myShares * myAvg;
+            const myPnl = myVal - myCost;
+            const myPnlPct = myCost > 0 ? (myPnl / myCost) * 100 : 0;
 
-    if (!targetBtc || !targetMnav) return;
+            document.getElementById('port-val').innerText = `$${myVal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            const pnlEl = document.getElementById('port-pnl');
+            pnlEl.innerText = `${myPnlPct >= 0 ? '+' : ''}${myPnlPct.toFixed(2)}% ($${myPnl.toFixed(0)})`;
+            pnlEl.className = `text-sm font-bold ${myPnlPct >= 0 ? 'text-red-400' : 'text-blue-400'}`;
+        }
 
-    const fdsoShares = DEFAULT_DATA.fdso * 1_000_000;
-    const usdAssets = DEFAULT_DATA.usdAssetsUsdB * 1_000_000_000;
-    const debt = DEFAULT_DATA.debtUsdB * 1_000_000_000;
-    const preferred = DEFAULT_DATA.preferredUsdB * 1_000_000_000;
-
-    const netBpsUsd = (DEFAULT_DATA.btcHoldings * targetBtc + usdAssets - debt - preferred) / fdsoShares;
-    const predictedMstr = netBpsUsd * targetMnav;
-
-    setSafeText("predictedMstrPrice", `$${predictedMstr.toFixed(2)}`);
-    setSafeText("predictedNetBps", `예상 Net BPS: $${netBpsUsd.toFixed(2)}`);
-}
-
-// 메인 실행 함수
-async function updateDashboard() {
-    const [btcPrice, fetchedMstrPrice] = await Promise.all([fetchLiveBtcPrice(), fetchLiveMstrPrice()]);
-    fetchFuturesData();
-
-    const btcInput = document.getElementById("btcPrice");
-    if (btcPrice && btcInput) btcInput.value = btcPrice.toFixed(2);
-
-    const mstrInput = document.getElementById("mstrPrice");
-    let mstrPrice = fetchedMstrPrice || parseFloat(mstrInput?.value) || 0;
-    if (fetchedMstrPrice && mstrInput) mstrInput.value = fetchedMstrPrice.toFixed(2);
-
-    const currentBtcPrice = parseFloat(btcInput?.value) || 0;
-    if (currentBtcPrice <= 0) return;
-
-    const fdsoShares = DEFAULT_DATA.fdso * 1_000_000;
-    const usdAssets = DEFAULT_DATA.usdAssetsUsdB * 1_000_000_000;
-    const debt = DEFAULT_DATA.debtUsdB * 1_000_000_000;
-    const preferred = DEFAULT_DATA.preferredUsdB * 1_000_000_000;
-
-    const btcValueUsd = DEFAULT_DATA.btcHoldings * currentBtcPrice;
-    const netReserveUsd = btcValueUsd + usdAssets - debt - preferred;
-    const netBpsUsd = netReserveUsd / fdsoShares;
-    const netBtcHoldings = netReserveUsd / currentBtcPrice;
-    const netBpsSats = (netBtcHoldings / fdsoShares) * 100_000_000;
-
-    setSafeText("netBpsUsd", `$${netBpsUsd.toFixed(2)}`);
-    setSafeText("netBpsSats", Math.round(netBpsSats).toLocaleString());
-    setSafeText("btcTotalValue", `$${(btcValueUsd / 1_000_000_000).toFixed(2)}B`);
-    setSafeText("netBtc", `${Math.round(netBtcHoldings).toLocaleString()} ₿`);
-
-    if (mstrPrice > 0 && netBpsUsd > 0) {
-        const mnav = mstrPrice / netBpsUsd;
-        const premiumPct = (mnav - 1) * 100;
-        setSafeText("mnavMultiple", `${mnav.toFixed(2)}×`);
-        setSafeText("premium", `${premiumPct >= 0 ? '+' : ''}${premiumPct.toFixed(1)}%`);
-    }
-
-    updateScenarioTable(netBpsUsd, currentBtcPrice);
-    targetPrice();
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-    const savedBtc = localStorage.getItem("savedTargetBtc");
-    const savedMnav = localStorage.getItem("savedTargetMnav");
-    if (savedBtc) document.getElementById("targetBtcPrice").value = savedBtc;
-    if (savedMnav) document.getElementById("targetMnav").value = savedMnav;
-
-    updateDashboard();
-
-    document.getElementById("targetBtcPrice")?.addEventListener("input", targetPrice);
-    document.getElementById("targetMnav")?.addEventListener("input", targetPrice);
-    document.getElementById("mstrPrice")?.addEventListener("input", updateDashboard);
-    document.getElementById("btcPrice")?.addEventListener("input", updateDashboard);
-
-    setInterval(updateDashboard, 10000);
-});
-</script>
-
+        window.onload = () => { loadCfg(); fetchPrices(); };
+    </script>
 </body>
 </html>
