@@ -1,5 +1,5 @@
 // =========================================================
-// MSTR REAL-TIME DATA FETCH & MNAV CALCULATOR (CORS Fixed)
+// MSTR REAL-TIME DATA FETCH & MNAV CALCULATOR (Auto Swap Fixed)
 // =========================================================
 
 // 1. 실시간 BTC 가격 수집 (Coinbase -> Binance Fallback)
@@ -29,12 +29,10 @@ async function fetchLiveMstrPrice() {
         const res = await fetch(proxyUrl);
         const json = await res.json();
         const meta = json.chart.result[0].meta;
-        
-        // 시간대별 가장 최신 시세(장후/장전/정규장) 적용
         const currentPrice = meta.postMarketPrice || meta.preMarketPrice || meta.regularMarketPrice;
         return parseFloat(currentPrice);
     } catch (e) {
-        console.warn("MSTR 주가 수집 실패 (기본 입력값 유지):", e);
+        console.warn("MSTR 주가 수집 실패:", e);
         return null;
     }
 }
@@ -60,11 +58,16 @@ async function updateDashboard() {
             return;
         }
 
-        // C. 자본 수치 파싱
-        const btcHoldings = parseFloat(data.btcHoldings || 845050);
-        const adso = parseFloat(data.adso || 424.479);
-        const fdso = parseFloat(data.fdso || 424.479);
+        // C. 주식수 교정 (FDSO는 항상 ADSO보다 큼)
+        const rawVal1 = parseFloat(data.adso || 298.039);
+        const rawVal2 = parseFloat(data.fdso || 424.479);
+        
+        const adso = Math.min(rawVal1, rawVal2); // 작은 수치 (298.039M)
+        const fdso = Math.max(rawVal1, rawVal2); // 큰 수치 (424.479M)
         const fdsoShares = fdso * 1_000_000;
+
+        // 자본 항목 파싱
+        const btcHoldings = parseFloat(data.btcHoldings || 845050);
         const usdAssets = parseFloat(data.usdAssetsUsdB || 6.690) * 1_000_000_000;
         const debt = parseFloat(data.debtUsdB || 6.754) * 1_000_000_000;
         const preferred = parseFloat(data.preferredUsdB || 14.966) * 1_000_000_000;
@@ -73,8 +76,8 @@ async function updateDashboard() {
         document.getElementById("btcPrice").value = btcPrice.toFixed(2);
         if (mstrPrice) document.getElementById("mstrPrice").value = mstrPrice.toFixed(2);
         document.getElementById("btcHoldings").value = btcHoldings;
-        document.getElementById("assumedShares").value = adso;
-        document.getElementById("fullyDilutedShares").value = fdso;
+        document.getElementById("assumedShares").value = adso.toFixed(3);
+        document.getElementById("fullyDilutedShares").value = fdso.toFixed(3);
 
         // E. 핵심 지표 계산
         const btcValueUsd = btcHoldings * btcPrice;
@@ -96,7 +99,7 @@ async function updateDashboard() {
         document.getElementById("reserveValue").textContent = `$${(usdAssets / 1_000_000_000).toFixed(2)}B`;
         document.getElementById("netBtc").textContent = `${Math.round(netBtcHoldings).toLocaleString()} ₿`;
         document.getElementById("grossBpsUsd").textContent = `$${grossBpsUsd.toFixed(2)}`;
-        document.getElementById("fdsoDisplay").textContent = `${fdso}M`;
+        document.getElementById("fdsoDisplay").textContent = `${fdso.toFixed(3)}M`;
 
         // G. mNAV 및 프리미엄 산출
         const activeMstrPrice = mstrPrice || parseFloat(document.getElementById("mstrPrice").value);
@@ -119,7 +122,7 @@ async function updateDashboard() {
 
         if (statusEl) {
             const now = new Date();
-            statusEl.textContent = `실시간 연동 완료 (${data.source || 'Strategy'} 데이터 기준) - ${now.toLocaleTimeString()}`;
+            statusEl.textContent = `실시간 연동 완료 (${data.source || 'Strategy'} 기준) - ${now.toLocaleTimeString()}`;
         }
 
         // 시나리오 테이블 자동 업데이트
@@ -155,7 +158,7 @@ function updateScenarioTable(netBpsUsd, currentBtc) {
     tbody.innerHTML = html;
 }
 
-// 5. 목표가 계산 버튼 함수 (data.json 동적 연동)
+// 5. 목표가 계산 버튼 함수
 async function targetPrice() {
     const targetBtc = parseFloat(document.getElementById("targetBtcPrice").value);
     const targetMnav = parseFloat(document.getElementById("targetMnav").value);
@@ -164,7 +167,6 @@ async function targetPrice() {
 
     if (!targetBtc || !targetMnav) return;
 
-    // data.json에서 최신 자본 정보 불러오기
     let usdAssets = 6.690 * 1_000_000_000;
     let debt = 6.754 * 1_000_000_000;
     let preferred = 14.966 * 1_000_000_000;
