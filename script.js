@@ -3,7 +3,7 @@
 // =========================================================
 
 // 💡 Finnhub 무료 키가 있으시면 큰따옴표 안에 입력하세요.
-const FINNHUB_KEY = "";
+const FINNHUB_KEY = "daaruppr01qn50rjdv2gdaaruppr01qn50rjdv30";
 
 // 1. 실시간 BTC 현물 가격 수집
 async function fetchLiveBtcPrice() {
