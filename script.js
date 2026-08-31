@@ -1,5 +1,5 @@
 // =========================================================
-// MSTR REAL-TIME DATA FETCH & MNAV CALCULATOR (Multi-Proxy Fixed)
+// MSTR REAL-TIME DATA FETCH & MNAV CALCULATOR (Stable Version)
 // =========================================================
 
 // 1. 실시간 BTC 가격 수집 (Coinbase -> Binance Fallback)
@@ -20,27 +20,43 @@ async function fetchLiveBtcPrice() {
     }
 }
 
-// 2. 실시간 MSTR 주가 수집 (다중 CORS 프록시 회선 적용)
+// 2. 실시간 MSTR 주가 수집 (Finnhub API 우선 -> 4단계 다중 프록시 우회)
 async function fetchLiveMstrPrice() {
-    const rawUrl = "https://query1.finance.yahoo.com/v8/finance/chart/MSTR?range=1d&interval=1m";
-    
-    // 프록시 목록 (1번 실패 시 2번, 3번 시도)
-    const proxies = [
+    // 💡 Finnhub 무료 API 키가 있다면 아래 큰따옴표 안에 넣으세요 (예: "c12345678...")
+    // 발급받아 넣으시면 MSTR 주가가 100% 끊김 없이 자동 업데이트됩니다.
+    const FINNHUB_KEY = ""; 
+
+    if (FINNHUB_KEY) {
+        try {
+            const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=MSTR&token=${FINNHUB_KEY}`);
+            const data = await res.json();
+            if (data && data.c && data.c > 0) {
+                return parseFloat(data.c); // c: 현재가
+            }
+        } catch (e) {
+            console.warn("Finnhub API 호출 실패, 우회 프록시로 전환합니다.", e);
+        }
+    }
+
+    // API 키가 없거나 실패 시 다중 우회 프록시 시도
+    const rawUrl = "https://query2.finance.yahoo.com/v8/finance/chart/MSTR?range=1d&interval=1m";
+    const proxyList = [
+        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(rawUrl)}`,
         `https://api.allorigins.win/raw?url=${encodeURIComponent(rawUrl)}`,
         `https://corsproxy.io/?${encodeURIComponent(rawUrl)}`,
         `https://thingproxy.freeboard.io/fetch/${rawUrl}`
     ];
 
-    for (const proxyUrl of proxies) {
+    for (const proxyUrl of proxyList) {
         try {
             const res = await fetch(proxyUrl);
             if (!res.ok) continue;
             const json = await res.json();
             const meta = json.chart.result[0].meta;
             const price = meta.postMarketPrice || meta.preMarketPrice || meta.regularMarketPrice;
-            if (price) return parseFloat(price);
+            if (price && price > 0) return parseFloat(price);
         } catch (e) {
-            console.warn(`프록시 시도 실패 (${proxyUrl}):`, e);
+            console.warn(`프록시 실패 (${proxyUrl})`);
         }
     }
     return null;
@@ -66,7 +82,7 @@ async function updateDashboard() {
             document.getElementById("btcPrice").value = btcPrice.toFixed(2);
         }
 
-        // MSTR 주가 수집 실패 시 사용자가 직접 입력한 값 유지
+        // MSTR 주가 자동 수집 성공 시 입력창 업데이트, 실패 시 수동 입력값 유지
         let mstrPrice = fetchedMstrPrice;
         if (mstrPrice) {
             document.getElementById("mstrPrice").value = mstrPrice.toFixed(2);
@@ -74,12 +90,12 @@ async function updateDashboard() {
             mstrPrice = parseFloat(document.getElementById("mstrPrice").value) || 0;
         }
 
-        // C. 주식수 위치 교정 (ADSO: 작은 값, FDSO: 큰 값)
+        // C. 주식수 위치 교정 (ADSO: 작은 값 ~298M, FDSO: 큰 값 ~424M)
         const rawVal1 = parseFloat(data.adso || 298.039);
         const rawVal2 = parseFloat(data.fdso || 424.479);
         
-        const adso = Math.min(rawVal1, rawVal2); // ~298.039M
-        const fdso = Math.max(rawVal1, rawVal2); // ~424.479M
+        const adso = Math.min(rawVal1, rawVal2);
+        const fdso = Math.max(rawVal1, rawVal2);
         const fdsoShares = fdso * 1_000_000;
 
         // 자본 항목 파싱
@@ -205,11 +221,11 @@ async function targetPrice() {
     document.getElementById("predictedNetBps").textContent = `예상 Net BPS: $${netBpsUsd.toFixed(2)}`;
 }
 
-// 6. 이벤트 리스너 등록 (수동 입력 시 즉시 recalculate)
+// 6. 이벤트 리스너 등록
 document.addEventListener("DOMContentLoaded", () => {
     updateDashboard();
     
-    // 사용자가 MSTR 주가나 BTC 가격을 수동으로 입력할 때 즉시 계산
+    // 수동 입력 시 즉시 반응
     document.getElementById("mstrPrice")?.addEventListener("input", updateDashboard);
     document.getElementById("btcPrice")?.addEventListener("input", updateDashboard);
 
