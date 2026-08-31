@@ -1,5 +1,5 @@
 // =========================================================
-// MSTR DASHBOARD - FULL INTEGRATED SCRIPT (LocalStorage Auto-Save)
+// MSTR DASHBOARD - FULL INTEGRATED SCRIPT (Complete Fix)
 // =========================================================
 
 // 💡 Finnhub 무료 키가 있으시면 큰따옴표 안에 입력하세요.
@@ -22,45 +22,84 @@ async function fetchLiveBtcPrice() {
     }
 }
 
-// 2. 바이낸스 선물 API - 펀딩비 / OI / 레버리지 경고등
+// 2. 바이낸스 선물 API - 펀딩비 / OI / 레버리지 경고등 (CORS 우회 및 다중 ID 연동)
 async function fetchFuturesData() {
+    const rawPremiumUrl = "https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT";
+    const rawOiUrl = "https://fapi.binance.com/fapi/v1/openInterest?symbol=BTCUSDT";
+
+    let premiumData = null;
+    let oiData = null;
+
+    // A. 직접 호출 시도
     try {
-        const [premiumRes, oiRes] = await Promise.all([
-            fetch("https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT"),
-            fetch("https://fapi.binance.com/fapi/v1/openInterest?symbol=BTCUSDT")
+        const [pRes, oRes] = await Promise.all([
+            fetch(rawPremiumUrl),
+            fetch(rawOiUrl)
         ]);
-
-        const premiumData = await premiumRes.json();
-        const oiData = await oiRes.json();
-
-        const fundingRateDecimal = parseFloat(premiumData.lastFundingRate);
-        const fundingRatePct = (fundingRateDecimal * 100).toFixed(4);
-
-        const openInterestBtc = parseFloat(oiData.openInterest);
-        const markPrice = parseFloat(premiumData.markPrice);
-        const oiUsdBillion = ((openInterestBtc * markPrice) / 1_000_000_000).toFixed(2);
-
-        const fundingEl = document.getElementById("fundingRate") || document.getElementById("btcFundingRate");
-        if (fundingEl) fundingEl.textContent = `${fundingRatePct}%`;
-
-        const oiEl = document.getElementById("btcOpenInterest") || document.getElementById("openInterest");
-        if (oiEl) oiEl.textContent = `$${oiUsdBillion}B (${Math.round(openInterestBtc).toLocaleString()} ₿)`;
-
-        const leverageSignalEl = document.getElementById("leverageSignal") || document.getElementById("leverageWarning");
-        if (leverageSignalEl) {
-            if (fundingRateDecimal >= 0.0003) {
-                leverageSignalEl.textContent = "🔴 과열 (롱 포지션 과도)";
-                leverageSignalEl.style.color = "#ff4d4d";
-            } else if (fundingRateDecimal <= -0.0001) {
-                leverageSignalEl.textContent = "🟢 숏 우세 / 숏스퀴즈 가능성";
-                leverageSignalEl.style.color = "#00e676";
-            } else {
-                leverageSignalEl.textContent = "🟡 중립 (적정 수준)";
-                leverageSignalEl.style.color = "#ffb74d";
-            }
+        if (pRes.ok && oRes.ok) {
+            premiumData = await pRes.json();
+            oiData = await oRes.json();
         }
-    } catch (e) {
-        console.warn("선물 데이터 수집 실패:", e);
+    } catch (e) {}
+
+    // B. 직접 호출 실패 시 CORS 프록시 우회 시도
+    if (!premiumData || !oiData) {
+        const proxyList = [
+            url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+            url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
+        ];
+
+        for (const getProxyUrl of proxyList) {
+            try {
+                const [pRes, oRes] = await Promise.all([
+                    fetch(getProxyUrl(rawPremiumUrl)),
+                    fetch(getProxyUrl(rawOiUrl))
+                ]);
+                if (pRes.ok && oRes.ok) {
+                    premiumData = await pRes.json();
+                    oiData = await oRes.json();
+                    break;
+                }
+            } catch (err) {}
+        }
+    }
+
+    if (!premiumData || !oiData) return;
+
+    // 수치 가공
+    const fundingRateDecimal = parseFloat(premiumData.lastFundingRate);
+    const fundingRatePct = (fundingRateDecimal * 100).toFixed(4) + "%";
+
+    const openInterestBtc = parseFloat(oiData.openInterest);
+    const markPrice = parseFloat(premiumData.markPrice);
+    const oiUsdBillion = `$${((openInterestBtc * markPrice) / 1_000_000_000).toFixed(2)}B`;
+
+    // C. 하단 카드 및 상단 요소 다중 ID 자동 반영
+    const fundingIds = ["fundingRate", "btcFundingRate", "fundingValue", "liveFundingRate", "cardFundingRate"];
+    fundingIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = fundingRatePct;
+    });
+
+    const oiIds = ["btcOpenInterest", "openInterest", "oiValue", "liveBtcOi", "cardBtcOi"];
+    oiIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = oiUsdBillion;
+    });
+
+    // D. 레버리지 경고등
+    const leverageSignalEl = document.getElementById("leverageSignal") || document.getElementById("leverageWarning");
+    if (leverageSignalEl) {
+        if (fundingRateDecimal >= 0.0003) {
+            leverageSignalEl.textContent = "🔴 과열 (롱 포지션 과도)";
+            leverageSignalEl.style.color = "#ff4d4d";
+        } else if (fundingRateDecimal <= -0.0001) {
+            leverageSignalEl.textContent = "🟢 숏 우세 / 숏스퀴즈 가능성";
+            leverageSignalEl.style.color = "#00e676";
+        } else {
+            leverageSignalEl.textContent = "🟡 중립 (적정 수준)";
+            leverageSignalEl.style.color = "#ffb74d";
+        }
     }
 }
 
@@ -119,7 +158,7 @@ function updateScenarioTable(netBpsUsd, currentBtc) {
     tbody.innerHTML = html;
 }
 
-// 5. 목표가 계산 및 localStorage 저장/불러오기 기능
+// 5. 목표가 계산 및 localStorage 저장/불러오기
 async function targetPrice() {
     const targetBtcInput = document.getElementById("targetBtcPrice");
     const targetMnavInput = document.getElementById("targetMnav");
@@ -129,7 +168,6 @@ async function targetPrice() {
     const targetBtc = parseFloat(targetBtcInput.value);
     const targetMnav = parseFloat(targetMnavInput.value);
 
-    // 값 자동 기억 (localStorage)
     if (!isNaN(targetBtc)) localStorage.setItem("savedTargetBtc", targetBtc);
     if (!isNaN(targetMnav)) localStorage.setItem("savedTargetMnav", targetMnav);
 
@@ -162,7 +200,6 @@ async function targetPrice() {
     if (predNetBpsEl) predNetBpsEl.textContent = `예상 Net BPS: $${netBpsUsd.toFixed(2)}`;
 }
 
-// 저장된 목표가 불러오기
 function loadSavedTargetValues() {
     const savedBtc = localStorage.getItem("savedTargetBtc");
     const savedMnav = localStorage.getItem("savedTargetMnav");
@@ -187,6 +224,8 @@ async function updateDashboard() {
             fetchLiveBtcPrice(),
             fetchLiveMstrPrice()
         ]);
+        
+        // 선물 데이터 수집 실행
         fetchFuturesData();
 
         if (btcPrice) {
@@ -200,7 +239,7 @@ async function updateDashboard() {
             mstrPrice = parseFloat(document.getElementById("mstrPrice").value) || 0;
         }
 
-        // ADSO / FDSO 교정
+        // ADSO / FDSO 위치 자동 교정
         const rawVal1 = parseFloat(data.adso || 298.039);
         const rawVal2 = parseFloat(data.fdso || 424.479);
         const adso = Math.min(rawVal1, rawVal2);
@@ -261,8 +300,6 @@ async function updateDashboard() {
         }
 
         updateScenarioTable(netBpsUsd, currentBtcPrice);
-        
-        // 목표가 실시간 자동 계산
         targetPrice();
 
     } catch (error) {
@@ -272,16 +309,11 @@ async function updateDashboard() {
 
 // 7. 이벤트 리스너
 document.addEventListener("DOMContentLoaded", () => {
-    // 1) 저장된 목표가 수치 복원
     loadSavedTargetValues();
-
-    // 2) 대시보드 갱신
     updateDashboard();
 
-    // 3) 목표가 수치 변경 시 실시간 자동 저장 및 즉시 재계산
     document.getElementById("targetBtcPrice")?.addEventListener("input", targetPrice);
     document.getElementById("targetMnav")?.addEventListener("input", targetPrice);
-
     document.getElementById("mstrPrice")?.addEventListener("input", updateDashboard);
     document.getElementById("btcPrice")?.addEventListener("input", updateDashboard);
 
