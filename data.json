@@ -8,5 +8,16 @@
   "source": "Strategy.com",
   "asOf": "2026-08-31",
   "notes": "Strategy/SEC 공시 기준 재무 및 비트코인 보유량 데이터",
-  "updatedAt": "2026-08-31T02:53:16Z"
+  "updatedAt": "2026-08-31T02:53:16Z",
+  "strategyMnav": null,
+  "strategyNetBpsUsd": null,
+  "strategyGrossBpsUsd": null,
+  "strategyMstrPrice": null,
+  "strategyBtcReserveM": null,
+  "errors": [
+    "home: 403 Client Error: Forbidden for url: https://www.strategy.com/",
+    "btc: 403 Client Error: Forbidden for url: https://www.strategy.com/btc",
+    "ledger: 403 Client Error: Forbidden for url: https://www.strategy.com/ledger",
+    "shares: 403 Client Error: Forbidden for url: https://www.strategy.com/shares"
+  ]
 }

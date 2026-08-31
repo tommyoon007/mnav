@@ -1,7 +1,7 @@
 {
-  "btcPrice": 78001.0,
-  "mstrPrice": 128.11,
-  "updatedAt": "2026-08-31T13:31:45.568327+00:00",
-  "btcSource": "CoinGecko",
-  "mstrSource": "Yahoo Finance"
+  "btcPrice": 78605.48,
+  "mstrPrice": 130.16,
+  "updatedAt": "2026-08-31T16:41:36.511092+00:00",
+  "btcSource": "Coinbase",
+  "mstrSource": "Yahoo Finance (v8)"
 }
