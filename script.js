@@ -1,10 +1,10 @@
 // =========================================================
-// MSTR mNAV DASHBOARD - FAILSAFE AUTO UPDATE SCRIPT
+// MSTR mNAV DASHBOARD - COMPLETE FAILSAFE SCRIPT
 // =========================================================
 
 const FINNHUB_KEY = "daaruppr01qn50rjdv2gdaaruppr01qn50rjdv30";
 
-// 통신 장애 시에도 화면을 즉시 채워줄 안전 백업 데이터
+// 통신 장애 시에도 화면을 즉시 채워줄 백업 데이터
 const DEFAULT_DATA = {
     btcHoldings: 845050,
     adso: 298.039,
@@ -49,8 +49,9 @@ async function fetchWithTimeout(url, timeoutMs = 3000) {
     }
 }
 
-// 1. 실시간 BTC 가격 수집 (다중 교차망)
+// 1. 실시간 BTC 가격 수집 (3중 교차망)
 async function fetchLiveBtcPrice() {
+    // 1차: Coinbase
     try {
         const res = await fetchWithTimeout("https://api.coinbase.com/v2/prices/spot?currency=USD");
         if (res && res.ok) {
@@ -60,6 +61,7 @@ async function fetchLiveBtcPrice() {
         }
     } catch (e) {}
 
+    // 2차: Binance
     try {
         const res = await fetchWithTimeout("https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT");
         if (res && res.ok) {
@@ -69,6 +71,7 @@ async function fetchLiveBtcPrice() {
         }
     } catch (e) {}
 
+    // 3차: CoinGecko
     try {
         const res = await fetchWithTimeout("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd");
         if (res && res.ok) {
@@ -81,16 +84,43 @@ async function fetchLiveBtcPrice() {
     return null;
 }
 
-// 2. 실시간 MSTR 주가 수집
+// 2. 실시간 MSTR 주가 수집 (3중 교차망: Finnhub + Yahoo Finance 다중 프록시)
 async function fetchLiveMstrPrice() {
-    if (!FINNHUB_KEY) return null;
+    // 1차: Finnhub API (현재가 c > 0 이면 c 사용, 장 마감 시 전일종가 pc 사용)
+    if (FINNHUB_KEY) {
+        try {
+            const res = await fetchWithTimeout(`https://finnhub.io/api/v1/quote?symbol=MSTR&token=${FINNHUB_KEY}`);
+            if (res && res.ok) {
+                const data = await res.json();
+                const price = (data?.c > 0) ? data.c : data?.pc;
+                if (price && price > 0) return parseFloat(price);
+            }
+        } catch (e) {}
+    }
+
+    // 2차: Yahoo Finance API (AllOrigins 우회 프록시)
     try {
-        const res = await fetchWithTimeout(`https://finnhub.io/api/v1/quote?symbol=MSTR&token=${FINNHUB_KEY}`);
+        const targetUrl = encodeURIComponent("https://query1.finance.yahoo.com/v8/finance/chart/MSTR");
+        const res = await fetchWithTimeout(`https://api.allorigins.win/raw?url=${targetUrl}`);
         if (res && res.ok) {
             const data = await res.json();
-            if (data && data.c && data.c > 0) return parseFloat(data.c);
+            const meta = data?.chart?.result?.[0]?.meta;
+            const price = meta?.regularMarketPrice || meta?.chartPreviousClose;
+            if (price && price > 0) return parseFloat(price);
         }
     } catch (e) {}
+
+    // 3차: Yahoo Finance API (Corsproxy 우회 프록시)
+    try {
+        const res = await fetchWithTimeout("https://corsproxy.io/?https://query1.finance.yahoo.com/v8/finance/chart/MSTR");
+        if (res && res.ok) {
+            const data = await res.json();
+            const meta = data?.chart?.result?.[0]?.meta;
+            const price = meta?.regularMarketPrice || meta?.chartPreviousClose;
+            if (price && price > 0) return parseFloat(price);
+        }
+    } catch (e) {}
+
     return null;
 }
 
@@ -193,13 +223,13 @@ function calculateDashboard(data) {
 async function updateDashboard() {
     let currentData = { ...DEFAULT_DATA };
 
-    // [1단계] 접속 즉시 화면부터 100% 채우기 (먹통 방지)
+    // [1단계] 화면 기본 데이터 채우기
     setVal("btcHoldings", currentData.btcHoldings);
     setVal("assumedShares", currentData.adso.toFixed(3));
     setVal("fullyDilutedShares", currentData.fdso.toFixed(3));
     calculateDashboard(currentData);
 
-    // [2단계] data.json 로드 시도
+    // [2단계] data.json 로드
     try {
         const res = await fetchWithTimeout("./data.json?cache=" + Date.now(), 2000);
         if (res && res.ok) {
@@ -217,21 +247,29 @@ async function updateDashboard() {
         }
     } catch (e) {}
 
-    // [3단계] 실시간 시세 연동
+    // [3단계] 실시간 BTC 및 MSTR 시세 연동
     try {
         const [fetchedBtc, fetchedMstr] = await Promise.all([
             fetchLiveBtcPrice(),
             fetchLiveMstrPrice()
         ]);
 
-        if (fetchedBtc && fetchedBtc > 0) setVal("btcPrice", fetchedBtc.toFixed(2));
-        if (fetchedMstr && fetchedMstr > 0) setVal("mstrPrice", fetchedMstr.toFixed(2));
+        if (fetchedBtc && fetchedBtc > 0) {
+            setVal("btcPrice", fetchedBtc.toFixed(2));
+        }
+
+        if (fetchedMstr && fetchedMstr > 0) {
+            setVal("mstrPrice", fetchedMstr.toFixed(2));
+        } else if (getNum("mstrPrice") <= 0) {
+            // 주가를 못 불러오고 기존 입력값도 0이면 백업 기본값 적용
+            setVal("mstrPrice", DEFAULT_DATA.fallbackMstrPrice);
+        }
 
         const now = new Date();
         const timeStr = now.toTimeString().split(' ')[0];
         setText("dataStatus", `최신 데이터 연동 완료 (${timeStr})`);
     } catch (e) {
-        setText("dataStatus", "실시간 시세 연결 대기 중 (기본값 동작)");
+        setText("dataStatus", "실시간 시세 연결 대기 중");
     }
 
     // [4단계] 최종 재계산
