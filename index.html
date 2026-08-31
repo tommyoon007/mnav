@@ -4,24 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>MSTR mNAV Pro</title>
-    <!-- PWA 및 모바일 웹앱 설정 -->
+    <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#090d16">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        brand: { orange: '#f97316', dark: '#090d16', card: '#111827', border: '#1f2937' }
-                    }
-                }
-            }
-        }
-    </script>
     <style>
         body { background-color: #090d16; color: #f3f4f6; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         .card { background-color: #111827; border: 1px solid #1f2937; }
@@ -31,7 +17,6 @@
 <body class="p-4 max-w-md mx-auto min-h-screen flex flex-col justify-between select-none">
 
     <div>
-        <!-- 상단 헤더 & 컨트롤 -->
         <div class="flex justify-between items-center mb-4">
             <div>
                 <h1 class="text-xl font-extrabold text-orange-500 tracking-tight flex items-center gap-1.5">
@@ -49,7 +34,6 @@
             </div>
         </div>
 
-        <!-- 메인 mNAV 배수 카드 -->
         <div class="card rounded-2xl p-4 mb-3 border-orange-500/40 bg-gradient-to-br from-gray-900 via-gray-900 to-orange-950/20 shadow-xl">
             <div class="flex justify-between items-start mb-1">
                 <span class="text-xs text-gray-400 font-medium">mNAV Multiple (프리미엄 배수)</span>
@@ -71,7 +55,6 @@
             </div>
         </div>
 
-        <!-- 시세 현황 카드 -->
         <div class="grid grid-cols-2 gap-2.5 mb-3">
             <div class="card p-3 rounded-xl">
                 <span class="text-[11px] text-gray-400">비트코인 (BTC)</span>
@@ -83,7 +66,6 @@
             </div>
         </div>
 
-        <!-- 개인 포트폴리오 연동 -->
         <div class="card rounded-2xl p-4 mb-3">
             <div class="flex justify-between items-center mb-2.5">
                 <h2 class="text-xs font-bold text-gray-300">내 보유 포트폴리오</h2>
@@ -101,7 +83,6 @@
             </div>
         </div>
 
-        <!-- 비트코인 목표가 시뮬레이터 -->
         <div class="card rounded-2xl p-4 mb-3">
             <h2 class="text-xs font-bold text-orange-400 mb-2 flex items-center gap-1">
                 <span>🎯</span> 비트코인 목표가 시뮬레이션
@@ -116,7 +97,7 @@
             </div>
             <div class="grid grid-cols-2 gap-2 text-xs bg-gray-800/30 p-2.5 rounded-xl border border-gray-800/60">
                 <div>
-                    <span class="text-gray-400 block text-[10px]">예상 MSTR 주가 (현재 배수 적용)</span>
+                    <span class="text-gray-400 block text-[10px]">예상 MSTR 주가</span>
                     <span class="text-xs font-bold text-gray-200" id="sim-mstr-price">$0.00</span>
                 </div>
                 <div>
@@ -126,7 +107,6 @@
             </div>
         </div>
 
-        <!-- 파라미터 설정 패널 -->
         <details class="card rounded-2xl p-3.5 mb-3">
             <summary class="text-xs font-bold text-gray-300 cursor-pointer flex justify-between items-center">
                 <span>⚙️ MSTR 재무 변수 및 내 평단 설정</span>
@@ -134,7 +114,7 @@
             </summary>
             <div class="mt-3 space-y-2.5 text-xs border-t border-gray-800 pt-3">
                 <div>
-                    <label class="block text-gray-400 text-[11px] mb-1">MSTR 수동 주가 ($) <span class="text-gray-500">(API fallback용)</span></label>
+                    <label class="block text-gray-400 text-[11px] mb-1">MSTR 수동 주가 ($)</label>
                     <input type="number" id="input-mstr-price" class="w-full bg-gray-800 border border-gray-700 rounded-lg p-2 text-white font-mono" value="130.00" onchange="calculate()">
                 </div>
                 <div>
@@ -198,7 +178,6 @@
                 const btcRes = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT');
                 const btcData = await btcRes.json();
                 liveBtcPrice = parseFloat(btcData.price);
-
                 liveMstrPrice = parseFloat(document.getElementById('input-mstr-price').value);
 
                 document.getElementById('last-updated').innerText = `최신화: ${new Date().toLocaleTimeString('ko-KR')}`;
@@ -236,18 +215,15 @@
             const mstrPrice = liveMstrPrice || parseFloat(document.getElementById('input-mstr-price').value) || 0;
             const btcPrice = liveBtcPrice || 90000;
 
-            // NAV 계산 공식
             const btcTotalVal = btcHoldings * btcPrice;
             const netNav = btcTotalVal - netDebt;
             const navPerShare = netNav / dilutedShares;
             const mnavMultiple = navPerShare > 0 ? (mstrPrice / navPerShare) : 0;
             const premiumPct = (mnavMultiple - 1) * 100;
 
-            // 1,000주당 BTC 수량
             const btcPerK = (btcHoldings / dilutedShares) * 1000;
             document.getElementById('btc-per-k').innerText = `${btcPerK.toFixed(3)} BTC / 1k주`;
 
-            // UI 업데이트 - 상단 요약
             document.getElementById('btc-price-display').innerText = `$${btcPrice.toLocaleString(undefined, {maximumFractionDigits: 0})}`;
             document.getElementById('mstr-price-display').innerText = `$${mstrPrice.toFixed(2)}`;
             document.getElementById('total-nav-display').innerText = `$${(netNav / 1e9).toFixed(2)}B`;
@@ -263,7 +239,6 @@
                 badge.className = "text-xs px-2.5 py-1 rounded-md font-bold bg-green-950/80 text-green-400 border border-green-800/50";
             }
 
-            // 내 포트폴리오
             document.getElementById('my-share-summary').innerText = `${myShares}주 @ $${myAvg.toFixed(2)}`;
             const currentVal = myShares * mstrPrice;
             const totalCost = myShares * myAvg;
@@ -275,7 +250,6 @@
             pnlEl.innerText = `${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}% ($${pnlAmount.toFixed(0)})`;
             pnlEl.className = `text-sm font-bold ${pnlPct >= 0 ? 'text-red-400' : 'text-blue-400'}`;
 
-            // 목표가 시뮬레이터 연산
             const targetBtc = parseFloat(document.getElementById('target-btc-slider').value);
             document.getElementById('target-btc-label').innerText = `$${targetBtc.toLocaleString()}`;
 
