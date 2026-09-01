@@ -1,5 +1,6 @@
 // =========================================================
 // MSTR mNAV & BTC FUTURES DASHBOARD - HYBRID REAL-TIME SCRIPT
+// Portfolio Sync: 97 Shares @ $173.65
 // =========================================================
 
 const FINNHUB_KEY = "daaruppr01qn50rjdv2gdaaruppr01qn50rjdv30";
@@ -85,7 +86,11 @@ async function fetchLiveMstrPrice() {
         const res = await fetchWithTimeout(proxyUrl, 3000);
         if (res && res.ok) {
             const data = await res.json();
-            const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
+            const meta = data?.chart?.result?.[0]?.meta;
+            
+            // 프리마켓 -> 애프터마켓 -> 정규장 순으로 존재하는 가격을 우선 적용
+            const price = meta?.preMarketPrice || meta?.postMarketPrice || meta?.regularMarketPrice;
+            
             if (price && price > 0) return parseFloat(price);
         }
     } catch (e) {}
