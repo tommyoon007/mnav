@@ -1,163 +1,524 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MSTR mNAV & BTC Futures Dashboard</title>
-    <!-- Chart.js 라이브러리 -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        body { background-color: #121212; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 16px; }
-        .card { background-color: #1e1e1e; border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid #2a2a2a; }
-        .card-title { font-size: 14px; color: #ff9f0a; font-weight: bold; margin-bottom: 12px; }
-        .status-box { font-size: 13px; color: #aaa; margin-bottom: 16px; line-height: 1.4; }
-        .input-group { margin-bottom: 12px; }
-        .input-group label { display: block; font-size: 13px; color: #aaa; margin-bottom: 4px; }
-        .input-group input { width: 100%; padding: 12px; background-color: #0d1117; border: 1px solid #30363d; border-radius: 8px; color: #fff; font-size: 16px; font-weight: bold; box-sizing: border-box; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .result-card { background: #161b22; padding: 12px; border-radius: 8px; border: 1px solid #30363d; }
-        .result-label { font-size: 11px; color: #8b949e; font-weight: bold; }
-        .result-val { font-size: 18px; font-weight: bold; margin-top: 4px; }
-        .result-sub { font-size: 11px; color: #8b949e; margin-top: 2px; }
-        .signal-box { margin-top: 12px; padding: 12px; background: #161b22; border-radius: 8px; text-align: center; font-weight: bold; }
-        .risk-card { background: #1c2128; border: 1px solid #30363d; border-radius: 8px; padding: 12px; margin-top: 12px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
-        th, td { border: 1px solid #30363d; padding: 6px; text-align: center; }
-        th { background: #161b22; color: #8b949e; }
-        .chart-container { position: relative; height: 280px; width: 100%; margin-top: 8px; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>바이낸스 BTC 선물 종합 분석 대시보드</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg-color: #121318;
+      --card-bg: #1e2026;
+      --text-color: #eaecef;
+      --text-sub: #848e9c;
+      --border-color: #2b313a;
+      --accent-yellow: #f0b90b;
+      --long-green: #26a69a;
+      --short-red: #ef5350;
+      --oi-blue: #29b6f6;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 1280px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .header-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .title-group h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--text-color);
+    }
+
+    .title-group p {
+      font-size: 0.85rem;
+      color: var(--text-sub);
+      margin-top: 4px;
+    }
+
+    .status-badge {
+      font-size: 0.8rem;
+      padding: 6px 12px;
+      background: rgba(240, 185, 11, 0.1);
+      color: var(--accent-yellow);
+      border: 1px solid rgba(240, 185, 11, 0.3);
+      border-radius: 20px;
+    }
+
+    .panel-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 20px;
+    }
+
+    .chart-panel {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .panel-title {
+      font-size: 1.05rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .panel-title::before {
+      content: '';
+      display: inline-block;
+      width: 4px;
+      height: 16px;
+      border-radius: 2px;
+    }
+
+    .funding-title::before { background-color: var(--accent-yellow); }
+    .oi-title::before { background-color: var(--oi-blue); }
+    .ls-title::before { background-color: var(--long-green); }
+
+    .live-indicator {
+      font-size: 0.8rem;
+      color: var(--text-sub);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      background-color: var(--long-green);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--long-green);
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 0.4; }
+      50% { opacity: 1; }
+      100% { opacity: 0.4; }
+    }
+
+    .chart-container {
+      position: relative;
+      width: 100%;
+      height: 300px;
+    }
+  </style>
 </head>
 <body>
 
-    <div class="card">
-        <h2 style="margin:0 0 8px 0;">₿ MSTR mNAV & BTC Futures</h2>
-        <p style="margin:0; font-size:13px; color:#aaa;">Strategy 공식 Net Reserve 기반 대시보드</p>
+<div class="container">
+  <!-- 헤더 영역 -->
+  <div class="header-card">
+    <div class="title-group">
+      <h1>BTC/USDT 선물 종합 분석 대시보드</h1>
+      <p>바이낸스 API · UTC 정산 펀딩비 / 실시간 미결제약정(OI) / 상위 트레이더 롱·숏 비율</p>
+    </div>
+    <div class="status-badge" id="updateStatus">데이터 동기화 중...</div>
+  </div>
+
+  <!-- 3단 분할 패널 Grid -->
+  <div class="panel-grid">
+    
+    <!-- 1. 펀딩비 패널 (UTC 일별 합산) -->
+    <div class="chart-panel">
+      <div class="panel-header">
+        <div class="panel-title funding-title">1. 일별 누적 펀딩비 (UTC 기준 3회 합산)</div>
+      </div>
+      <div class="chart-container">
+        <canvas id="fundingChart"></canvas>
+      </div>
     </div>
 
-    <div class="card">
-        <div class="card-title">⚡ 자동 수집 데이터 및 입력</div>
-        <div class="status-box">
-            <div id="dataStatus">실시간 데이터 연동 중...</div>
+    <!-- 2. 미결제약정 (OI) 패널 (5초 실시간 갱신) -->
+    <div class="chart-panel">
+      <div class="panel-header">
+        <div class="panel-title oi-title">2. 미결제약정 추이 (Open Interest, BTC)</div>
+        <div class="live-indicator">
+          <div class="pulse-dot"></div>
+          <span id="liveOiText">5초 실시간 동기화 중</span>
         </div>
-
-        <div class="input-group">
-            <label for="btcPrice">BTC 실시간 가격 ($)</label>
-            <input type="text" id="btcPrice" value="95000">
-        </div>
-
-        <div class="input-group">
-            <label for="mstrPrice">MSTR 실시간 주가 ($)</label>
-            <input type="text" id="mstrPrice" value="130">
-        </div>
-
-        <div class="input-group">
-            <label for="btcHoldings">BTC 보유량</label>
-            <input type="text" id="btcHoldings" value="845050">
-        </div>
-
-        <div class="input-group">
-            <label for="assumedShares">ADSO (M)</label>
-            <input type="text" id="assumedShares" value="298.039">
-        </div>
-
-        <div class="input-group">
-            <label for="fullyDilutedShares">FDSO (M)</label>
-            <input type="text" id="fullyDilutedShares" value="424.479">
-        </div>
+      </div>
+      <div class="chart-container">
+        <canvas id="oiChart"></canvas>
+      </div>
     </div>
 
-    <!-- BTC 선물 파생 지표 & 레버리지 위험도 -->
-    <div class="card">
-        <div class="card-title">🔥 BTC 선물 파생 지표 & 레버리지 위험도</div>
-        <div class="grid">
-            <div class="result-card">
-                <div class="result-label">FUNDING RATE (8H)</div>
-                <div class="result-val" id="fundingRate">-</div>
-            </div>
-            <div class="result-card">
-                <div class="result-label">BTC OPEN INTEREST</div>
-                <div class="result-val" id="btcOi">-</div>
-            </div>
-        </div>
-        
-        <div class="risk-card">
-            <div class="result-label">BTC 레버리지 위험 스펙트럼 (5단계)</div>
-            <div class="result-val" id="futuresRiskStage" style="color:#ff9f0a; margin-top:4px;">🟢 2단계 (건전/중립)</div>
-            <div class="result-sub" id="futuresRiskText">적정 레버리지 (건전한 시장)</div>
-        </div>
+    <!-- 3. 롱/숏 비율 패널 (Dual Y-Axis) -->
+    <div class="chart-panel">
+      <div class="panel-header">
+        <div class="panel-title ls-title">3. 상위 트레이더 롱/숏 비율 (Top Trader Long/Short Ratio)</div>
+      </div>
+      <div class="chart-container">
+        <canvas id="lsChart"></canvas>
+      </div>
     </div>
 
-    <!-- BTC 선물 파생 지표 & 위험 기준선 추이 차트 -->
-    <div class="card">
-        <div class="card-title">📊 BTC 선물 파생 지표 & 위험 기준선 추이</div>
-        <div class="chart-container">
-            <canvas id="futuresChart"></canvas>
-        </div>
-    </div>
+  </div>
+</div>
 
-    <div class="card">
-        <div class="card-title">📊 핵심 계산 결과</div>
-        <div class="grid">
-            <div class="result-card">
-                <div class="result-label">GROSS BTC / SHARE</div>
-                <div class="result-val" id="grossBpsSats">-</div>
-                <div class="result-sub">Sats</div>
-            </div>
-            <div class="result-card">
-                <div class="result-label">NET BTC / SHARE</div>
-                <div class="result-val" id="netBpsSats">-</div>
-                <div class="result-sub">Sats</div>
-            </div>
-            <div class="result-card">
-                <div class="result-label">NET BPS (USD)</div>
-                <div class="result-val" id="netBpsUsd">-</div>
-            </div>
-            <div class="result-card">
-                <div class="result-label">현재 MNAV</div>
-                <div class="result-val" id="mnavMultiple">-</div>
-                <div class="result-sub" id="premium">프리미엄: -</div>
-            </div>
-        </div>
-        <div class="signal-box" id="signal">계산 중...</div>
-    </div>
+<script>
+  let chartFunding = null;
+  let chartOI = null;
+  let chartLS = null;
 
-    <div class="card">
-        <div class="card-title">🎯 MSTR 목표가 시뮬레이터</div>
-        <div class="input-group">
-            <label for="targetBtcPrice">목표 비트코인 가격 ($)</label>
-            <input type="text" id="targetBtcPrice" value="100000">
-        </div>
-        <div class="input-group">
-            <label for="targetMnav">목표 mNAV 배수 (×)</label>
-            <input type="text" id="targetMnav" value="1.5">
-        </div>
-        <div class="risk-card" style="text-align: center;">
-            <div class="result-label">예상 MSTR 주가</div>
-            <div class="result-val" id="predictedMstrPrice" style="color:#3fb950; font-size:22px;">$0.00</div>
-            <div class="result-sub" id="predictedNetBps">예상 Net BPS: $0.00</div>
-        </div>
-    </div>
+  let lastValidOI = null;
+  let oiTimerId = null; // 타이머 중복 생성 방지용 핸들러
 
-    <div class="card">
-        <div class="card-title">📈 BTC 가격별 mNAV 시나리오 표 ($30k ~ $500k)</div>
-        <div style="overflow-x:auto;">
-            <table>
-                <thead>
-                    <tr>
-                        <th>BTC 가격</th>
-                        <th>1.0×</th>
-                        <th>1.25×</th>
-                        <th>1.5×</th>
-                        <th>2.0×</th>
-                        <th>2.5×</th>
-                        <th>3.0×</th>
-                    </tr>
-                </thead>
-                <tbody id="scenarioTable"></tbody>
-            </table>
-        </div>
-    </div>
+  // UTC 기준 YYYY-MM-DD 날짜 추출 공통 함수
+  function formatUTCDate(timestamp) {
+    const d = new Date(timestamp);
+    return d.toISOString().split('T')[0];
+  }
 
-    <script src="script.js?v=20260901_verified_v3"></script>
+  // 공통 API Fetcher (1차 direct, 2차 corsproxy 백업)
+  async function fetchWithFallback(endpoint) {
+    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(endpoint)}`;
+    try {
+      let res = await fetch(endpoint);
+      if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
+      return await res.json();
+    } catch (e) {
+      console.warn(`[Direct Fail] ${endpoint} -> 프록시 재시도`, e);
+      try {
+        let pRes = await fetch(proxyUrl);
+        if (!pRes.ok) throw new Error(`Proxy Error ${pRes.status}`);
+        return await pRes.json();
+      } catch (pErr) {
+        console.error(`[Proxy Fail] ${endpoint}`, pErr);
+        return null;
+      }
+    }
+  }
+
+  // 1. 펀딩비 데이터 수신 및 UTC 일별 합산
+  async function loadFundingData() {
+    const raw = await fetchWithFallback('https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=1000');
+    if (!raw || raw.length === 0) return null;
+
+    const utcDailyMap = {};
+
+    raw.forEach(item => {
+      const utcDateStr = formatUTCDate(item.fundingTime);
+      const ratePercent = parseFloat(item.fundingRate) * 100;
+
+      if (!utcDailyMap[utcDateStr]) {
+        utcDailyMap[utcDateStr] = 0;
+      }
+      utcDailyMap[utcDateStr] += ratePercent;
+    });
+
+    const labels = Object.keys(utcDailyMap);
+    const values = Object.values(utcDailyMap);
+
+    return { labels, values };
+  }
+
+  // 2. 미결제약정 (OI) 과거 데이터 수신 (UTC 날짜 적용)
+  async function loadOIData() {
+    const raw = await fetchWithFallback('https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1d&limit=330');
+    if (!raw || raw.length === 0) return null;
+
+    const labels = raw.map(i => formatUTCDate(i.timestamp));
+    const values = raw.map(i => parseFloat(i.sumOpenInterest));
+
+    if (values.length > 0) {
+      lastValidOI = values[values.length - 1];
+    }
+
+    return { labels, values };
+  }
+
+  // 3. 롱/숏 비율 데이터 수신 (UTC 날짜 적용)
+  async function loadLSData() {
+    const raw = await fetchWithFallback('https://fapi.binance.com/futures/data/topLongShortPositionRatio?symbol=BTCUSDT&period=1d&limit=330');
+    if (!raw || raw.length === 0) return null;
+
+    const labels = raw.map(i => formatUTCDate(i.timestamp));
+    const longs = raw.map(i => (parseFloat(i.longPosition) * 100).toFixed(2));
+    const shorts = raw.map(i => (parseFloat(i.shortPosition) * 100).toFixed(2));
+    const ratios = raw.map(i => parseFloat(i.longShortRatio).toFixed(2));
+
+    return { labels, longs, shorts, ratios };
+  }
+
+  // --- 차트 렌더링 함수들 ---
+
+  function renderFundingChart(labels, values) {
+    const ctx = document.getElementById('fundingChart').getContext('2d');
+    const backgroundColors = values.map(v => v >= 0 ? '#26a69a' : '#ef5350');
+
+    if (chartFunding) chartFunding.destroy();
+
+    chartFunding = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: '일별 펀딩비 합산 (%)',
+          data: values,
+          backgroundColor: backgroundColors,
+          borderRadius: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => `일일 합산 펀딩비: ${ctx.parsed.y.toFixed(4)}%`
+            }
+          }
+        },
+        scales: {
+          x: { grid: { color: '#2b313a' }, ticks: { color: '#848e9c', maxTicksLimit: 14 } },
+          y: { 
+            grid: { color: '#2b313a' }, 
+            ticks: { 
+              color: '#848e9c',
+              callback: (val) => val.toFixed(3) + '%'
+            } 
+          }
+        }
+      }
+    });
+  }
+
+  function renderOIChart(labels, values) {
+    const ctx = document.getElementById('oiChart').getContext('2d');
+
+    if (chartOI) chartOI.destroy();
+
+    chartOI = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: '미결제약정 (BTC)',
+          data: values,
+          borderColor: '#29b6f6',
+          backgroundColor: 'rgba(41, 182, 246, 0.08)',
+          fill: true,
+          borderWidth: 2,
+          tension: 0.15,
+          pointRadius: 0,
+          pointHoverRadius: 5
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => `OI: ${Math.round(ctx.parsed.y).toLocaleString()} BTC`
+            }
+          }
+        },
+        scales: {
+          x: { grid: { color: '#2b313a' }, ticks: { color: '#848e9c', maxTicksLimit: 14 } },
+          y: { 
+            grid: { color: '#2b313a' }, 
+            ticks: { 
+              color: '#848e9c',
+              callback: (val) => (val / 1000).toFixed(1) + 'k ₿'
+            } 
+          }
+        }
+      }
+    });
+  }
+
+  function renderLSChart(labels, longs, shorts, ratios) {
+    const ctx = document.getElementById('lsChart').getContext('2d');
+
+    if (chartLS) chartLS.destroy();
+
+    chartLS = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: '롱 비율 (%)',
+            data: longs,
+            borderColor: '#26a69a',
+            backgroundColor: 'rgba(38, 166, 154, 0.08)',
+            borderWidth: 1.8,
+            fill: true,
+            tension: 0.15,
+            yAxisID: 'yPercent',
+            pointRadius: 0,
+            pointHoverRadius: 4
+          },
+          {
+            label: '숏 비율 (%)',
+            data: shorts,
+            borderColor: '#ef5350',
+            backgroundColor: 'rgba(239, 83, 80, 0.08)',
+            borderWidth: 1.8,
+            fill: true,
+            tension: 0.15,
+            yAxisID: 'yPercent',
+            pointRadius: 0,
+            pointHoverRadius: 4
+          },
+          {
+            label: '롱/숏 Ratio',
+            data: ratios,
+            borderColor: '#f0b90b',
+            borderWidth: 2,
+            borderDash: [3, 3],
+            fill: false,
+            tension: 0.15,
+            yAxisID: 'yRatio',
+            pointRadius: 0,
+            pointHoverRadius: 5
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { labels: { color: '#848e9c', font: { size: 12 } } },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const label = ctx.dataset.label;
+                const val = ctx.parsed.y;
+                return ctx.dataset.yAxisID === 'yPercent' ? `${label}: ${val}%` : `${label}: ${val}`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: { grid: { color: '#2b313a' }, ticks: { color: '#848e9c', maxTicksLimit: 14 } },
+          yPercent: {
+            type: 'linear',
+            position: 'left',
+            min: 0,
+            max: 100,
+            grid: { color: '#2b313a' },
+            ticks: { color: '#848e9c', callback: (v) => v + '%' }
+          },
+          yRatio: {
+            type: 'linear',
+            position: 'right',
+            suggestedMin: 0.5,
+            suggestedMax: 2.5,
+            grid: { drawOnChartArea: false },
+            ticks: { color: '#f0b90b' }
+          }
+        }
+      }
+    });
+  }
+
+  // --- 5초 주기 실시간 OI 갱신 함수 (로직 보완) ---
+  async function updateRealtimeOI() {
+    const res = await fetchWithFallback('https://fapi.binance.com/fapi/v1/openInterest?symbol=BTCUSDT');
+    if (res && res.openInterest) {
+      const currentOI = parseFloat(res.openInterest);
+      lastValidOI = currentOI;
+
+      if (chartOI && chartOI.data.datasets[0].data.length > 0) {
+        const labels = chartOI.data.labels;
+        const dataArr = chartOI.data.datasets[0].data;
+        const todayUTC = formatUTCDate(Date.now());
+
+        // 마지막 데이터 날짜가 오늘 날짜면 값만 업데이트, 없으면 오늘 포인트 추가
+        if (labels[labels.length - 1] === todayUTC) {
+          dataArr[dataArr.length - 1] = currentOI;
+        } else {
+          labels.push(todayUTC);
+          dataArr.push(currentOI);
+        }
+
+        chartOI.update('none'); // 애니메이션 없이 변경사항 반영
+      }
+
+      document.getElementById('liveOiText').textContent = `실시간 OI: ${Math.round(currentOI).toLocaleString()} BTC`;
+    } else if (lastValidOI && chartOI) {
+      document.getElementById('liveOiText').textContent = `실시간 OI: ${Math.round(lastValidOI).toLocaleString()} BTC (보존됨)`;
+    }
+  }
+
+  // --- 메인 로딩 함수 ---
+  async function initDashboard() {
+    const statusBadge = document.getElementById('updateStatus');
+
+    const [fundingData, oiData, lsData] = await Promise.all([
+      loadFundingData(),
+      loadOIData(),
+      loadLSData()
+    ]);
+
+    if (fundingData) renderFundingChart(fundingData.labels, fundingData.values);
+    if (oiData) renderOIChart(oiData.labels, oiData.values);
+    if (lsData) renderLSChart(lsData.labels, lsData.longs, lsData.shorts, lsData.ratios);
+
+    const now = new Date().toLocaleTimeString();
+    statusBadge.textContent = `동기화 완료 (${now})`;
+
+    // 최초 1회 실행 후 타이머가 없을 때만 새로 생성 (타이머 누적 방지)
+    updateRealtimeOI();
+    if (!oiTimerId) {
+      oiTimerId = setInterval(updateRealtimeOI, 5000);
+    }
+  }
+
+  // 10분마다 전체 과거 데이터 재동기화
+  setInterval(initDashboard, 10 * 60 * 1000);
+
+  // 실행 시작
+  initDashboard();
+</script>
+
 </body>
 </html>
