@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MSTR mNAV & BTC Futures Dashboard</title>
+    <!-- Chart.js 라이브러리 추가 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { background-color: #121212; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 16px; }
         .card { background-color: #1e1e1e; border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid #2a2a2a; }
@@ -22,6 +24,7 @@
         table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
         th, td { border: 1px solid #30363d; padding: 6px; text-align: center; }
         th { background: #161b22; color: #8b949e; }
+        .chart-container { position: relative; height: 260px; width: 100%; margin-top: 8px; }
     </style>
 </head>
 <body>
@@ -84,6 +87,14 @@
         </div>
     </div>
 
+    <!-- 실시간 시세 그래프 카드 (가로: 날짜/시간, 세로: 가격/주가) -->
+    <div class="card">
+        <div class="card-title">📈 BTC & MSTR 가격 추이 차트</div>
+        <div class="chart-container">
+            <canvas id="priceChart"></canvas>
+        </div>
+    </div>
+
     <div class="card">
         <div class="card-title">📊 핵심 계산 결과</div>
         <div class="grid">
@@ -127,13 +138,14 @@
         </div>
     </div>
 
+    <!-- 하한 $30,000 ~ 상한 $500,000 대폭 확장된 시나리오 표 -->
     <div class="card">
-        <div class="card-title">📈 BTC 가격별 mNAV 시나리오 표</div>
+        <div class="card-title">📈 BTC 가격별 mNAV 시나리오 표 ($30k ~ $500k)</div>
         <div style="overflow-x:auto;">
             <table>
                 <thead>
                     <tr>
-                        <th>BTC</th>
+                        <th>BTC 가격</th>
                         <th>1.0×</th>
                         <th>1.25×</th>
                         <th>1.5×</th>
@@ -147,6 +159,6 @@
         </div>
     </div>
 
-    <script src="script.js?v=20260901_final"></script>
+    <script src="script.js?v=20260901_final_fix"></script>
 </body>
 </html>
