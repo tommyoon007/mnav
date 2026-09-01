@@ -7,166 +7,104 @@
     <!-- Chart.js 라이브러리 -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root {
-            --bg-color: #121212;
-            --card-bg: #1e1e1e;
-            --card-border: #2a2a2a;
-            --text-main: #ffffff;
-            --text-sub: #aaa;
-            --input-bg: #0d1117;
-            --input-border: #30363d;
-            --accent-yellow: #f0b90b;
-            --accent-orange: #ff9f0a;
-            --long-green: #26a69a;
-            --short-red: #ef5350;
-            --oi-blue: #29b6f6;
-        }
-
-        body { 
-            background-color: var(--bg-color); 
-            color: var(--text-main); 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-            margin: 0; 
-            padding: 16px; 
-            display: flex;
-            justify-content: center;
-        }
-
-        .container {
-            width: 100%;
-            max-width: 1200px;
-        }
-
-        .card { 
-            background-color: var(--card-bg); 
-            border-radius: 12px; 
-            padding: 16px; 
-            margin-bottom: 16px; 
-            border: 1px solid var(--card-border); 
-        }
-
-        .card-title { 
-            font-size: 14px; 
-            color: var(--accent-orange); 
-            font-weight: bold; 
-            margin-bottom: 12px; 
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .status-box { font-size: 13px; color: var(--text-sub); margin-bottom: 16px; line-height: 1.4; }
-        
-        .input-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 12px;
-        }
-
+        body { background-color: #121212; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 16px; }
+        .card { background-color: #1e1e1e; border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid #2a2a2a; }
+        .card-title { font-size: 14px; color: #ff9f0a; font-weight: bold; margin-bottom: 12px; }
+        .status-box { font-size: 13px; color: #aaa; margin-bottom: 16px; line-height: 1.4; }
         .input-group { margin-bottom: 12px; }
-        .input-group label { display: block; font-size: 13px; color: var(--text-sub); margin-bottom: 4px; }
-        .input-group input { 
-            width: 100%; 
-            padding: 10px 12px; 
-            background-color: var(--input-bg); 
-            border: 1px solid var(--input-border); 
-            border-radius: 8px; 
-            color: #fff; 
-            font-size: 15px; 
-            font-weight: bold; 
-            box-sizing: border-box; 
-        }
-
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
-        .result-card { background: #161b22; padding: 12px; border-radius: 8px; border: 1px solid var(--input-border); }
+        .input-group label { display: block; font-size: 13px; color: #aaa; margin-bottom: 4px; }
+        .input-group input { width: 100%; padding: 12px; background-color: #0d1117; border: 1px solid #30363d; border-radius: 8px; color: #fff; font-size: 16px; font-weight: bold; box-sizing: border-box; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .result-card { background: #161b22; padding: 12px; border-radius: 8px; border: 1px solid #30363d; }
         .result-label { font-size: 11px; color: #8b949e; font-weight: bold; }
-        .result-val { font-size: 18px; font-weight: bold; margin-top: 4px; word-break: break-all; }
+        .result-val { font-size: 18px; font-weight: bold; margin-top: 4px; }
         .result-sub { font-size: 11px; color: #8b949e; margin-top: 2px; }
-        
-        .signal-box { margin-top: 12px; padding: 12px; background: #161b22; border-radius: 8px; text-align: center; font-weight: bold; border: 1px solid var(--input-border); }
-        .risk-card { background: #1c2128; border: 1px solid var(--input-border); border-radius: 8px; padding: 12px; margin-top: 12px; }
-        
+        .signal-box { margin-top: 12px; padding: 12px; background: #161b22; border-radius: 8px; text-align: center; font-weight: bold; }
+        .risk-card { background: #1c2128; border: 1px solid #30363d; border-radius: 8px; padding: 12px; margin-top: 12px; }
         table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
-        th, td { border: 1px solid var(--input-border); padding: 8px 6px; text-align: center; }
+        th, td { border: 1px solid #30363d; padding: 6px; text-align: center; }
         th { background: #161b22; color: #8b949e; }
-        tr:nth-child(even) { background-color: rgba(255, 255, 255, 0.02); }
-
         .chart-container { position: relative; height: 280px; width: 100%; margin-top: 8px; }
-
-        .pulse-dot {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            background-color: var(--long-green);
-            border-radius: 50%;
-            margin-right: 6px;
-            box-shadow: 0 0 8px var(--long-green);
-            animation: pulse 1.5s infinite;
-        }
-
-        @keyframes pulse {
-            0% { opacity: 0.4; }
-            50% { opacity: 1; }
-            100% { opacity: 0.4; }
-        }
     </style>
 </head>
 <body>
 
-<div class="container">
-
-    <!-- 상단 헤더 -->
     <div class="card">
-        <h2 style="margin:0 0 8px 0;">₿ MSTR mNAV & BTC Futures Dashboard</h2>
-        <p style="margin:0; font-size:13px; color:#aaa;">MicroStrategy Net Reserve 기반 분석 & 바이낸스 선물 종합 파생 지표</p>
+        <h2 style="margin:0 0 8px 0;">₿ MSTR mNAV & BTC Futures</h2>
+        <p style="margin:0; font-size:13px; color:#aaa;">Strategy 공식 Net Reserve 기반 대시보드</p>
     </div>
 
-    <!-- 데이터 입력 카드 -->
     <div class="card">
-        <div class="card-title">⚡ 기초 설정 및 수동/자동 입력 데이터</div>
+        <div class="card-title">⚡ 자동 수집 데이터 및 입력</div>
         <div class="status-box">
             <div id="dataStatus">실시간 데이터 연동 중...</div>
         </div>
 
-        <div class="input-grid">
-            <div class="input-group">
-                <label for="btcPrice">BTC 가격 ($)</label>
-                <input type="text" id="btcPrice" value="95000">
-            </div>
+        <div class="input-group">
+            <label for="btcPrice">BTC 실시간 가격 ($)</label>
+            <input type="text" id="btcPrice" value="95000">
+        </div>
 
-            <div class="input-group">
-                <label for="mstrPrice">MSTR 실시간 주가 ($)</label>
-                <input type="text" id="mstrPrice" value="130">
-            </div>
+        <div class="input-group">
+            <label for="mstrPrice">MSTR 실시간 주가 ($)</label>
+            <input type="text" id="mstrPrice" value="130">
+        </div>
 
-            <div class="input-group">
-                <label for="btcHoldings">BTC 보유량 (개)</label>
-                <input type="text" id="btcHoldings" value="845050">
-            </div>
+        <div class="input-group">
+            <label for="btcHoldings">BTC 보유량</label>
+            <input type="text" id="btcHoldings" value="845050">
+        </div>
 
-            <div class="input-group">
-                <label for="assumedShares">ADSO (M)</label>
-                <input type="text" id="assumedShares" value="298.039">
-            </div>
+        <div class="input-group">
+            <label for="assumedShares">ADSO (M)</label>
+            <input type="text" id="assumedShares" value="298.039">
+        </div>
 
-            <div class="input-group">
-                <label for="fullyDilutedShares">FDSO (M)</label>
-                <input type="text" id="fullyDilutedShares" value="424.479">
-            </div>
+        <div class="input-group">
+            <label for="fullyDilutedShares">FDSO (M)</label>
+            <input type="text" id="fullyDilutedShares" value="424.479">
         </div>
     </div>
 
-    <!-- MSTR 핵심 계산 결과 카드 -->
+    <!-- BTC 선물 파생 지표 & 레버리지 위험도 -->
     <div class="card">
-        <div class="card-title">📊 MSTR 핵심 mNAV 계산 결과</div>
+        <div class="card-title">🔥 BTC 선물 파생 지표 & 레버리지 위험도</div>
         <div class="grid">
             <div class="result-card">
-                <div class="result-label">GROSS BTC / SHARE (ADSO)</div>
+                <div class="result-label">FUNDING RATE (8H)</div>
+                <div class="result-val" id="fundingRate">-</div>
+            </div>
+            <div class="result-card">
+                <div class="result-label">BTC OPEN INTEREST</div>
+                <div class="result-val" id="btcOi">-</div>
+            </div>
+        </div>
+        
+        <div class="risk-card">
+            <div class="result-label">BTC 레버리지 위험 스펙트럼 (5단계)</div>
+            <div class="result-val" id="futuresRiskStage" style="color:#ff9f0a; margin-top:4px;">🟢 2단계 (건전/중립)</div>
+            <div class="result-sub" id="futuresRiskText">적정 레버리지 (건전한 시장)</div>
+        </div>
+    </div>
+
+    <!-- BTC 선물 파생 지표 & 위험 기준선 추이 차트 -->
+    <div class="card">
+        <div class="card-title">📊 BTC 선물 파생 지표 & 위험 기준선 추이</div>
+        <div class="chart-container">
+            <canvas id="futuresChart"></canvas>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">📊 핵심 계산 결과</div>
+        <div class="grid">
+            <div class="result-card">
+                <div class="result-label">GROSS BTC / SHARE</div>
                 <div class="result-val" id="grossBpsSats">-</div>
                 <div class="result-sub">Sats</div>
             </div>
             <div class="result-card">
-                <div class="result-label">NET BTC / SHARE (FDSO)</div>
+                <div class="result-label">NET BTC / SHARE</div>
                 <div class="result-val" id="netBpsSats">-</div>
                 <div class="result-sub">Sats</div>
             </div>
@@ -183,27 +121,23 @@
         <div class="signal-box" id="signal">계산 중...</div>
     </div>
 
-    <!-- MSTR 목표가 시뮬레이터 -->
     <div class="card">
         <div class="card-title">🎯 MSTR 목표가 시뮬레이터</div>
-        <div class="input-grid">
-            <div class="input-group">
-                <label for="targetBtcPrice">목표 비트코인 가격 ($)</label>
-                <input type="text" id="targetBtcPrice" value="100000">
-            </div>
-            <div class="input-group">
-                <label for="targetMnav">목표 mNAV 배수 (×)</label>
-                <input type="text" id="targetMnav" value="1.5">
-            </div>
+        <div class="input-group">
+            <label for="targetBtcPrice">목표 비트코인 가격 ($)</label>
+            <input type="text" id="targetBtcPrice" value="100000">
+        </div>
+        <div class="input-group">
+            <label for="targetMnav">목표 mNAV 배수 (×)</label>
+            <input type="text" id="targetMnav" value="1.5">
         </div>
         <div class="risk-card" style="text-align: center;">
             <div class="result-label">예상 MSTR 주가</div>
-            <div class="result-val" id="predictedMstrPrice" style="color:#3fb950; font-size:24px;">$0.00</div>
+            <div class="result-val" id="predictedMstrPrice" style="color:#3fb950; font-size:22px;">$0.00</div>
             <div class="result-sub" id="predictedNetBps">예상 Net BPS: $0.00</div>
         </div>
     </div>
 
-    <!-- BTC 가격별 mNAV 시나리오 표 -->
     <div class="card">
         <div class="card-title">📈 BTC 가격별 mNAV 시나리오 표 ($30k ~ $500k)</div>
         <div style="overflow-x:auto;">
@@ -224,459 +158,6 @@
         </div>
     </div>
 
-    <!-- BTC 선물 파생 지표 & 레버리지 위험도 -->
-    <div class="card">
-        <div class="card-title">
-            <span>🔥 BTC 선물 파생 지표 & 레버리지 위험도</span>
-            <span style="font-size:11px; color:#848e9c; font-weight:normal;" id="liveOiText"><span class="pulse-dot"></span>5초 실시간 동기화</span>
-        </div>
-        <div class="grid">
-            <div class="result-card">
-                <div class="result-label">FUNDING RATE (최근 8H)</div>
-                <div class="result-val" id="fundingRate">-</div>
-            </div>
-            <div class="result-card">
-                <div class="result-label">BTC OPEN INTEREST</div>
-                <div class="result-val" id="btcOi">-</div>
-            </div>
-        </div>
-        
-        <div class="risk-card">
-            <div class="result-label">BTC 레버리지 위험 스펙트럼 (5단계)</div>
-            <div class="result-val" id="futuresRiskStage" style="color:#ff9f0a; margin-top:4px;">🟢 2단계 (건전/중립)</div>
-            <div class="result-sub" id="futuresRiskText">적정 레버리지 유지 중 (건전한 시장)</div>
-        </div>
-    </div>
-
-    <!-- 바이낸스 3단 선물 차트 패널 -->
-    <div class="card">
-        <div class="card-title">1. 일별 누적 펀딩비 (UTC 기준 3회 합산)</div>
-        <div class="chart-container">
-            <canvas id="fundingChart"></canvas>
-        </div>
-    </div>
-
-    <div class="card">
-        <div class="card-title">2. 미결제약정 추이 (Open Interest, BTC)</div>
-        <div class="chart-container">
-            <canvas id="oiChart"></canvas>
-        </div>
-    </div>
-
-    <div class="card">
-        <div class="card-title">3. 상위 트레이더 롱/숏 비율 (Top Trader Long/Short Ratio)</div>
-        <div class="chart-container">
-            <canvas id="lsChart"></canvas>
-        </div>
-    </div>
-
-</div>
-
-<script>
-    // --- 전역 차트 및 타이머 변수 ---
-    let chartFunding = null;
-    let chartOI = null;
-    let chartLS = null;
-    let lastValidOI = null;
-    let oiTimerId = null;
-    let userEditedBtcPrice = false; // 사용자 수동 입력 여부 플래그
-
-    // --- UTC 날짜 추출 공통 함수 ---
-    function formatUTCDate(timestamp) {
-        const d = new Date(timestamp);
-        return d.toISOString().split('T')[0];
-    }
-
-    // --- 공통 API Fetcher (1차 direct, 2차 corsproxy 백업) ---
-    async function fetchWithFallback(endpoint) {
-        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(endpoint)}`;
-        try {
-            let res = await fetch(endpoint);
-            if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
-            return await res.json();
-        } catch (e) {
-            try {
-                let pRes = await fetch(proxyUrl);
-                if (!pRes.ok) throw new Error(`Proxy Error ${pRes.status}`);
-                return await pRes.json();
-            } catch (pErr) {
-                console.error(`[Proxy Fail] ${endpoint}`, pErr);
-                return null;
-            }
-        }
-    }
-
-    // --- 1. MSTR mNAV 계산 엔진 (ADSO / FDSO 수식 완전 복원) ---
-    function calculateMstr() {
-        const btcPrice = parseFloat(document.getElementById('btcPrice').value.replace(/,/g, '')) || 0;
-        const mstrPrice = parseFloat(document.getElementById('mstrPrice').value.replace(/,/g, '')) || 0;
-        const btcHoldings = parseFloat(document.getElementById('btcHoldings').value.replace(/,/g, '')) || 0;
-        const adso = parseFloat(document.getElementById('assumedShares').value.replace(/,/g, '')) || 1; // ADSO (M)
-        const fdso = parseFloat(document.getElementById('fullyDilutedShares').value.replace(/,/g, '')) || 1; // FDSO (M)
-
-        // Gross BTC / Share (Sats) = ADSO 기준
-        const grossSats = Math.round((btcHoldings * 100) / adso);
-
-        // Net BTC / Share (Sats) = FDSO 기준
-        const netSats = Math.round((btcHoldings * 100) / fdso);
-
-        // Net BPS (USD) = FDSO 기준
-        const netBpsUsd = (btcHoldings * btcPrice) / (fdso * 1000000);
-        const mnav = netBpsUsd > 0 ? (mstrPrice / netBpsUsd) : 0;
-        const premiumPct = ((mnav - 1) * 100).toFixed(1);
-
-        document.getElementById('grossBpsSats').textContent = grossSats.toLocaleString();
-        document.getElementById('netBpsSats').textContent = netSats.toLocaleString();
-        document.getElementById('netBpsUsd').textContent = '$' + netBpsUsd.toFixed(2);
-        document.getElementById('mnavMultiple').textContent = mnav.toFixed(2) + '×';
-        
-        const premiumEl = document.getElementById('premium');
-        premiumEl.textContent = `프리미엄: ${premiumPct >= 0 ? '+' : ''}${premiumPct}%`;
-
-        // Signal Box
-        const signalEl = document.getElementById('signal');
-        if (mnav < 1.0) {
-            signalEl.textContent = '🟢 저평가 구간 (MNAV < 1.0× - 강한 매수 우위)';
-            signalEl.style.color = '#26a69a';
-        } else if (mnav <= 1.5) {
-            signalEl.textContent = '🟡 적정/건전 매수 구간 (1.0× ~ 1.5×)';
-            signalEl.style.color = '#f0b90b';
-        } else if (mnav <= 2.5) {
-            signalEl.textContent = '🟠 프리미엄 고평가 경계 구간 (1.5× ~ 2.5×)';
-            signalEl.style.color = '#ff9f0a';
-        } else {
-            signalEl.textContent = '🔴 과열 및 버블 위험 구간 (MNAV > 2.5×)';
-            signalEl.style.color = '#ef5350';
-        }
-
-        calculateSimulator();
-        renderScenarioTable();
-    }
-
-    // --- 2. MSTR 목표가 시뮬레이터 (고정값 유지 계산) ---
-    function calculateSimulator() {
-        const targetBtc = parseFloat(document.getElementById('targetBtcPrice').value.replace(/,/g, '')) || 0;
-        const targetMnav = parseFloat(document.getElementById('targetMnav').value.replace(/,/g, '')) || 0;
-        const btcHoldings = parseFloat(document.getElementById('btcHoldings').value.replace(/,/g, '')) || 0;
-        const fdso = parseFloat(document.getElementById('fullyDilutedShares').value.replace(/,/g, '')) || 1;
-
-        const predNetBps = (btcHoldings * targetBtc) / (fdso * 1000000);
-        const predMstr = predNetBps * targetMnav;
-
-        document.getElementById('predictedMstrPrice').textContent = '$' + predMstr.toFixed(2);
-        document.getElementById('predictedNetBps').textContent = '예상 Net BPS: $' + predNetBps.toFixed(2);
-    }
-
-    // --- 3. BTC 가격별 mNAV 시나리오 표 생성 ---
-    function renderScenarioTable() {
-        const btcHoldings = parseFloat(document.getElementById('btcHoldings').value.replace(/,/g, '')) || 0;
-        const fdso = parseFloat(document.getElementById('fullyDilutedShares').value.replace(/,/g, '')) || 1;
-        const tbody = document.getElementById('scenarioTable');
-        tbody.innerHTML = '';
-
-        const prices = [30000, 50000, 70000, 90000, 100000, 120000, 150000, 200000, 300000, 500000];
-        const multiples = [1.0, 1.25, 1.5, 2.0, 2.5, 3.0];
-
-        prices.forEach(price => {
-            const tr = document.createElement('tr');
-            let html = `<td style="font-weight:bold; color:#f0b90b;">$${price.toLocaleString()}</td>`;
-            multiples.forEach(m => {
-                const bps = (btcHoldings * price) / (fdso * 1000000);
-                const targetMstr = bps * m;
-                html += `<td>$${Math.round(targetMstr).toLocaleString()}</td>`;
-            });
-            tr.innerHTML = html;
-            tbody.appendChild(tr);
-        });
-    }
-
-    // --- 4. 바이낸스 선물 데이터 로드 (사용자 수동 입력 보호 적용) ---
-    async function loadBinanceData() {
-        const statusEl = document.getElementById('dataStatus');
-        
-        // 1) BTC 실시간 가격 수신 (사용자가 직접 수정 중이 아니거나 수동 변경 플래그가 없을 때만 반영)
-        const ticker = await fetchWithFallback('https://fapi.binance.com/fapi/v1/ticker/price?symbol=BTCUSDT');
-        if (ticker && ticker.price) {
-            const currentBtcPrice = parseFloat(ticker.price).toFixed(0);
-            const btcInput = document.getElementById('btcPrice');
-            
-            // 사용자가 현재 포커스를 맞추고 있지 않고, 수동 수정을 안 했을 때만 자동 채움
-            if (document.activeElement !== btcInput && !userEditedBtcPrice) {
-                btcInput.value = currentBtcPrice;
-                calculateMstr();
-            }
-        }
-
-        // 2) 펀딩비 데이터 수신 (UTC 일별 합산)
-        const fundingRaw = await fetchWithFallback('https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=1000');
-        let fundingParsed = null;
-        if (fundingRaw && fundingRaw.length > 0) {
-            const lastRate = (parseFloat(fundingRaw[fundingRaw.length - 1].fundingRate) * 100).toFixed(4);
-            const fundingEl = document.getElementById('fundingRate');
-            fundingEl.textContent = `${lastRate}%`;
-            fundingEl.style.color = lastRate >= 0 ? '#26a69a' : '#ef5350';
-
-            const utcDailyMap = {};
-            fundingRaw.forEach(item => {
-                const dateStr = formatUTCDate(item.fundingTime);
-                const rate = parseFloat(item.fundingRate) * 100;
-                utcDailyMap[dateStr] = (utcDailyMap[dateStr] || 0) + rate;
-            });
-            fundingParsed = {
-                labels: Object.keys(utcDailyMap),
-                values: Object.values(utcDailyMap)
-            };
-        }
-
-        // 3) OI 과거 데이터 수신
-        const oiRaw = await fetchWithFallback('https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1d&limit=330');
-        let oiParsed = null;
-        if (oiRaw && oiRaw.length > 0) {
-            const labels = oiRaw.map(i => formatUTCDate(i.timestamp));
-            const values = oiRaw.map(i => parseFloat(i.sumOpenInterest));
-            lastValidOI = values[values.length - 1];
-
-            document.getElementById('btcOi').textContent = `${Math.round(lastValidOI).toLocaleString()} BTC`;
-            oiParsed = { labels, values };
-        }
-
-        // 4) 롱/숏 비율 수신
-        const lsRaw = await fetchWithFallback('https://fapi.binance.com/futures/data/topLongShortPositionRatio?symbol=BTCUSDT&period=1d&limit=330');
-        let lsParsed = null;
-        if (lsRaw && lsRaw.length > 0) {
-            lsParsed = {
-                labels: lsRaw.map(i => formatUTCDate(i.timestamp)),
-                longs: lsRaw.map(i => (parseFloat(i.longPosition) * 100).toFixed(2)),
-                shorts: lsRaw.map(i => (parseFloat(i.shortPosition) * 100).toFixed(2)),
-                ratios: lsRaw.map(i => parseFloat(i.longShortRatio).toFixed(2))
-            };
-        }
-
-        // 레버리지 위험 스펙트럼 계산
-        updateRiskStage();
-
-        // 차트 렌더링
-        if (fundingParsed) renderFundingChart(fundingParsed.labels, fundingParsed.values);
-        if (oiParsed) renderOIChart(oiParsed.labels, oiParsed.values);
-        if (lsParsed) renderLSChart(lsParsed.labels, lsParsed.longs, lsParsed.shorts, lsParsed.ratios);
-
-        const now = new Date().toLocaleTimeString();
-        statusEl.textContent = `실시간 데이터 연결 완료 (${now})`;
-
-        // 5초 실시간 OI 동기화 타이머
-        updateRealtimeOI();
-        if (!oiTimerId) {
-            oiTimerId = setInterval(updateRealtimeOI, 5000);
-        }
-    }
-
-    // --- 5초 실시간 OI 갱신 함수 ---
-    async function updateRealtimeOI() {
-        const res = await fetchWithFallback('https://fapi.binance.com/fapi/v1/openInterest?symbol=BTCUSDT');
-        if (res && res.openInterest) {
-            const currentOI = parseFloat(res.openInterest);
-            lastValidOI = currentOI;
-
-            document.getElementById('btcOi').textContent = `${Math.round(currentOI).toLocaleString()} BTC`;
-
-            if (chartOI && chartOI.data.datasets[0].data.length > 0) {
-                const labels = chartOI.data.labels;
-                const dataArr = chartOI.data.datasets[0].data;
-                const todayUTC = formatUTCDate(Date.now());
-
-                if (labels[labels.length - 1] === todayUTC) {
-                    dataArr[dataArr.length - 1] = currentOI;
-                } else {
-                    labels.push(todayUTC);
-                    dataArr.push(currentOI);
-                }
-                chartOI.update('none');
-            }
-            document.getElementById('liveOiText').innerHTML = `<span class="pulse-dot"></span>실시간 OI: ${Math.round(currentOI).toLocaleString()} BTC`;
-        }
-    }
-
-    // --- 레버리지 위험도 단계 판단 ---
-    function updateRiskStage() {
-        const fundingText = document.getElementById('fundingRate').textContent;
-        const fundingVal = parseFloat(fundingText) || 0;
-
-        const stageEl = document.getElementById('futuresRiskStage');
-        const textEl = document.getElementById('futuresRiskText');
-
-        if (fundingVal < -0.01) {
-            stageEl.textContent = '🔵 1단계 (과냉각/숏 과열)';
-            stageEl.style.color = '#29b6f6';
-            textEl.textContent = '음수 펀딩비 우세 (반등 리스크 유효)';
-        } else if (fundingVal <= 0.01) {
-            stageEl.textContent = '🟢 2단계 (건전/중립)';
-            stageEl.style.color = '#26a69a';
-            textEl.textContent = '적정 레버리지 유지 중 (건전한 시장)';
-        } else if (fundingVal <= 0.03) {
-            stageEl.textContent = '🟡 3단계 (상승 과열 진입)';
-            stageEl.style.color = '#f0b90b';
-            textEl.textContent = '롱 레버리지 누적 증가 중';
-        } else if (fundingVal <= 0.06) {
-            stageEl.textContent = '🟠 4단계 (고레버리지 경계)';
-            stageEl.style.color = '#ff9f0a';
-            textEl.textContent = '조정 발생 시 롱 스퀴즈 위험성 증가';
-        } else {
-            stageEl.textContent = '🔴 5단계 (극단적 과열/청산 위험)';
-            stageEl.style.color = '#ef5350';
-            textEl.textContent = '과도한 롱 레버리지로 대규모 청산 위험 상존';
-        }
-    }
-
-    // --- 차트 렌더링 함수들 ---
-    function renderFundingChart(labels, values) {
-        const ctx = document.getElementById('fundingChart').getContext('2d');
-        if (chartFunding) chartFunding.destroy();
-
-        chartFunding = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: '일별 펀딩비 합산 (%)',
-                    data: values,
-                    backgroundColor: values.map(v => v >= 0 ? '#26a69a' : '#ef5350'),
-                    borderRadius: 2
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    x: { grid: { color: '#2b313a' }, ticks: { color: '#848e9c', maxTicksLimit: 12 } },
-                    y: { grid: { color: '#2b313a' }, ticks: { color: '#848e9c', callback: (v) => v.toFixed(3) + '%' } }
-                }
-            }
-        });
-    }
-
-    function renderOIChart(labels, values) {
-        const ctx = document.getElementById('oiChart').getContext('2d');
-        if (chartOI) chartOI.destroy();
-
-        chartOI = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: '미결제약정 (BTC)',
-                    data: values,
-                    borderColor: '#29b6f6',
-                    backgroundColor: 'rgba(41, 182, 246, 0.08)',
-                    fill: true,
-                    borderWidth: 2,
-                    tension: 0.15,
-                    pointRadius: 0
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    x: { grid: { color: '#2b313a' }, ticks: { color: '#848e9c', maxTicksLimit: 12 } },
-                    y: { grid: { color: '#2b313a' }, ticks: { color: '#848e9c', callback: (v) => (v / 1000).toFixed(1) + 'k ₿' } }
-                }
-            }
-        });
-    }
-
-    function renderLSChart(labels, longs, shorts, ratios) {
-        const ctx = document.getElementById('lsChart').getContext('2d');
-        if (chartLS) chartLS.destroy();
-
-        chartLS = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [
-                    {
-                        label: '롱 비율 (%)',
-                        data: longs,
-                        borderColor: '#26a69a',
-                        backgroundColor: 'rgba(38, 166, 154, 0.08)',
-                        borderWidth: 1.8,
-                        fill: true,
-                        tension: 0.15,
-                        yAxisID: 'yPercent',
-                        pointRadius: 0
-                    },
-                    {
-                        label: '숏 비율 (%)',
-                        data: shorts,
-                        borderColor: '#ef5350',
-                        backgroundColor: 'rgba(239, 83, 80, 0.08)',
-                        borderWidth: 1.8,
-                        fill: true,
-                        tension: 0.15,
-                        yAxisID: 'yPercent',
-                        pointRadius: 0
-                    },
-                    {
-                        label: '롱/숏 Ratio',
-                        data: ratios,
-                        borderColor: '#f0b90b',
-                        borderWidth: 2,
-                        borderDash: [3, 3],
-                        fill: false,
-                        tension: 0.15,
-                        yAxisID: 'yRatio',
-                        pointRadius: 0
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
-                plugins: { legend: { labels: { color: '#848e9c' } } },
-                scales: {
-                    x: { grid: { color: '#2b313a' }, ticks: { color: '#848e9c', maxTicksLimit: 12 } },
-                    yPercent: {
-                        type: 'linear',
-                        position: 'left',
-                        min: 0,
-                        max: 100,
-                        grid: { color: '#2b313a' },
-                        ticks: { color: '#848e9c', callback: (v) => v + '%' }
-                    },
-                    yRatio: {
-                        type: 'linear',
-                        position: 'right',
-                        suggestedMin: 0.5,
-                        suggestedMax: 2.5,
-                        grid: { drawOnChartArea: false },
-                        ticks: { color: '#f0b90b' }
-                    }
-                }
-            }
-        });
-    }
-
-    // --- 이벤트 리스너 등록 ---
-    const mstrInputs = ['btcPrice', 'mstrPrice', 'btcHoldings', 'assumedShares', 'fullyDilutedShares'];
-    mstrInputs.forEach(id => {
-        document.getElementById(id).addEventListener('input', () => {
-            if (id === 'btcPrice') userEditedBtcPrice = true; // 사용자가 직접 BTC 가격을 입력하면 자동 갱신 비활성화
-            calculateMstr();
-        });
-    });
-
-    const simulatorInputs = ['targetBtcPrice', 'targetMnav'];
-    simulatorInputs.forEach(id => {
-        document.getElementById(id).addEventListener('input', calculateSimulator);
-    });
-
-    // --- 초기화 ---
-    calculateMstr();
-    loadBinanceData();
-    setInterval(loadBinanceData, 10 * 60 * 1000); // 10분마다 과거 전체 재동기화
-</script>
-
+    <script src="script.js?v=20260901_verified_v3"></script>
 </body>
 </html>
