@@ -1,12 +1,10 @@
 // =========================================================
-// MSTR mNAV & BTC FUTURES DASHBOARD - FULLY FIXED SCRIPT
+// MSTR mNAV & BTC FUTURES DASHBOARD - COMPLETE FULL ENGINE
 // =========================================================
 
 const FINNHUB_KEY = "daaruppr01qn50rjdv2gdaaruppr01qn50rjdv30";
 
 // Strategy/SEC 기준 올바른 재무 데이터
-// ADSO(Assumed Diluted Shares): ~298.039M
-// FDSO(Fully Diluted Shares): ~424.479M (희석 주식수가 항상 더 큼)
 const DEFAULT_DATA = {
     btcHoldings: 845050,
     adso: 298.039,
@@ -53,7 +51,7 @@ async function fetchWithTimeout(url, timeoutMs = 3000, options = {}) {
     }
 }
 
-// 1. 실시간 BTC 가격 수집 (Coinbase -> Binance -> CoinGecko)
+// 1. 실시간 BTC 가격 수집 (Coinbase -> Binance)
 async function fetchLiveBtcPrice() {
     try {
         const res = await fetchWithTimeout("https://api.coinbase.com/v2/prices/spot?currency=USD", 3000);
@@ -76,9 +74,8 @@ async function fetchLiveBtcPrice() {
     return null;
 }
 
-// 2. 실시간 MSTR 주가 수집 (장외 프리마켓/애프터마켓 시세 지원)
+// 2. 실시간 MSTR 주가 수집 (Yahoo Finance -> TradingView -> Finnhub)
 async function fetchLiveMstrPrice() {
-    // 1차: Yahoo Finance API (includePrePost=true 파라미터로 장외 거래 시세 수집)
     const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/MSTR?interval=1m&range=1d&includePrePost=true&ts=${Date.now()}`;
     const proxies = [
         `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`,
@@ -93,7 +90,6 @@ async function fetchLiveMstrPrice() {
                 const data = await res.json();
                 const meta = data?.chart?.result?.[0]?.meta;
                 if (meta) {
-                    // 애프터마켓 -> 프리마켓 -> 정규장 -> 이전 종가 순으로 실시간 최신 가격 적용
                     const price = meta.postMarketPrice || meta.preMarketPrice || meta.regularMarketPrice || meta.chartPreviousClose;
                     if (price && price > 0) return parseFloat(price);
                 }
@@ -101,7 +97,6 @@ async function fetchLiveMstrPrice() {
         } catch (e) {}
     }
 
-    // 2차: TradingView Scan API (extended_hours_price 열 포함)
     try {
         const res = await fetchWithTimeout("https://scanner.tradingview.com/america/scan", 3000, {
             method: "POST",
@@ -115,15 +110,14 @@ async function fetchLiveMstrPrice() {
             const data = await res.json();
             const row = data?.data?.[0]?.d;
             if (row) {
-                const extPrice = row[0]; // 장외 실시간 가격
-                const regPrice = row[1]; // 정규장 종가
+                const extPrice = row[0];
+                const regPrice = row[1];
                 const price = (extPrice && extPrice > 0) ? extPrice : regPrice;
                 if (price && price > 0) return parseFloat(price);
             }
         }
     } catch (e) {}
 
-    // 3차: Finnhub API
     if (FINNHUB_KEY) {
         try {
             const res = await fetchWithTimeout(`https://finnhub.io/api/v1/quote?symbol=MSTR&token=${FINNHUB_KEY}`, 3000);
@@ -138,12 +132,11 @@ async function fetchLiveMstrPrice() {
     return null;
 }
 
-// 3. BTC 선물 지표 (미체결약정 OI & 펀딩비) 수집 (Binance -> Bybit 다중 연동)
+// 3. BTC 선물 지표 수집 (Binance -> Bybit)
 async function fetchFuturesData() {
     let fundingRate = null;
     let openInterest = null;
 
-    // 1차: 바이낸스 선물 API
     try {
         const [resFR, resOI] = await Promise.all([
             fetchWithTimeout("https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT", 3000),
@@ -165,7 +158,6 @@ async function fetchFuturesData() {
         }
     } catch (e) {}
 
-    // 2차: 바이비트 선물 API (바이낸스 실패 시)
     if (!fundingRate || !openInterest) {
         try {
             const res = await fetchWithTimeout("https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT", 3000);
@@ -187,6 +179,26 @@ async function fetchFuturesData() {
     return { fundingRate, openInterest };
 }
 
+// 4. 5단계 선물 레버리지 위험도 판별 엔진
+function evaluateFuturesRisk(fundingRateStr) {
+    if (!fundingRateStr) return { stage: "🟡 -단계", text: "데이터 수집 대기 중", color: "#aaa" };
+
+    const fr = parseFloat(String(fundingRateStr).replace("%", ""));
+    if (isNaN(fr)) return { stage: "🟡 -단계", text: "데이터 분석 불가", color: "#aaa" };
+
+    if (fr < -0.01) {
+        return { stage: "🟢 1단계 (숏 과열)", text: "숏 쏠림 심화 (스퀴즈 반등 주의)", color: "#2ea043" };
+    } else if (fr <= 0.015) {
+        return { stage: "🟢 2단계 (건전/중립)", text: "적정 레버리지 (건전한 시장)", color: "#3fb950" };
+    } else if (fr <= 0.030) {
+        return { stage: "🟡 3단계 (열기 발생)", text: "롱 포지션 누적 (과열 초기)", color: "#d29922" };
+    } else if (fr <= 0.050) {
+        return { stage: "🟠 4단계 (과열 경고)", text: "롱 쏠림 심화 (조정 및 청산 위험)", color: "#db6d28" };
+    } else {
+        return { stage: "🔴 5단계 (극심한 위험)", text: "극단적 탐욕 (대규모 청산빔 주의)", color: "#f85149" };
+    }
+}
+
 // 카드 UI 요소 탐색 및 데이터 업데이트
 function updateCardValue(possibleIds, labelText, valueText) {
     if (!valueText) return;
@@ -206,7 +218,7 @@ function updateCardValue(possibleIds, labelText, valueText) {
     });
 }
 
-// 4. 고정 시나리오 표 생성
+// 5. 고정 시나리오 표 생성
 function updateScenarioTable(netBpsUsd, currentBtc) {
     const tbody = document.getElementById("scenarioTable");
     if (!tbody || !netBpsUsd || !currentBtc) return;
@@ -227,7 +239,7 @@ function updateScenarioTable(netBpsUsd, currentBtc) {
     tbody.innerHTML = html;
 }
 
-// 5. MSTR 목표가 예측
+// 6. MSTR 목표가 예측
 window.targetPrice = function() {
     const targetBtc = getNum("targetBtcPrice");
     const targetMnav = getNum("targetMnav");
@@ -252,7 +264,7 @@ window.targetPrice = function() {
     setText("predictedNetBps", `예상 Net BPS: $${netBpsUsd.toFixed(2)}`);
 };
 
-// 6. 대시보드 종합 계산
+// 7. 대시보드 종합 계산
 function calculateDashboard(data = currentData) {
     let currentBtcPrice = getNum("btcPrice");
     let currentMstrPrice = getNum("mstrPrice");
@@ -260,7 +272,6 @@ function calculateDashboard(data = currentData) {
     if (currentBtcPrice <= 0) currentBtcPrice = DEFAULT_DATA.fallbackBtcPrice;
     if (currentMstrPrice <= 0) currentMstrPrice = DEFAULT_DATA.fallbackMstrPrice;
 
-    // FDSO 사용 (희석 주식수 424.479M)
     const fdsoShares = data.fdso * 1_000_000;
     const usdAssets = data.usdAssetsUsdB * 1_000_000_000;
     const debt = data.debtUsdB * 1_000_000_000;
@@ -302,7 +313,7 @@ function calculateDashboard(data = currentData) {
     window.targetPrice();
 }
 
-// 7. 메인 데이터 업데이트 로직
+// 8. 메인 데이터 업데이트 로직
 async function updateDashboard() {
     try {
         const res = await fetchWithTimeout("./data.json?cache=" + Date.now(), 2000);
@@ -317,7 +328,6 @@ async function updateDashboard() {
         }
     } catch (e) {}
 
-    // ADSO와 FDSO 반전 오류 방지 (ADSO < FDSO 관계 강제)
     if (currentData.adso > currentData.fdso) {
         const temp = currentData.adso;
         currentData.adso = currentData.fdso;
@@ -328,7 +338,6 @@ async function updateDashboard() {
     setVal("assumedShares", currentData.adso.toFixed(3));
     setVal("fullyDilutedShares", currentData.fdso.toFixed(3));
 
-    // 병렬 데이터 수집 (BTC, MSTR, 선물 지표)
     try {
         const [fetchedBtc, fetchedMstr, futures] = await Promise.all([
             fetchLiveBtcPrice(),
@@ -344,9 +353,15 @@ async function updateDashboard() {
             setVal("mstrPrice", fetchedMstr.toFixed(2));
         }
 
-        // OI 및 펀딩비 UI 업데이트
         if (futures.fundingRate) {
             updateCardValue(["fundingRate", "fundingRateValue", "frValue"], "Funding Rate", futures.fundingRate);
+            
+            // 5단계 선물 레버리지 위험도 자동 계산 및 UI 표시
+            const risk = evaluateFuturesRisk(futures.fundingRate);
+            setText("futuresRiskStage", risk.stage);
+            setText("futuresRiskText", risk.text);
+            const riskStageEl = document.getElementById("futuresRiskStage");
+            if (riskStageEl) riskStageEl.style.color = risk.color;
         }
         if (futures.openInterest) {
             updateCardValue(["btcOi", "btcOiValue", "oiValue"], "BTC OI", futures.openInterest);
