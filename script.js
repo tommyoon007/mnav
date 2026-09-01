@@ -1,5 +1,5 @@
 // =========================================================
-// MSTR mNAV & BTC DASHBOARD - ULTRA-FAST PARALLEL RACE FETCH
+// MSTR mNAV & BTC FUTURES DASHBOARD - AUTO SAVE & API FIX
 // =========================================================
 
 const FINNHUB_KEY = "daaruppr01qn50rjdv2gdaaruppr01qn50rjdv30";
@@ -24,6 +24,7 @@ function setText(id, text) {
 
 function setVal(id, val) {
     const el = document.getElementById(id);
+    // 사용자가 입력 칸을 터치하고 있지 않을 때만 값을 업데이트 (입력 방해 방지)
     if (el && document.activeElement !== el) {
         el.value = val;
     }
@@ -37,7 +38,7 @@ function getNum(id) {
     return isNaN(num) ? 0 : num;
 }
 
-async function fetchWithTimeout(url, timeoutMs = 2500, options = {}) {
+async function fetchWithTimeout(url, timeoutMs = 4000, options = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
@@ -50,105 +51,73 @@ async function fetchWithTimeout(url, timeoutMs = 2500, options = {}) {
     }
 }
 
-// ---------------------------------------------------------
-// [초고속] BTC 실시간 가격 - 병렬 레이싱 (가장 빠른 응답 채택)
-// ---------------------------------------------------------
-async function fetchLiveBtcPriceFast() {
-    const sources = [
-        // Source 1: Coinbase Spot API
-        async () => {
-            const res = await fetchWithTimeout("https://api.coinbase.com/v2/prices/spot?currency=USD", 2000);
-            if (!res || !res.ok) throw new Error();
+// 1. 실시간 BTC 가격 수집
+async function fetchLiveBtcPrice() {
+    try {
+        const res = await fetchWithTimeout("https://api.coinbase.com/v2/prices/spot?currency=USD", 3000);
+        if (res && res.ok) {
             const data = await res.json();
             const p = parseFloat(data?.data?.amount);
             if (p > 0) return p;
-            throw new Error();
-        },
-        // Source 2: Binance Ticker
-        async () => {
-            const res = await fetchWithTimeout("https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT", 2000);
-            if (!res || !res.ok) throw new Error();
+        }
+    } catch (e) {}
+
+    try {
+        const res = await fetchWithTimeout("https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT", 3000);
+        if (res && res.ok) {
             const data = await res.json();
             const p = parseFloat(data?.price);
             if (p > 0) return p;
-            throw new Error();
-        },
-        // Source 3: CoinGecko Public Treasury / Spot
-        async () => {
-            const res = await fetchWithTimeout("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd", 2000);
-            if (!res || !res.ok) throw new Error();
-            const data = await res.json();
-            const p = parseFloat(data?.bitcoin?.usd);
-            if (p > 0) return p;
-            throw new Error();
         }
+    } catch (e) {}
+
+    return null;
+}
+
+// 2. 실시간 MSTR 주가 수집 (로직 개선)
+async function fetchLiveMstrPrice() {
+    // 1순위: 안정적인 Finnhub API 우선 호출
+    if (FINNHUB_KEY) {
+        try {
+            const res = await fetchWithTimeout(`https://finnhub.io/api/v1/quote?symbol=MSTR&token=${FINNHUB_KEY}`, 3000);
+            if (res && res.ok) {
+                const data = await res.json();
+                const price = (data?.c > 0) ? data.c : data?.pc;
+                if (price && price > 0) return parseFloat(price);
+            }
+        } catch (e) {}
+    }
+
+    // 2순위: 야후 파이낸스 (프록시 우회)
+    const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/MSTR?interval=1m&range=1d&includePrePost=true&ts=${Date.now()}`;
+    const proxies = [
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(yahooUrl)}`,
+        `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`
     ];
 
-    try {
-        // 가장 먼저 성공하는 1등 데이터 채택
-        return await Promise.any(sources.map(fn => fn()));
-    } catch (e) {
-        return null;
+    for (const proxy of proxies) {
+        try {
+            const res = await fetchWithTimeout(proxy, 3000);
+            if (res && res.ok) {
+                const data = await res.json();
+                const meta = data?.chart?.result?.[0]?.meta;
+                if (meta) {
+                    const price = meta.postMarketPrice || meta.preMarketPrice || meta.regularMarketPrice || meta.chartPreviousClose;
+                    if (price && price > 0) return parseFloat(price);
+                }
+            }
+        } catch (e) {}
     }
+
+    return null; // 모든 API 실패 시 null 반환 (130으로 리셋하지 않음)
 }
 
-// ---------------------------------------------------------
-// [초고속] MSTR 실시간 주가 - 병렬 레이싱 교차 수집 (Fastest Win)
-// ---------------------------------------------------------
-async function fetchLiveMstrPriceFast() {
-    const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/MSTR?interval=1m&range=1d&includePrePost=true&ts=${Date.now()}`;
-
-    const sources = [];
-
-    // Source 1: Finnhub API (전용 키 호출 - 가장 빠름)
-    if (FINNHUB_KEY) {
-        sources.push(async () => {
-            const res = await fetchWithTimeout(`https://finnhub.io/api/v1/quote?symbol=MSTR&token=${FINNHUB_KEY}`, 2000);
-            if (!res || !res.ok) throw new Error();
-            const data = await res.json();
-            const price = (data?.c > 0) ? data.c : data?.pc;
-            if (price && price > 0) return { price: parseFloat(price), src: "Finnhub" };
-            throw new Error();
-        });
-    }
-
-    // Source 2: Yahoo via corsproxy.io
-    sources.push(async () => {
-        const res = await fetchWithTimeout(`https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`, 2500);
-        if (!res || !res.ok) throw new Error();
-        const data = await res.json();
-        const meta = data?.chart?.result?.[0]?.meta;
-        const price = meta?.postMarketPrice || meta?.preMarketPrice || meta?.regularMarketPrice || meta?.chartPreviousClose;
-        if (price && price > 0) return { price: parseFloat(price), src: "Yahoo-CorsProxy" };
-        throw new Error();
-    });
-
-    // Source 3: Yahoo via AllOrigins
-    sources.push(async () => {
-        const res = await fetchWithTimeout(`https://api.allorigins.win/raw?url=${encodeURIComponent(yahooUrl)}`, 2500);
-        if (!res || !res.ok) throw new Error();
-        const data = await res.json();
-        const meta = data?.chart?.result?.[0]?.meta;
-        const price = meta?.postMarketPrice || meta?.preMarketPrice || meta?.regularMarketPrice || meta?.chartPreviousClose;
-        if (price && price > 0) return { price: parseFloat(price), src: "Yahoo-AllOrigins" };
-        throw new Error();
-    });
-
-    try {
-        // 3개 서버에 동시에 요청을 쏘고, 0.1초라도 먼저 리턴되는 것 바로 채택!
-        const result = await Promise.any(sources.map(fn => fn()));
-        return result.price;
-    } catch (e) {
-        return null; // 실패 시 기존 저장된 주가 유지를 위해 null 반환
-    }
-}
-
-// 바이낸스 선물 과거 데이터 수집
+// 3. 바이낸스 선물 과거 누적 데이터 수집
 async function fetchFuturesHistory() {
     try {
         const [resFR, resOI] = await Promise.all([
-            fetchWithTimeout("https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=90", 4000),
-            fetchWithTimeout("https://fapi.binance.com/fapi/v1/openInterestHist?symbol=BTCUSDT&period=4h&limit=90", 4000)
+            fetchWithTimeout("https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=90", 5000),
+            fetchWithTimeout("https://fapi.binance.com/fapi/v1/openInterestHist?symbol=BTCUSDT&period=4h&limit=90", 5000)
         ]);
 
         if (!resFR || !resFR.ok) return null;
@@ -179,13 +148,13 @@ async function fetchFuturesHistory() {
     }
 }
 
-// 실시간 선물 지표
+// 4. 실시간 선물 단기 데이터 수집
 async function fetchFuturesData() {
     let fundingRate = null, openInterest = null, rawFr = 0, rawOi = 0;
     try {
         const [resFR, resOI] = await Promise.all([
-            fetchWithTimeout("https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT", 2500),
-            fetchWithTimeout("https://fapi.binance.com/fapi/v1/openInterest?symbol=BTCUSDT", 2500)
+            fetchWithTimeout("https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT", 3000),
+            fetchWithTimeout("https://fapi.binance.com/fapi/v1/openInterest?symbol=BTCUSDT", 3000)
         ]);
 
         if (resFR && resFR.ok) {
@@ -207,6 +176,7 @@ async function fetchFuturesData() {
     return { fundingRate, openInterest, rawFr, rawOi };
 }
 
+// 5. 레버리지 위험도 평가
 function evaluateFuturesRisk(fundingRateStr) {
     if (!fundingRateStr) return { stage: "🟡 -단계", text: "데이터 수집 대기 중", color: "#aaa" };
     const fr = parseFloat(String(fundingRateStr).replace("%", ""));
@@ -227,6 +197,7 @@ function updateCardValue(possibleIds, labelText, valueText) {
     }
 }
 
+// 6. 선물 지표 히스토리 차트 구동
 async function initOrUpdateFuturesChart(liveFr, liveOi) {
     const canvas = document.getElementById('futuresChart');
     if (!canvas) return;
@@ -278,6 +249,7 @@ async function initOrUpdateFuturesChart(liveFr, liveOi) {
     }
 }
 
+// 7. 시나리오 표 생성
 function updateScenarioTable(netBpsUsd, currentBtc) {
     const tbody = document.getElementById("scenarioTable");
     if (!tbody || !netBpsUsd || !currentBtc) return;
@@ -300,6 +272,7 @@ function updateScenarioTable(netBpsUsd, currentBtc) {
     tbody.innerHTML = html;
 }
 
+// 8. MSTR 목표가 예측
 window.targetPrice = function() {
     const targetBtc = getNum("targetBtcPrice");
     const targetMnav = getNum("targetMnav");
@@ -319,10 +292,12 @@ window.targetPrice = function() {
     setText("predictedNetBps", `예상 Net BPS: $${netBpsUsd.toFixed(2)}`);
 };
 
+// 9. 대시보드 메인 계산
 function calculateDashboard() {
     let currentBtcPrice = getNum("btcPrice");
     let currentMstrPrice = getNum("mstrPrice");
     
+    // 만약 가격이 입력칸에 없다면 로컬 저장소에서 마지막 값을 불러옵니다.
     if (!currentBtcPrice) currentBtcPrice = parseFloat(localStorage.getItem("savedBtcPrice")) || 95000;
     if (!currentMstrPrice) currentMstrPrice = parseFloat(localStorage.getItem("savedMstrPrice")) || 130;
 
@@ -352,15 +327,16 @@ function calculateDashboard() {
     window.targetPrice();
 }
 
+// 10. 메인 수집 실행
 async function updateDashboard() {
     try {
-        // [병렬 레이싱 실행] 가장 빠른 응답을 받아옵니다.
         const [fetchedBtc, fetchedMstr, futures] = await Promise.all([
-            fetchLiveBtcPriceFast(),
-            fetchLiveMstrPriceFast(),
+            fetchLiveBtcPrice(),
+            fetchLiveMstrPrice(),
             fetchFuturesData()
         ]);
 
+        // API 수집 성공 시 화면 입력칸에 업데이트하고 스마트폰에 저장 (캐시)
         if (fetchedBtc && fetchedBtc > 0) {
             setVal("btcPrice", fetchedBtc.toFixed(2));
             localStorage.setItem("savedBtcPrice", fetchedBtc.toFixed(2));
@@ -385,15 +361,17 @@ async function updateDashboard() {
 
         const now = new Date();
         const timeStr = now.toTimeString().split(' ')[0];
-        setText("dataStatus", `실시간 초고속 연동 완료 (${timeStr})`);
+        setText("dataStatus", `시세 및 데이터 연동 완료 (${timeStr})`);
     } catch (e) {
-        setText("dataStatus", "시세 연동 완료");
+        setText("dataStatus", "시세 연동 대기 중");
     }
 
     calculateDashboard();
 }
 
+// 11. 초기화 및 이벤트 리스너 세팅
 document.addEventListener("DOMContentLoaded", () => {
+    // 폰에 저장된 모든 값을 불러오기
     const savedBtcHoldings = localStorage.getItem("savedBtcHoldings");
     const savedAdso = localStorage.getItem("savedAdso");
     const savedFdso = localStorage.getItem("savedFdso");
@@ -406,6 +384,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (savedAdso) currentData.adso = parseFloat(savedAdso);
     if (savedFdso) currentData.fdso = parseFloat(savedFdso);
     
+    // 화면 입력칸에 저장된 값 표시
     setVal("btcHoldings", currentData.btcHoldings);
     setVal("assumedShares", currentData.adso.toFixed(3));
     setVal("fullyDilutedShares", currentData.fdso.toFixed(3));
@@ -417,6 +396,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     updateDashboard();
 
+    // 사용자가 입력칸을 직접 수정했을 때 폰에 즉시 저장
     const inputIds = ["btcPrice", "mstrPrice", "btcHoldings", "assumedShares", "fullyDilutedShares", "targetBtcPrice", "targetMnav"];
     inputIds.forEach(id => {
         document.getElementById(id)?.addEventListener("input", () => {
@@ -441,8 +421,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
-    // 5초마다 초고속 갱신 (지연 최소화)
-    setInterval(updateDashboard, 5000);
+    setInterval(updateDashboard, 10000);
 
     document.addEventListener("visibilitychange", () => {
         if (!document.hidden) updateDashboard();
