@@ -37,7 +37,24 @@ function getNum(id) {
     return isNaN(num) ? 0 : num;
 }
 
-async function fetchWithTimeout(url, timeoutMs = 3000, options = {}) {
+// UTC 기준 날짜 포맷 함수 (시차 오류 방지)
+function getUtcDateKey(timestamp) {
+    const d = new Date(timestamp);
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+
+function getUtcDisplayDate(timestamp) {
+    const d = new Date(timestamp);
+    const y = String(d.getUTCFullYear()).slice(2);
+    const m = d.getUTCMonth() + 1;
+    const day = d.getUTCDate();
+    return `${y}/${m}/${day}`;
+}
+
+async function fetchWithTimeout(url, timeoutMs = 4000, options = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
@@ -83,7 +100,6 @@ async function fetchLiveBtcPriceFast() {
 
     try {
         const result = await Promise.any(sources.map(fn => fn()));
-        console.log(`[BTC 성공] 출처: ${result.src}, 가격: $${result.price}`);
         return result.price;
     } catch (e) {
         return null;
@@ -130,7 +146,6 @@ async function fetchLiveMstrPriceFast() {
 
     try {
         const result = await Promise.any(sources.map(fn => fn()));
-        console.log(`[MSTR 성공] 출처: ${result.src}, 가격: $${result.price}`);
         return result.price;
     } catch (e) {
         return null;
@@ -138,43 +153,69 @@ async function fetchLiveMstrPriceFast() {
 }
 
 // ---------------------------------------------------------
-// [장기 차트] 1년(365일) 월/년 단위 바이낸스 선물 과거 데이터 수집
+// [완벽한 장기 차트] 1년치 일별 과거 데이터 수집 (UTC 시차 보정)
 // ---------------------------------------------------------
 async function fetchFuturesHistory() {
     try {
-        const [resFR, resOI] = await Promise.all([
-            fetchWithTimeout("https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=1000", 5000),
-            fetchWithTimeout("https://fapi.binance.com/fapi/v1/openInterestHist?symbol=BTCUSDT&period=1d&limit=365", 5000)
-        ]);
+        const frUrl = "https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=1000";
+        const oiUrl = "https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1d&limit=500";
 
+        const resFR = await fetchWithTimeout(frUrl, 4000);
         if (!resFR || !resFR.ok) return null;
 
         const frList = await resFR.json();
+
+        // OI 데이터 수집 (CORS 보장 프록시 백업 포함)
         let oiList = [];
-        if (resOI && resOI.ok) oiList = await resOI.json();
+        let resOI = await fetchWithTimeout(oiUrl, 4000);
+        if (resOI && resOI.ok) {
+            try { oiList = await resOI.json(); } catch (e) {}
+        } else {
+            try {
+                const proxyRes = await fetchWithTimeout(`https://corsproxy.io/?${encodeURIComponent(oiUrl)}`, 4000);
+                if (proxyRes && proxyRes.ok) oiList = await proxyRes.json();
+            } catch (e) {}
+        }
 
-        // 8시간 단위 펀딩비를 날짜별(YYYY-MM-DD) 일일 합산 펀딩비로 변환
-        const dailyFrMap = {};
-        frList.forEach(item => {
-            const dateObj = new Date(item.fundingTime);
-            const dateKey = `${dateObj.getFullYear()}-${(dateObj.getMonth() + 1).toString().padStart(2, '0')}-${dateObj.getDate().toString().padStart(2, '0')}`;
-            if (!dailyFrMap[dateKey]) dailyFrMap[dateKey] = 0;
-            dailyFrMap[dateKey] += parseFloat(item.fundingRate) * 100;
-        });
-
-        const labels = [], frData = [], oiData = [];
-
-        if (oiList.length > 0) {
-            oiList.forEach(oiItem => {
-                const dateObj = new Date(oiItem.timestamp);
-                const dateKey = `${dateObj.getFullYear()}-${(dateObj.getMonth() + 1).toString().padStart(2, '0')}-${dateObj.getDate().toString().padStart(2, '0')}`;
-                const displayDate = `${dateObj.getFullYear().toString().slice(2)}/${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
-                
-                labels.push(displayDate);
-                frData.push(dailyFrMap[dateKey] !== undefined ? dailyFrMap[dateKey] : 0.03);
-                oiData.push(parseFloat(oiItem.sumOpenInterest) / 1000);
+        // 1. OI 날짜별 매핑 (UTC 기준)
+        const oiMap = {};
+        if (Array.isArray(oiList) && oiList.length > 0) {
+            oiList.forEach(item => {
+                const key = getUtcDateKey(item.timestamp);
+                oiMap[key] = parseFloat(item.sumOpenInterest) / 1000;
             });
         }
+
+        // 2. FR 일일 누적 합계 매핑 (UTC 기준)
+        const dailyFrMap = {};
+        const dateDisplayMap = {};
+        if (Array.isArray(frList)) {
+            frList.forEach(item => {
+                const key = getUtcDateKey(item.fundingTime);
+                if (!dailyFrMap[key]) {
+                    dailyFrMap[key] = 0;
+                    dateDisplayMap[key] = getUtcDisplayDate(item.fundingTime);
+                }
+                dailyFrMap[key] += parseFloat(item.fundingRate) * 100;
+            });
+        }
+
+        const sortedKeys = Object.keys(dailyFrMap).sort();
+        const labels = [];
+        const frData = [];
+        const oiData = [];
+
+        let lastValidOi = null;
+
+        sortedKeys.forEach(key => {
+            labels.push(dateDisplayMap[key]);
+            frData.push(parseFloat(dailyFrMap[key].toFixed(4)));
+
+            if (oiMap[key] !== undefined && !isNaN(oiMap[key])) {
+                lastValidOi = oiMap[key];
+            }
+            oiData.push(lastValidOi);
+        });
 
         return { labels, frData, oiData };
     } catch (e) {
@@ -182,7 +223,7 @@ async function fetchFuturesHistory() {
     }
 }
 
-// 실시간 선물 지표 수집
+// 실시간 선물 지표
 async function fetchFuturesData() {
     let fundingRate = null, openInterest = null, rawFr = 0, rawOi = 0;
     try {
@@ -235,18 +276,18 @@ async function initOrUpdateFuturesChart(liveFr, liveOi) {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     
-    // 일일 누적 기준 위험 선 (0.03% * 3회 = 0.09%)
+    // 일일 누적 과열 기준선 (0.03% * 3회 = 0.09%)
     const dailyRiskThreshold = 0.09;
 
     if (!isChartInitialized) {
         const history = await fetchFuturesHistory();
         let labels = [], frData = [], oiData = [];
 
-        if (history && history.labels.length > 0) {
+        if (history && history.labels && history.labels.length > 0) {
             labels = history.labels; frData = history.frData; oiData = history.oiData;
         } else {
             const now = new Date();
-            labels = [`${now.getFullYear().toString().slice(2)}/${now.getMonth()+1}/${now.getDate()}`];
+            labels = [`${String(now.getUTCFullYear()).slice(2)}/${now.getUTCMonth()+1}/${now.getUTCDate()}`];
             frData = [liveFr * 3]; oiData = [liveOi];
         }
 
@@ -257,26 +298,97 @@ async function initOrUpdateFuturesChart(liveFr, liveOi) {
             data: {
                 labels: labels,
                 datasets: [
-                    { label: '일일 펀딩비 합계 (%)', data: frData, borderColor: '#ff9f0a', backgroundColor: 'rgba(255, 159, 10, 0.15)', yAxisID: 'yFR', borderWidth: 1.5, tension: 0.1, pointRadius: 0 },
-                    { label: '미결제약정 (k ₿)', data: oiData, borderColor: '#58a6ff', backgroundColor: 'rgba(88, 166, 255, 0.05)', yAxisID: 'yOI', borderWidth: 1.5, tension: 0.1, pointRadius: 0 },
-                    { label: '일일 과열 기준선 (0.09%)', data: thresholdArray, borderColor: '#f85149', borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0, fill: false, yAxisID: 'yFR' }
+                    {
+                        label: '일일 펀딩비 합계 (%)',
+                        data: frData,
+                        borderColor: '#ff9f0a',
+                        backgroundColor: 'rgba(255, 159, 10, 0.15)',
+                        yAxisID: 'yFR',
+                        borderWidth: 1.5,
+                        tension: 0.1,
+                        pointRadius: 0
+                    },
+                    {
+                        label: '미결제약정 (k ₿)',
+                        data: oiData,
+                        borderColor: '#58a6ff',
+                        backgroundColor: 'rgba(88, 166, 255, 0.05)',
+                        yAxisID: 'yOI',
+                        borderWidth: 1.5,
+                        tension: 0.1,
+                        pointRadius: 0
+                    },
+                    {
+                        label: '일일 과열 기준선 (0.09%)',
+                        data: thresholdArray,
+                        borderColor: '#f85149',
+                        borderWidth: 1.5,
+                        borderDash: [4, 4],
+                        pointRadius: 0,
+                        fill: false,
+                        yAxisID: 'yFR'
+                    }
                 ]
             },
             options: {
-                responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                interaction: { mode: 'index', intersect: false },
                 scales: {
-                    x: { grid: { color: '#2a2a2a' }, ticks: { color: '#8b949e', font: { size: 9 }, maxTicksLimit: 12 } },
-                    yFR: { type: 'linear', position: 'left', grid: { color: '#2a2a2a' }, ticks: { color: '#ff9f0a', font: { size: 10 } } },
-                    yOI: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#58a6ff', font: { size: 10 } } }
+                    x: {
+                        grid: { color: '#2a2a2a' },
+                        ticks: { color: '#8b949e', font: { size: 9 }, maxTicksLimit: 12 }
+                    },
+                    yFR: {
+                        type: 'linear',
+                        position: 'left',
+                        grid: { color: '#2a2a2a' },
+                        ticks: {
+                            color: '#ff9f0a',
+                            font: { size: 10 },
+                            callback: function(value) { return value.toFixed(2) + '%'; }
+                        }
+                    },
+                    yOI: {
+                        type: 'linear',
+                        position: 'right',
+                        grid: { drawOnChartArea: false },
+                        ticks: {
+                            color: '#58a6ff',
+                            font: { size: 10 },
+                            callback: function(value) { return value !== null ? value.toFixed(0) + 'k' : ''; }
+                        }
+                    }
                 },
-                plugins: { legend: { labels: { color: '#fff', font: { size: 11 } } } }
+                plugins: {
+                    legend: { labels: { color: '#fff', font: { size: 11 } } },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) label += ': ';
+                                if (context.parsed.y !== null) {
+                                    if (context.dataset.yAxisID === 'yFR') {
+                                        label += context.parsed.y.toFixed(4) + '%';
+                                    } else {
+                                        label += context.parsed.y.toFixed(1) + 'k ₿';
+                                    }
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                }
             }
         });
         isChartInitialized = true;
     } else if (futuresChartInstance) {
         const lastIdx = futuresChartInstance.data.datasets[0].data.length - 1;
         if (lastIdx >= 0) {
-            futuresChartInstance.data.datasets[1].data[lastIdx] = liveOi;
+            if (liveOi > 0) {
+                futuresChartInstance.data.datasets[1].data[lastIdx] = liveOi;
+            }
             futuresChartInstance.update('none');
         }
     }
