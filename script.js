@@ -1,12 +1,10 @@
 // =========================================================
-// MSTR mNAV & BTC FUTURES DASHBOARD - FULLY FIXED SCRIPT
+// MSTR mNAV & BTC FUTURES DASHBOARD - HYBRID REAL-TIME SCRIPT
 // =========================================================
 
 const FINNHUB_KEY = "daaruppr01qn50rjdv2gdaaruppr01qn50rjdv30";
 
 // Strategy/SEC 기준 올바른 재무 데이터
-// ADSO(Assumed Diluted Shares): ~298.039M
-// FDSO(Fully Diluted Shares): ~424.479M (희석 주식수가 항상 더 큼)
 const DEFAULT_DATA = {
     btcHoldings: 845050,
     adso: 298.039,
@@ -20,6 +18,7 @@ const DEFAULT_DATA = {
 
 let currentData = { ...DEFAULT_DATA };
 
+// --- 유틸리티 함수 ---
 function setText(id, text) {
     const el = document.getElementById(id);
     if (el) el.textContent = text;
@@ -53,7 +52,9 @@ async function fetchWithTimeout(url, timeoutMs = 3000, options = {}) {
     }
 }
 
-// 1. 실시간 BTC 가격 수집 (Coinbase -> Binance -> CoinGecko)
+// --- REST API 백업 데이터 수집 ---
+
+// 1. 실시간 BTC 가격 백업 (Coinbase -> Binance)
 async function fetchLiveBtcPrice() {
     try {
         const res = await fetchWithTimeout("https://api.coinbase.com/v2/prices/spot?currency=USD", 3000);
@@ -76,27 +77,12 @@ async function fetchLiveBtcPrice() {
     return null;
 }
 
-// 2. 실시간 MSTR 주가 수집 (TradingView -> Yahoo Finance -> Finnhub)
+// 2. 실시간 MSTR 주가 백업 (Yahoo Finance Proxy -> Finnhub)
 async function fetchLiveMstrPrice() {
     try {
-        const res = await fetchWithTimeout("https://scanner.tradingview.com/america/scan", 3000, {
-            method: "POST",
-            headers: { "Content-Type": "text/plain" },
-            body: JSON.stringify({
-                symbols: { tickers: ["NASDAQ:MSTR"] },
-                columns: ["close"]
-            })
-        });
-        if (res && res.ok) {
-            const data = await res.json();
-            const price = data?.data?.[0]?.d?.[0];
-            if (price && price > 0) return parseFloat(price);
-        }
-    } catch (e) {}
-
-    try {
         const targetUrl = "https://query1.finance.yahoo.com/v8/finance/chart/MSTR?interval=1m&range=1d";
-        const res = await fetchWithTimeout("https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(targetUrl), 3000);
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
+        const res = await fetchWithTimeout(proxyUrl, 3000);
         if (res && res.ok) {
             const data = await res.json();
             const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
@@ -114,16 +100,14 @@ async function fetchLiveMstrPrice() {
             }
         } catch (e) {}
     }
-
     return null;
 }
 
-// 3. BTC 선물 지표 (미미체결약정 OI & 펀딩비) 수집 (Binance -> Bybit 다중 연동)
+// 3. BTC 선물 지표 (미체결약정 OI & 펀딩비) 수집
 async function fetchFuturesData() {
     let fundingRate = null;
     let openInterest = null;
 
-    // 1차: 바이낸스 선물 API
     try {
         const [resFR, resOI] = await Promise.all([
             fetchWithTimeout("https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT", 3000),
@@ -145,7 +129,6 @@ async function fetchFuturesData() {
         }
     } catch (e) {}
 
-    // 2차: 바이비트 선물 API (바이낸스 실패 시)
     if (!fundingRate || !openInterest) {
         try {
             const res = await fetchWithTimeout("https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT", 3000);
@@ -153,21 +136,53 @@ async function fetchFuturesData() {
                 const json = await res.json();
                 const item = json?.result?.list?.[0];
                 if (item) {
-                    if (!fundingRate && item.fundingRate) {
-                        fundingRate = (parseFloat(item.fundingRate) * 100).toFixed(4) + "%";
-                    }
-                    if (!openInterest && item.openInterest) {
-                        openInterest = (parseFloat(item.openInterest) / 1000).toFixed(1) + "k ₿";
-                    }
+                    if (!fundingRate && item.fundingRate) fundingRate = (parseFloat(item.fundingRate) * 100).toFixed(4) + "%";
+                    if (!openInterest && item.openInterest) openInterest = (parseFloat(item.openInterest) / 1000).toFixed(1) + "k ₿";
                 }
             }
         } catch (e) {}
     }
-
     return { fundingRate, openInterest };
 }
 
-// 카드 UI 요소 탐색 및 데이터 업데이트
+// --- WebSocket 실시간 데이터 스트림 ---
+
+function initBtcWebSocket() {
+    const btcWs = new WebSocket("wss://stream.binance.com:9443/ws/btcusdt@trade");
+    
+    btcWs.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data && data.p) {
+            setVal("btcPrice", parseFloat(data.p).toFixed(2));
+            calculateDashboard(currentData);
+        }
+    };
+    
+    btcWs.onerror = () => console.warn("BTC WebSocket 오류, REST API로 대체됩니다.");
+}
+
+function initMstrWebSocket() {
+    if (!FINNHUB_KEY) return;
+    const mstrWs = new WebSocket(`wss://ws.finnhub.io?token=${FINNHUB_KEY}`);
+    
+    mstrWs.onopen = () => mstrWs.send(JSON.stringify({ type: 'subscribe', symbol: 'MSTR' }));
+    
+    mstrWs.onmessage = (event) => {
+        const response = JSON.parse(event.data);
+        if (response.type === 'trade' && response.data && response.data[0]) {
+            const liveMstr = parseFloat(response.data[0].p);
+            if (liveMstr > 0) {
+                setVal("mstrPrice", liveMstr.toFixed(2));
+                calculateDashboard(currentData);
+            }
+        }
+    };
+    
+    mstrWs.onerror = () => console.warn("MSTR WebSocket 오류, REST API로 대체됩니다.");
+}
+
+// --- UI 업데이트 및 계산 ---
+
 function updateCardValue(possibleIds, labelText, valueText) {
     if (!valueText) return;
     for (const id of possibleIds) {
@@ -186,15 +201,14 @@ function updateCardValue(possibleIds, labelText, valueText) {
     });
 }
 
-// 4. 고정 시나리오 표 생성
 function updateScenarioTable(netBpsUsd, currentBtc) {
     const tbody = document.getElementById("scenarioTable");
     if (!tbody || !netBpsUsd || !currentBtc) return;
 
     const fixedBtcTargets = [70000, 80000, 90000, 100000, 120000, 150000, 200000];
     const mnavMultipliers = [1.0, 1.25, 1.5, 2.0, 2.5, 3.0];
-
     let html = "";
+    
     fixedBtcTargets.forEach(targetBtc => {
         const ratio = targetBtc / currentBtc;
         const targetNetBps = netBpsUsd * ratio;
@@ -207,19 +221,16 @@ function updateScenarioTable(netBpsUsd, currentBtc) {
     tbody.innerHTML = html;
 }
 
-// 5. MSTR 목표가 예측
 window.targetPrice = function() {
     const targetBtc = getNum("targetBtcPrice");
     const targetMnav = getNum("targetMnav");
 
     if (targetBtc > 0) localStorage.setItem("savedTargetBtc", targetBtc);
     if (targetMnav > 0) localStorage.setItem("savedTargetMnav", targetMnav);
-
     if (!targetBtc || !targetMnav) return;
 
     const fdso = getNum("fullyDilutedShares") || currentData.fdso;
     const btcHoldings = getNum("btcHoldings") || currentData.btcHoldings;
-
     const fdsoShares = fdso * 1_000_000;
     const usdAssets = currentData.usdAssetsUsdB * 1_000_000_000;
     const debt = currentData.debtUsdB * 1_000_000_000;
@@ -232,7 +243,6 @@ window.targetPrice = function() {
     setText("predictedNetBps", `예상 Net BPS: $${netBpsUsd.toFixed(2)}`);
 };
 
-// 6. 대시보드 종합 계산
 function calculateDashboard(data = currentData) {
     let currentBtcPrice = getNum("btcPrice");
     let currentMstrPrice = getNum("mstrPrice");
@@ -240,7 +250,6 @@ function calculateDashboard(data = currentData) {
     if (currentBtcPrice <= 0) currentBtcPrice = DEFAULT_DATA.fallbackBtcPrice;
     if (currentMstrPrice <= 0) currentMstrPrice = DEFAULT_DATA.fallbackMstrPrice;
 
-    // FDSO 사용 (희석 주식수 424.479M)
     const fdsoShares = data.fdso * 1_000_000;
     const usdAssets = data.usdAssetsUsdB * 1_000_000_000;
     const debt = data.debtUsdB * 1_000_000_000;
@@ -282,7 +291,7 @@ function calculateDashboard(data = currentData) {
     window.targetPrice();
 }
 
-// 7. 메인 데이터 업데이트 로직
+// 7. 메인 데이터 업데이트 로직 (REST/JSON 백업용)
 async function updateDashboard() {
     try {
         const res = await fetchWithTimeout("./data.json?cache=" + Date.now(), 2000);
@@ -297,7 +306,6 @@ async function updateDashboard() {
         }
     } catch (e) {}
 
-    // ADSO와 FDSO 반전 오류 방지 (ADSO < FDSO 관계 강제)
     if (currentData.adso > currentData.fdso) {
         const temp = currentData.adso;
         currentData.adso = currentData.fdso;
@@ -308,7 +316,6 @@ async function updateDashboard() {
     setVal("assumedShares", currentData.adso.toFixed(3));
     setVal("fullyDilutedShares", currentData.fdso.toFixed(3));
 
-    // 병렬 데이터 수집 (BTC, MSTR, 선물 지표)
     try {
         const [fetchedBtc, fetchedMstr, futures] = await Promise.all([
             fetchLiveBtcPrice(),
@@ -316,25 +323,22 @@ async function updateDashboard() {
             fetchFuturesData()
         ]);
 
-        if (fetchedBtc && fetchedBtc > 0) {
+        // WebSocket 값이 아직 없을 때만 REST API 값을 입력창에 반영
+        const currentBtcInput = getNum("btcPrice");
+        if (fetchedBtc && fetchedBtc > 0 && currentBtcInput <= 0) {
             setVal("btcPrice", fetchedBtc.toFixed(2));
         }
 
-        if (fetchedMstr && fetchedMstr > 0) {
+        const currentMstrInput = getNum("mstrPrice");
+        if (fetchedMstr && fetchedMstr > 0 && currentMstrInput <= 0) {
             setVal("mstrPrice", fetchedMstr.toFixed(2));
         }
 
-        // OI 및 펀딩비 UI 업데이트
-        if (futures.fundingRate) {
-            updateCardValue(["fundingRate", "fundingRateValue", "frValue"], "Funding Rate", futures.fundingRate);
-        }
-        if (futures.openInterest) {
-            updateCardValue(["btcOi", "btcOiValue", "oiValue"], "BTC OI", futures.openInterest);
-        }
+        if (futures.fundingRate) updateCardValue(["fundingRate", "fundingRateValue", "frValue"], "Funding Rate", futures.fundingRate);
+        if (futures.openInterest) updateCardValue(["btcOi", "btcOiValue", "oiValue"], "BTC OI", futures.openInterest);
 
         const now = new Date();
-        const timeStr = now.toTimeString().split(' ')[0];
-        setText("dataStatus", `실시간 데이터 연동 완료 (${timeStr})`);
+        setText("dataStatus", `하이브리드 실시간 연동 중 (${now.toTimeString().split(' ')[0]})`);
     } catch (e) {
         setText("dataStatus", "실시간 시세 연동 대기 중");
     }
@@ -342,19 +346,27 @@ async function updateDashboard() {
     calculateDashboard(currentData);
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+// --- 초기화 ---
+document.addEventListener("DOMContentLoaded", async () => {
     const savedBtc = localStorage.getItem("savedTargetBtc");
     const savedMnav = localStorage.getItem("savedTargetMnav");
     if (savedBtc) setVal("targetBtcPrice", savedBtc);
     if (savedMnav) setVal("targetMnav", savedMnav);
 
-    updateDashboard();
+    // 최초 1회 공시 데이터 및 REST 가격 로드
+    await updateDashboard();
 
+    // 양방향 WebSocket 스트림 개설 (핵심)
+    initBtcWebSocket();
+    initMstrWebSocket();
+
+    // 수동 입력 창 이벤트 리스너 등록
     document.getElementById("targetBtcPrice")?.addEventListener("input", window.targetPrice);
     document.getElementById("targetMnav")?.addEventListener("input", window.targetPrice);
     document.getElementById("mstrPrice")?.addEventListener("input", () => calculateDashboard(currentData));
     document.getElementById("btcPrice")?.addEventListener("input", () => calculateDashboard(currentData));
 
+    // 공시 데이터 및 펀딩비 10초 주기 백업 갱신
     setInterval(updateDashboard, 10000);
 
     document.addEventListener("visibilitychange", () => {
