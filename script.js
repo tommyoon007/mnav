@@ -27,6 +27,7 @@ function setText(id, text) {
 
 function setVal(id, val) {
     const el = document.getElementById(id);
+    // 사용자가 입력창을 클릭(포커스)하고 있지 않을 때만 값을 업데이트하여 입력 방해 방지
     if (el && document.activeElement !== el) {
         el.value = val;
     }
@@ -78,23 +79,36 @@ async function fetchLiveBtcPrice() {
     return null;
 }
 
-// 2. 실시간 MSTR 주가 백업 (Yahoo Finance Proxy -> Finnhub)
+// 2. 실시간 MSTR 주가 백업 (Yahoo Finance 다중 Proxy -> Finnhub)
 async function fetchLiveMstrPrice() {
+    // 캐시를 방지하기 위해 URL 끝에 현재 시간(ts) 추가
+    const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/MSTR?interval=1m&range=1d&ts=${Date.now()}`;
+    
+    // 1차 프록시 시도
     try {
-        const targetUrl = "https://query1.finance.yahoo.com/v8/finance/chart/MSTR?interval=1m&range=1d";
         const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
         const res = await fetchWithTimeout(proxyUrl, 3000);
         if (res && res.ok) {
             const data = await res.json();
             const meta = data?.chart?.result?.[0]?.meta;
-            
-            // 프리마켓 -> 애프터마켓 -> 정규장 순으로 존재하는 가격을 우선 적용
             const price = meta?.preMarketPrice || meta?.postMarketPrice || meta?.regularMarketPrice;
-            
             if (price && price > 0) return parseFloat(price);
         }
     } catch (e) {}
 
+    // 2차 프록시 시도 (1차 실패 시)
+    try {
+        const proxyUrl2 = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`;
+        const res2 = await fetchWithTimeout(proxyUrl2, 3000);
+        if (res2 && res2.ok) {
+            const data = await res2.json();
+            const meta = data?.chart?.result?.[0]?.meta;
+            const price = meta?.preMarketPrice || meta?.postMarketPrice || meta?.regularMarketPrice;
+            if (price && price > 0) return parseFloat(price);
+        }
+    } catch (e) {}
+
+    // 3차 Finnhub REST 시도
     if (FINNHUB_KEY) {
         try {
             const res = await fetchWithTimeout(`https://finnhub.io/api/v1/quote?symbol=MSTR&token=${FINNHUB_KEY}`, 3000);
@@ -108,7 +122,7 @@ async function fetchLiveMstrPrice() {
     return null;
 }
 
-// 3. BTC 선물 지표 (미체결약정 OI & 펀딩비) 수집
+// 3. BTC 선물 지표 수집
 async function fetchFuturesData() {
     let fundingRate = null;
     let openInterest = null;
@@ -328,14 +342,13 @@ async function updateDashboard() {
             fetchFuturesData()
         ]);
 
-        // WebSocket 값이 아직 없을 때만 REST API 값을 입력창에 반영
-        const currentBtcInput = getNum("btcPrice");
-        if (fetchedBtc && fetchedBtc > 0 && currentBtcInput <= 0) {
+        // 입력창에 이미 숫자가 있더라도 항상 백그라운드 시세로 덮어씌움 
+        // (단, 사용자가 클릭해서 입력 중일 때는 덮어씌우지 않음 - setVal 함수 자체 로직)
+        if (fetchedBtc && fetchedBtc > 0) {
             setVal("btcPrice", fetchedBtc.toFixed(2));
         }
 
-        const currentMstrInput = getNum("mstrPrice");
-        if (fetchedMstr && fetchedMstr > 0 && currentMstrInput <= 0) {
+        if (fetchedMstr && fetchedMstr > 0) {
             setVal("mstrPrice", fetchedMstr.toFixed(2));
         }
 
