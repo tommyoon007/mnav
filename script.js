@@ -1,14 +1,24 @@
+// =========================================================================
+// MSTR mNAV & BTC FUTURES PRO DASHBOARD - DEFINITIVE ENGINE
+// =========================================================================
+
 document.addEventListener("DOMContentLoaded", () => {
     setupEventListeners();
     fetchFuturesData();
     updateDashboard();
-    changeChartTimeframe('1M'); // 기본 차트 보기
+    changeChartTimeframe('1M'); 
     
-    // 5분마다 실시간 펀딩비 및 OI 업데이트 (무한 루프 방지)
+    // 5분마다 실시간 펀딩비 및 OI 업데이트
     setInterval(fetchFuturesData, 300000); 
 });
 
-const parseNum = (str) => parseFloat(str.toString().replace(/,/g, '')) || 0;
+const parseNum = (str) => {
+    if (str === null || str === undefined) return 0;
+    const cleanStr = str.toString().replace(/,/g, '').trim();
+    const num = parseFloat(cleanStr);
+    return isNaN(num) ? 0 : num;
+};
+
 const formatNum = (num) => Number(num).toLocaleString('en-US', { maximumFractionDigits: 2 });
 
 function setupEventListeners() {
@@ -16,7 +26,10 @@ function setupEventListeners() {
     inputs.forEach(id => {
         const el = document.getElementById(id);
         if (el) {
-            el.addEventListener('input', () => updateDashboard());
+            // 입력 중 커서가 튀거나 포커스가 풀리지 않도록 실시간 계산만 수행
+            el.addEventListener('input', () => {
+                updateDashboard();
+            });
         }
     });
 }
@@ -39,6 +52,7 @@ function updateDashboard() {
     const mnav = netBpsUsd > 0 ? (mstrPrice / netBpsUsd) : 0;
     const premium = (mnav - 1) * 100;
 
+    // 결과값만 안전하게 갱신 (사용자 입력 칸은 절대 건드리지 않음)
     document.getElementById('grossBpsSats').innerText = formatNum(grossSats.toFixed(0));
     document.getElementById('netBpsSats').innerText = formatNum(netSats.toFixed(0));
     document.getElementById('netBpsUsd').innerText = "$" + formatNum(netBpsUsd.toFixed(2));
@@ -112,11 +126,11 @@ async function fetchFuturesData() {
         updateRiskStage(fundingRate);
         
         const statusEl = document.getElementById('dataStatus');
-        statusEl.innerText = `✅ 실시간 데이터 연동 완료 (마지막 업데이트: ${new Date().toLocaleTimeString()})`;
+        statusEl.innerText = `✅ 실시간 파생 데이터 연동 완료 (${new Date().toLocaleTimeString()})`;
         statusEl.style.color = "#3fb950";
 
     } catch (error) {
-        document.getElementById('dataStatus').innerText = "⚠️ 바이낸스 API 연결 실패. 기본 데이터를 표시합니다.";
+        document.getElementById('dataStatus').innerText = "⚠️ 바이낸스 API 연결 실패. 기본 상태를 유지합니다.";
         document.getElementById('dataStatus').style.color = "#ff453a";
     }
 }
@@ -156,72 +170,112 @@ window.changeChartTimeframe = async function(timeframe) {
 
     const ctx = document.getElementById('futuresChart').getContext('2d');
     
-    // 메모리 누수 방지: 새 데이터를 부르기 전에 기존 차트 즉시 파기
     if (chartInstance) {
         chartInstance.destroy();
     }
     
-    // 기간별 바이낸스 API 호출 횟수 안전 한도 설정 (Max 1000)
     let limit = 90; 
-    if (timeframe === '1D') limit = 3;        // 1일 (8시간 * 3)
-    else if (timeframe === '1M') limit = 90;  // 1개월 (8시간 * 90)
-    else if (timeframe === '3M') limit = 270; // 3개월
-    else if (timeframe === '6M') limit = 540; // 6개월
-    else if (timeframe === '1Y') limit = 1000;// 1년 (최대치 한도 제한 적용)
+    if (timeframe === '1D') limit = 3;        
+    else if (timeframe === '1M') limit = 90;  
+    else if (timeframe === '3M') limit = 270; 
+    else if (timeframe === '6M') limit = 540; 
+    else if (timeframe === '1Y') limit = 1000;
 
     try {
-        const response = await fetch(`https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=${limit}`);
-        const data = await response.json();
+        // [업그레이드] BTC 8시간봉 가격 데이터와 펀딩비 데이터를 병렬로 동시 호출하여 듀얼 차트 구성
+        const [frRes, klinesRes] = await Promise.all([
+            fetch(`https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=${limit}`),
+            fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval=8h&limit=${limit}`)
+        ]);
 
-        const labels = data.map(d => {
+        const frData = await frRes.json();
+        const klinesData = await klinesRes.json();
+
+        const labels = frData.map(d => {
             const date = new Date(d.fundingTime);
             return timeframe === '1D' ? date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : date.toLocaleDateString();
         });
         
-        const fundingRates = data.map(d => parseFloat(d.fundingRate) * 100);
+        const fundingRates = frData.map(d => parseFloat(d.fundingRate) * 100);
+        const btcPrices = klinesData.map(k => parseFloat(k[4])); // 8시간봉 종가(Close)
 
         chartInstance = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: labels,
-                datasets: [{
-                    label: 'Funding Rate (%)',
-                    data: fundingRates,
-                    borderColor: '#ff9f0a',
-                    backgroundColor: 'rgba(255, 159, 10, 0.1)',
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0.4,
-                    pointRadius: timeframe === '1Y' ? 0 : 2, // 1Y일 때 점 크기 축소로 렌더링 최적화
-                    pointHitRadius: 10
-                }]
+                datasets: [
+                    {
+                        label: 'BTC 가격 ($)',
+                        data: btcPrices,
+                        borderColor: '#58a6ff',
+                        backgroundColor: 'rgba(88, 166, 255, 0.05)',
+                        borderWidth: 2,
+                        yAxisID: 'y', // 왼쪽 축
+                        tension: 0.3,
+                        pointRadius: 0,
+                        fill: true
+                    },
+                    {
+                        label: '펀딩비 (%)',
+                        data: fundingRates,
+                        borderColor: '#ff9f0a',
+                        backgroundColor: 'rgba(255, 159, 10, 0.15)',
+                        borderWidth: 1.5,
+                        yAxisID: 'y1', // 오른쪽 축 (독립 분리)
+                        tension: 0.3,
+                        pointRadius: timeframe === '1Y' ? 0 : 2,
+                        fill: false
+                    }
+                ]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: { display: false },
+                    legend: { 
+                        display: true,
+                        labels: { color: '#8b949e', font: { size: 11 } }
+                    },
                     tooltip: {
                         mode: 'index',
                         intersect: false,
                         callbacks: {
                             label: function(context) {
-                                return context.parsed.y.toFixed(4) + '%';
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed.y !== null) {
+                                    label += context.dataset.yAxisID === 'y' ? '$' + formatNum(context.parsed.y) : context.parsed.y.toFixed(4) + '%';
+                                }
+                                return label;
                             }
                         }
                     }
                 },
                 scales: {
-                    x: { display: false },
+                    x: { 
+                        display: false 
+                    },
                     y: {
-                        grid: { color: '#30363d', drawBorder: false },
-                        ticks: { color: '#8b949e', font: { size: 10 } }
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        grid: { color: '#21262d' },
+                        ticks: { color: '#58a6ff', font: { size: 10 } }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        grid: { drawOnChartArea: false }, // 격자선 겹침 방지
+                        ticks: { color: '#ff9f0a', font: { size: 10 } }
                     }
                 },
                 interaction: { mode: 'nearest', axis: 'x', intersect: false }
             }
         });
     } catch (error) {
-        console.error("차트 데이터 불러오기 실패:", error);
+        console.error("차트 데이터 연동 실패:", error);
     }
 };
