@@ -123,14 +123,14 @@
 
     <!-- 데이터 입력 카드 -->
     <div class="card">
-        <div class="card-title">⚡ 실시간 수집 및 기초 설정 데이터</div>
+        <div class="card-title">⚡ 기초 설정 및 수동/자동 입력 데이터</div>
         <div class="status-box">
             <div id="dataStatus">실시간 데이터 연동 중...</div>
         </div>
 
         <div class="input-grid">
             <div class="input-group">
-                <label for="btcPrice">BTC 실시간 가격 ($)</label>
+                <label for="btcPrice">BTC 가격 ($)</label>
                 <input type="text" id="btcPrice" value="95000">
             </div>
 
@@ -161,12 +161,12 @@
         <div class="card-title">📊 MSTR 핵심 mNAV 계산 결과</div>
         <div class="grid">
             <div class="result-card">
-                <div class="result-label">GROSS BTC / SHARE</div>
+                <div class="result-label">GROSS BTC / SHARE (ADSO)</div>
                 <div class="result-val" id="grossBpsSats">-</div>
                 <div class="result-sub">Sats</div>
             </div>
             <div class="result-card">
-                <div class="result-label">NET BTC / SHARE</div>
+                <div class="result-label">NET BTC / SHARE (FDSO)</div>
                 <div class="result-val" id="netBpsSats">-</div>
                 <div class="result-sub">Sats</div>
             </div>
@@ -279,6 +279,7 @@
     let chartLS = null;
     let lastValidOI = null;
     let oiTimerId = null;
+    let userEditedBtcPrice = false; // 사용자 수동 입력 여부 플래그
 
     // --- UTC 날짜 추출 공통 함수 ---
     function formatUTCDate(timestamp) {
@@ -305,18 +306,21 @@
         }
     }
 
-    // --- 1. MSTR mNAV 계산 엔진 ---
+    // --- 1. MSTR mNAV 계산 엔진 (ADSO / FDSO 수식 완전 복원) ---
     function calculateMstr() {
         const btcPrice = parseFloat(document.getElementById('btcPrice').value.replace(/,/g, '')) || 0;
         const mstrPrice = parseFloat(document.getElementById('mstrPrice').value.replace(/,/g, '')) || 0;
         const btcHoldings = parseFloat(document.getElementById('btcHoldings').value.replace(/,/g, '')) || 0;
-        const fdso = parseFloat(document.getElementById('fullyDilutedShares').value.replace(/,/g, '')) || 1; // M단위
+        const adso = parseFloat(document.getElementById('assumedShares').value.replace(/,/g, '')) || 1; // ADSO (M)
+        const fdso = parseFloat(document.getElementById('fullyDilutedShares').value.replace(/,/g, '')) || 1; // FDSO (M)
 
-        // Gross BTC / Share (Sats) = (보유량 * 1억) / (FDSO * 100만) = (보유량 * 100) / FDSO
-        const grossSats = Math.round((btcHoldings * 100) / fdso);
-        const netSats = grossSats;
+        // Gross BTC / Share (Sats) = ADSO 기준
+        const grossSats = Math.round((btcHoldings * 100) / adso);
 
-        // Net BPS (USD)
+        // Net BTC / Share (Sats) = FDSO 기준
+        const netSats = Math.round((btcHoldings * 100) / fdso);
+
+        // Net BPS (USD) = FDSO 기준
         const netBpsUsd = (btcHoldings * btcPrice) / (fdso * 1000000);
         const mnav = netBpsUsd > 0 ? (mstrPrice / netBpsUsd) : 0;
         const premiumPct = ((mnav - 1) * 100).toFixed(1);
@@ -349,7 +353,7 @@
         renderScenarioTable();
     }
 
-    // --- 2. MSTR 목표가 시뮬레이터 ---
+    // --- 2. MSTR 목표가 시뮬레이터 (고정값 유지 계산) ---
     function calculateSimulator() {
         const targetBtc = parseFloat(document.getElementById('targetBtcPrice').value.replace(/,/g, '')) || 0;
         const targetMnav = parseFloat(document.getElementById('targetMnav').value.replace(/,/g, '')) || 0;
@@ -386,16 +390,21 @@
         });
     }
 
-    // --- 4. 바이낸스 선물 데이터 로드 ---
+    // --- 4. 바이낸스 선물 데이터 로드 (사용자 수동 입력 보호 적용) ---
     async function loadBinanceData() {
         const statusEl = document.getElementById('dataStatus');
         
-        // 1) BTC 실시간 가격 수신
+        // 1) BTC 실시간 가격 수신 (사용자가 직접 수정 중이 아니거나 수동 변경 플래그가 없을 때만 반영)
         const ticker = await fetchWithFallback('https://fapi.binance.com/fapi/v1/ticker/price?symbol=BTCUSDT');
         if (ticker && ticker.price) {
             const currentBtcPrice = parseFloat(ticker.price).toFixed(0);
-            document.getElementById('btcPrice').value = currentBtcPrice;
-            calculateMstr(); // 계산기 즉시 갱신
+            const btcInput = document.getElementById('btcPrice');
+            
+            // 사용자가 현재 포커스를 맞추고 있지 않고, 수동 수정을 안 했을 때만 자동 채움
+            if (document.activeElement !== btcInput && !userEditedBtcPrice) {
+                btcInput.value = currentBtcPrice;
+                calculateMstr();
+            }
         }
 
         // 2) 펀딩비 데이터 수신 (UTC 일별 합산)
@@ -650,9 +659,17 @@
     }
 
     // --- 이벤트 리스너 등록 ---
-    const inputs = ['btcPrice', 'mstrPrice', 'btcHoldings', 'assumedShares', 'fullyDilutedShares', 'targetBtcPrice', 'targetMnav'];
-    inputs.forEach(id => {
-        document.getElementById(id).addEventListener('input', calculateMstr);
+    const mstrInputs = ['btcPrice', 'mstrPrice', 'btcHoldings', 'assumedShares', 'fullyDilutedShares'];
+    mstrInputs.forEach(id => {
+        document.getElementById(id).addEventListener('input', () => {
+            if (id === 'btcPrice') userEditedBtcPrice = true; // 사용자가 직접 BTC 가격을 입력하면 자동 갱신 비활성화
+            calculateMstr();
+        });
+    });
+
+    const simulatorInputs = ['targetBtcPrice', 'targetMnav'];
+    simulatorInputs.forEach(id => {
+        document.getElementById(id).addEventListener('input', calculateSimulator);
     });
 
     // --- 초기화 ---
