@@ -1,5 +1,5 @@
 // =========================================================
-// MSTR mNAV & BTC FUTURES DASHBOARD - VERIFIED ENGINE CODE
+// MSTR mNAV & BTC FUTURES DASHBOARD - HISTORICAL DATA ENGINE
 // =========================================================
 
 const FINNHUB_KEY = "daaruppr01qn50rjdv2gdaaruppr01qn50rjdv30";
@@ -17,6 +17,7 @@ const DEFAULT_DATA = {
 
 let currentData = { ...DEFAULT_DATA };
 let futuresChartInstance = null;
+let isChartInitialized = false;
 
 function setText(id, text) {
     const el = document.getElementById(id);
@@ -38,7 +39,7 @@ function getNum(id) {
     return isNaN(num) ? 0 : num;
 }
 
-async function fetchWithTimeout(url, timeoutMs = 3000, options = {}) {
+async function fetchWithTimeout(url, timeoutMs = 4000, options = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
@@ -111,7 +112,51 @@ async function fetchLiveMstrPrice() {
     return null;
 }
 
-// 3. 선물 지표 수집 (Bybit 폴백 시 rawFr/rawOi 파싱 보완)
+// 3. 바이낸스 선물 과거 누적 데이터 수집 (최근 30일, 8시간 간격)
+async function fetchFuturesHistory() {
+    try {
+        const [resFR, resOI] = await Promise.all([
+            fetchWithTimeout("https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=90", 5000),
+            fetchWithTimeout("https://fapi.binance.com/fapi/v1/openInterestHist?symbol=BTCUSDT&period=4h&limit=90", 5000)
+        ]);
+
+        if (!resFR || !resFR.ok) return null;
+
+        const frList = await resFR.json();
+        let oiList = [];
+        if (resOI && resOI.ok) {
+            oiList = await resOI.json();
+        }
+
+        const labels = [];
+        const frData = [];
+        const oiData = [];
+
+        frList.forEach((item) => {
+            const dateObj = new Date(item.fundingTime);
+            const dateStr = `${dateObj.getMonth() + 1}/${dateObj.getDate()} ${dateObj.getHours().toString().padStart(2, '0')}:00`;
+            labels.push(dateStr);
+
+            const frVal = parseFloat(item.fundingRate) * 100;
+            frData.push(frVal);
+
+            // 해당 시각 근처의 OI 데이터 검색
+            const matchedOi = oiList.find(o => Math.abs(o.timestamp - item.fundingTime) < 4 * 3600 * 1000);
+            if (matchedOi && matchedOi.sumOpenInterest) {
+                oiData.push(parseFloat(matchedOi.sumOpenInterest) / 1000); // k BTC 단위
+            } else {
+                oiData.push(oiData.length > 0 ? oiData[oiData.length - 1] : 0);
+            }
+        });
+
+        return { labels, frData, oiData };
+    } catch (e) {
+        console.error("과거 히스토리 로드 실패:", e);
+        return null;
+    }
+}
+
+// 4. 실시간 선물 단기 데이터 수집
 async function fetchFuturesData() {
     let fundingRate = null;
     let openInterest = null;
@@ -141,31 +186,10 @@ async function fetchFuturesData() {
         }
     } catch (e) {}
 
-    // Bybit 폴백 로직에서도 차트용 숫자 데이터(rawFr, rawOi) 추출
-    if (!fundingRate || !openInterest) {
-        try {
-            const res = await fetchWithTimeout("https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT", 3000);
-            if (res && res.ok) {
-                const json = await res.json();
-                const item = json?.result?.list?.[0];
-                if (item) {
-                    if (!fundingRate && item.fundingRate) {
-                        rawFr = parseFloat(item.fundingRate) * 100;
-                        fundingRate = rawFr.toFixed(4) + "%";
-                    }
-                    if (!openInterest && item.openInterest) {
-                        rawOi = (parseFloat(item.openInterest) / 1000);
-                        openInterest = rawOi.toFixed(1) + "k ₿";
-                    }
-                }
-            }
-        } catch (e) {}
-    }
-
     return { fundingRate, openInterest, rawFr, rawOi };
 }
 
-// 4. 레버리지 위험도 평가
+// 5. 레버리지 위험도 평가
 function evaluateFuturesRisk(fundingRateStr) {
     if (!fundingRateStr) return { stage: "🟡 -단계", text: "데이터 수집 대기 중", color: "#aaa" };
 
@@ -196,48 +220,63 @@ function updateCardValue(possibleIds, labelText, valueText) {
     }
 }
 
-// 5. 선물 지표 추이 차트 생성/갱신
-function updateFuturesChart(frVal, oiVal) {
+// 6. 선물 지표 히스토리 차트 구동
+async function initOrUpdateFuturesChart(liveFr, liveOi) {
     const canvas = document.getElementById('futuresChart');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
+    const riskThreshold = 0.030; // 0.03% 위험 경고 기준선
 
-    const now = new Date();
-    const timeLabel = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
-    const riskThreshold = 0.030; // 과열 경고 기준선 (0.03%)
+    if (!isChartInitialized) {
+        const history = await fetchFuturesHistory();
+        let labels = [];
+        let frData = [];
+        let oiData = [];
 
-    if (!futuresChartInstance) {
+        if (history && history.labels.length > 0) {
+            labels = history.labels;
+            frData = history.frData;
+            oiData = history.oiData;
+        } else {
+            const now = new Date();
+            labels = [`${now.getMonth()+1}/${now.getDate()} ${now.getHours()}:${now.getMinutes()}`];
+            frData = [liveFr];
+            oiData = [liveOi];
+        }
+
+        const thresholdArray = new Array(labels.length).fill(riskThreshold);
+
         futuresChartInstance = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: [timeLabel],
+                labels: labels,
                 datasets: [
                     {
                         label: '펀딩비 (%)',
-                        data: [frVal],
+                        data: frData,
                         borderColor: '#ff9f0a',
-                        backgroundColor: 'rgba(255, 159, 10, 0.2)',
+                        backgroundColor: 'rgba(255, 159, 10, 0.15)',
                         yAxisID: 'yFR',
                         borderWidth: 2,
-                        tension: 0.2,
-                        pointRadius: 3
+                        tension: 0.1,
+                        pointRadius: 1.5
                     },
                     {
                         label: '미결제약정 (k ₿)',
-                        data: [oiVal],
+                        data: oiData,
                         borderColor: '#58a6ff',
-                        backgroundColor: 'rgba(88, 166, 255, 0.1)',
+                        backgroundColor: 'rgba(88, 166, 255, 0.05)',
                         yAxisID: 'yOI',
                         borderWidth: 2,
-                        tension: 0.2,
-                        pointRadius: 3
+                        tension: 0.1,
+                        pointRadius: 1.5
                     },
                     {
                         label: '과열 위험 기준선 (0.03%)',
-                        data: [riskThreshold],
+                        data: thresholdArray,
                         borderColor: '#f85149',
                         borderWidth: 1.5,
-                        borderDash: [5, 5],
+                        borderDash: [4, 4],
                         pointRadius: 0,
                         fill: false,
                         yAxisID: 'yFR'
@@ -252,22 +291,22 @@ function updateFuturesChart(frVal, oiVal) {
                 scales: {
                     x: {
                         grid: { color: '#2a2a2a' },
-                        ticks: { color: '#8b949e', font: { size: 10 } },
-                        title: { display: true, text: '수집 시각 (시간:분:초)', color: '#aaa', font: { size: 11 } }
+                        ticks: { color: '#8b949e', font: { size: 9 }, maxTicksLimit: 10 },
+                        title: { display: true, text: '기간 (월/일 시간)', color: '#aaa', font: { size: 10 } }
                     },
                     yFR: {
                         type: 'linear',
                         position: 'left',
                         grid: { color: '#2a2a2a' },
                         ticks: { color: '#ff9f0a', font: { size: 10 } },
-                        title: { display: true, text: '펀딩비 (%)', color: '#ff9f0a', font: { size: 11 } }
+                        title: { display: true, text: '펀딩비 (%)', color: '#ff9f0a', font: { size: 10 } }
                     },
                     yOI: {
                         type: 'linear',
                         position: 'right',
                         grid: { drawOnChartArea: false },
                         ticks: { color: '#58a6ff', font: { size: 10 } },
-                        title: { display: true, text: '미결제약정 (k ₿)', color: '#58a6ff', font: { size: 11 } }
+                        title: { display: true, text: '미결제약정 (k ₿)', color: '#58a6ff', font: { size: 10 } }
                     }
                 },
                 plugins: {
@@ -275,23 +314,20 @@ function updateFuturesChart(frVal, oiVal) {
                 }
             }
         });
-    } else {
-        futuresChartInstance.data.labels.push(timeLabel);
-        futuresChartInstance.data.datasets[0].data.push(frVal);
-        futuresChartInstance.data.datasets[1].data.push(oiVal);
-        futuresChartInstance.data.datasets[2].data.push(riskThreshold);
 
-        if (futuresChartInstance.data.labels.length > 30) {
-            futuresChartInstance.data.labels.shift();
-            futuresChartInstance.data.datasets[0].data.shift();
-            futuresChartInstance.data.datasets[1].data.shift();
-            futuresChartInstance.data.datasets[2].data.shift();
+        isChartInitialized = true;
+    } else if (futuresChartInstance) {
+        // 실시간 최신 수치만 맨 끝에 업데이트
+        const lastIdx = futuresChartInstance.data.datasets[0].data.length - 1;
+        if (lastIdx >= 0) {
+            futuresChartInstance.data.datasets[0].data[lastIdx] = liveFr;
+            futuresChartInstance.data.datasets[1].data[lastIdx] = liveOi;
+            futuresChartInstance.update('none');
         }
-        futuresChartInstance.update();
     }
 }
 
-// 6. 시나리오 표 생성 ($30k ~ $500k)
+// 7. 시나리오 표 생성
 function updateScenarioTable(netBpsUsd, currentBtc) {
     const tbody = document.getElementById("scenarioTable");
     if (!tbody || !netBpsUsd || !currentBtc) return;
@@ -319,7 +355,7 @@ function updateScenarioTable(netBpsUsd, currentBtc) {
     tbody.innerHTML = html;
 }
 
-// 7. MSTR 목표가 예측
+// 8. MSTR 목표가 예측
 window.targetPrice = function() {
     const targetBtc = getNum("targetBtcPrice");
     const targetMnav = getNum("targetMnav");
@@ -344,7 +380,7 @@ window.targetPrice = function() {
     setText("predictedNetBps", `예상 Net BPS: $${netBpsUsd.toFixed(2)}`);
 };
 
-// 8. 대시보드 핵심 계산
+// 9. 대시보드 메인 계산
 function calculateDashboard() {
     let currentBtcPrice = getNum("btcPrice") || DEFAULT_DATA.fallbackBtcPrice;
     let currentMstrPrice = getNum("mstrPrice") || DEFAULT_DATA.fallbackMstrPrice;
@@ -385,7 +421,7 @@ function calculateDashboard() {
     window.targetPrice();
 }
 
-// 9. 메인 데이터 업데이트
+// 10. 메인 수집 실행
 async function updateDashboard() {
     try {
         const res = await fetchWithTimeout("./data.json?cache=" + Date.now(), 2000);
@@ -422,7 +458,8 @@ async function updateDashboard() {
             const riskStageEl = document.getElementById("futuresRiskStage");
             if (riskStageEl) riskStageEl.style.color = risk.color;
 
-            updateFuturesChart(futures.rawFr, futures.rawOi);
+            // 누적 히스토리 차트 초기화 및 갱신 호출
+            await initOrUpdateFuturesChart(futures.rawFr, futures.rawOi);
         }
         if (futures.openInterest) {
             updateCardValue(["btcOi"], "BTC OI", futures.openInterest);
@@ -430,9 +467,9 @@ async function updateDashboard() {
 
         const now = new Date();
         const timeStr = now.toTimeString().split(' ')[0];
-        setText("dataStatus", `실시간 데이터 연동 완료 (${timeStr})`);
+        setText("dataStatus", `누적 데이터 연동 완료 (${timeStr})`);
     } catch (e) {
-        setText("dataStatus", "실시간 시세 연동 대기 중");
+        setText("dataStatus", "시세 연동 대기 중");
     }
 
     calculateDashboard();
