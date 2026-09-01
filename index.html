@@ -25,6 +25,11 @@
         th, td { border: 1px solid #30363d; padding: 6px; text-align: center; }
         th { background: #161b22; color: #8b949e; }
         .chart-container { position: relative; height: 280px; width: 100%; margin-top: 8px; }
+        
+        /* 기간 선택 버튼 스타일 */
+        .timeframe-group { display: flex; gap: 4px; }
+        .tf-btn { background: #161b22; border: 1px solid #30363d; color: #8b949e; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; }
+        .tf-btn.active { background: #ff9f0a; color: #0d1117; border-color: #ff9f0a; }
     </style>
 </head>
 <body>
@@ -89,7 +94,14 @@
 
     <!-- BTC 선물 파생 지표 & 위험 기준선 추이 차트 -->
     <div class="card">
-        <div class="card-title">📊 BTC 선물 파생 지표 & 위험 기준선 추이</div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <div class="card-title" style="margin-bottom: 0;">📊 BTC 선물 파생 지표 & 위험 기준선 추이</div>
+            <div class="timeframe-group">
+                <button class="tf-btn" id="tf-1D" onclick="changeChartTimeframe('1D')">일</button>
+                <button class="tf-btn active" id="tf-1M" onclick="changeChartTimeframe('1M')">월</button>
+                <button class="tf-btn" id="tf-1Y" onclick="changeChartTimeframe('1Y')">년</button>
+            </div>
+        </div>
         <div class="chart-container">
             <canvas id="futuresChart"></canvas>
         </div>
@@ -158,6 +170,6 @@
         </div>
     </div>
 
-    <script src="script.js?v=20260901_verified_v3"></script>
+    <script src="script.js?v=20260902_upgrade_v1"></script>
 </body>
 </html>
