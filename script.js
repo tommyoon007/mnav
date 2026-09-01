@@ -76,34 +76,54 @@ async function fetchLiveBtcPrice() {
     return null;
 }
 
-// 2. 실시간 MSTR 주가 수집 (TradingView -> Yahoo Finance -> Finnhub)
+// 2. 실시간 MSTR 주가 수집 (장외 프리마켓/애프터마켓 시세 지원)
 async function fetchLiveMstrPrice() {
+    // 1차: Yahoo Finance API (includePrePost=true 파라미터로 장외 거래 시세 수집)
+    const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/MSTR?interval=1m&range=1d&includePrePost=true&ts=${Date.now()}`;
+    const proxies = [
+        `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`,
+        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(yahooUrl)}`,
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(yahooUrl)}`
+    ];
+
+    for (const proxy of proxies) {
+        try {
+            const res = await fetchWithTimeout(proxy, 3000);
+            if (res && res.ok) {
+                const data = await res.json();
+                const meta = data?.chart?.result?.[0]?.meta;
+                if (meta) {
+                    // 애프터마켓 -> 프리마켓 -> 정규장 -> 이전 종가 순으로 실시간 최신 가격 적용
+                    const price = meta.postMarketPrice || meta.preMarketPrice || meta.regularMarketPrice || meta.chartPreviousClose;
+                    if (price && price > 0) return parseFloat(price);
+                }
+            }
+        } catch (e) {}
+    }
+
+    // 2차: TradingView Scan API (extended_hours_price 열 포함)
     try {
         const res = await fetchWithTimeout("https://scanner.tradingview.com/america/scan", 3000, {
             method: "POST",
             headers: { "Content-Type": "text/plain" },
             body: JSON.stringify({
                 symbols: { tickers: ["NASDAQ:MSTR"] },
-                columns: ["close"]
+                columns: ["extended_hours_price", "close"]
             })
         });
         if (res && res.ok) {
             const data = await res.json();
-            const price = data?.data?.[0]?.d?.[0];
-            if (price && price > 0) return parseFloat(price);
+            const row = data?.data?.[0]?.d;
+            if (row) {
+                const extPrice = row[0]; // 장외 실시간 가격
+                const regPrice = row[1]; // 정규장 종가
+                const price = (extPrice && extPrice > 0) ? extPrice : regPrice;
+                if (price && price > 0) return parseFloat(price);
+            }
         }
     } catch (e) {}
 
-    try {
-        const targetUrl = "https://query1.finance.yahoo.com/v8/finance/chart/MSTR?interval=1m&range=1d";
-        const res = await fetchWithTimeout("https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(targetUrl), 3000);
-        if (res && res.ok) {
-            const data = await res.json();
-            const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
-            if (price && price > 0) return parseFloat(price);
-        }
-    } catch (e) {}
-
+    // 3차: Finnhub API
     if (FINNHUB_KEY) {
         try {
             const res = await fetchWithTimeout(`https://finnhub.io/api/v1/quote?symbol=MSTR&token=${FINNHUB_KEY}`, 3000);
@@ -118,7 +138,7 @@ async function fetchLiveMstrPrice() {
     return null;
 }
 
-// 3. BTC 선물 지표 (미미체결약정 OI & 펀딩비) 수집 (Binance -> Bybit 다중 연동)
+// 3. BTC 선물 지표 (미체결약정 OI & 펀딩비) 수집 (Binance -> Bybit 다중 연동)
 async function fetchFuturesData() {
     let fundingRate = null;
     let openInterest = null;
