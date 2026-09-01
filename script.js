@@ -1,9 +1,10 @@
 // =========================================================
-// MSTR mNAV & BTC FUTURES DASHBOARD - HISTORICAL DATA ENGINE
+// MSTR mNAV & BTC FUTURES DASHBOARD - MANUAL INPUT & LOCAL SAVE
 // =========================================================
 
 const FINNHUB_KEY = "daaruppr01qn50rjdv2gdaaruppr01qn50rjdv30";
 
+// 초기 기본값 (최초 접속 시에만 사용되며, 이후 수동 입력값으로 대체됨)
 const DEFAULT_DATA = {
     btcHoldings: 845050,
     adso: 298.039,
@@ -112,7 +113,7 @@ async function fetchLiveMstrPrice() {
     return null;
 }
 
-// 3. 바이낸스 선물 과거 누적 데이터 수집 (최근 30일, 8시간 간격)
+// 3. 바이낸스 선물 과거 누적 데이터 수집
 async function fetchFuturesHistory() {
     try {
         const [resFR, resOI] = await Promise.all([
@@ -124,9 +125,7 @@ async function fetchFuturesHistory() {
 
         const frList = await resFR.json();
         let oiList = [];
-        if (resOI && resOI.ok) {
-            oiList = await resOI.json();
-        }
+        if (resOI && resOI.ok) oiList = await resOI.json();
 
         const labels = [];
         const frData = [];
@@ -136,14 +135,11 @@ async function fetchFuturesHistory() {
             const dateObj = new Date(item.fundingTime);
             const dateStr = `${dateObj.getMonth() + 1}/${dateObj.getDate()} ${dateObj.getHours().toString().padStart(2, '0')}:00`;
             labels.push(dateStr);
+            frData.push(parseFloat(item.fundingRate) * 100);
 
-            const frVal = parseFloat(item.fundingRate) * 100;
-            frData.push(frVal);
-
-            // 해당 시각 근처의 OI 데이터 검색
             const matchedOi = oiList.find(o => Math.abs(o.timestamp - item.fundingTime) < 4 * 3600 * 1000);
             if (matchedOi && matchedOi.sumOpenInterest) {
-                oiData.push(parseFloat(matchedOi.sumOpenInterest) / 1000); // k BTC 단위
+                oiData.push(parseFloat(matchedOi.sumOpenInterest) / 1000);
             } else {
                 oiData.push(oiData.length > 0 ? oiData[oiData.length - 1] : 0);
             }
@@ -151,18 +147,13 @@ async function fetchFuturesHistory() {
 
         return { labels, frData, oiData };
     } catch (e) {
-        console.error("과거 히스토리 로드 실패:", e);
         return null;
     }
 }
 
 // 4. 실시간 선물 단기 데이터 수집
 async function fetchFuturesData() {
-    let fundingRate = null;
-    let openInterest = null;
-    let rawFr = 0;
-    let rawOi = 0;
-
+    let fundingRate = null, openInterest = null, rawFr = 0, rawOi = 0;
     try {
         const [resFR, resOI] = await Promise.all([
             fetchWithTimeout("https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT", 3000),
@@ -179,8 +170,7 @@ async function fetchFuturesData() {
         if (resOI && resOI.ok) {
             const data = await resOI.json();
             if (data.openInterest !== undefined) {
-                const oiBtc = parseFloat(data.openInterest);
-                rawOi = (oiBtc / 1000);
+                rawOi = (parseFloat(data.openInterest) / 1000);
                 openInterest = rawOi.toFixed(1) + "k ₿";
             }
         }
@@ -192,31 +182,21 @@ async function fetchFuturesData() {
 // 5. 레버리지 위험도 평가
 function evaluateFuturesRisk(fundingRateStr) {
     if (!fundingRateStr) return { stage: "🟡 -단계", text: "데이터 수집 대기 중", color: "#aaa" };
-
     const fr = parseFloat(String(fundingRateStr).replace("%", ""));
     if (isNaN(fr)) return { stage: "🟡 -단계", text: "데이터 분석 불가", color: "#aaa" };
 
-    if (fr < -0.01) {
-        return { stage: "🟢 1단계 (숏 과열)", text: "숏 쏠림 심화 (스퀴즈 반등 주의)", color: "#2ea043" };
-    } else if (fr <= 0.015) {
-        return { stage: "🟢 2단계 (건전/중립)", text: "적정 레버리지 (건전한 시장)", color: "#3fb950" };
-    } else if (fr <= 0.030) {
-        return { stage: "🟡 3단계 (열기 발생)", text: "롱 포지션 누적 (과열 초기)", color: "#d29922" };
-    } else if (fr <= 0.050) {
-        return { stage: "🟠 4단계 (과열 경고)", text: "롱 쏠림 심화 (조정 및 청산 위험)", color: "#db6d28" };
-    } else {
-        return { stage: "🔴 5단계 (극심한 위험)", text: "극단적 탐욕 (대규모 청산빔 주의)", color: "#f85149" };
-    }
+    if (fr < -0.01) return { stage: "🟢 1단계 (숏 과열)", text: "숏 쏠림 심화 (스퀴즈 반등 주의)", color: "#2ea043" };
+    else if (fr <= 0.015) return { stage: "🟢 2단계 (건전/중립)", text: "적정 레버리지 (건전한 시장)", color: "#3fb950" };
+    else if (fr <= 0.030) return { stage: "🟡 3단계 (열기 발생)", text: "롱 포지션 누적 (과열 초기)", color: "#d29922" };
+    else if (fr <= 0.050) return { stage: "🟠 4단계 (과열 경고)", text: "롱 쏠림 심화 (조정 및 청산 위험)", color: "#db6d28" };
+    else return { stage: "🔴 5단계 (극심한 위험)", text: "극단적 탐욕 (대규모 청산빔 주의)", color: "#f85149" };
 }
 
 function updateCardValue(possibleIds, labelText, valueText) {
     if (!valueText) return;
     for (const id of possibleIds) {
         const el = document.getElementById(id);
-        if (el) {
-            el.textContent = valueText;
-            return;
-        }
+        if (el) { el.textContent = valueText; return; }
     }
 }
 
@@ -225,23 +205,18 @@ async function initOrUpdateFuturesChart(liveFr, liveOi) {
     const canvas = document.getElementById('futuresChart');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    const riskThreshold = 0.030; // 0.03% 위험 경고 기준선
+    const riskThreshold = 0.030;
 
     if (!isChartInitialized) {
         const history = await fetchFuturesHistory();
-        let labels = [];
-        let frData = [];
-        let oiData = [];
+        let labels = [], frData = [], oiData = [];
 
         if (history && history.labels.length > 0) {
-            labels = history.labels;
-            frData = history.frData;
-            oiData = history.oiData;
+            labels = history.labels; frData = history.frData; oiData = history.oiData;
         } else {
             const now = new Date();
             labels = [`${now.getMonth()+1}/${now.getDate()} ${now.getHours()}:${now.getMinutes()}`];
-            frData = [liveFr];
-            oiData = [liveOi];
+            frData = [liveFr]; oiData = [liveOi];
         }
 
         const thresholdArray = new Array(labels.length).fill(riskThreshold);
@@ -251,73 +226,23 @@ async function initOrUpdateFuturesChart(liveFr, liveOi) {
             data: {
                 labels: labels,
                 datasets: [
-                    {
-                        label: '펀딩비 (%)',
-                        data: frData,
-                        borderColor: '#ff9f0a',
-                        backgroundColor: 'rgba(255, 159, 10, 0.15)',
-                        yAxisID: 'yFR',
-                        borderWidth: 2,
-                        tension: 0.1,
-                        pointRadius: 1.5
-                    },
-                    {
-                        label: '미결제약정 (k ₿)',
-                        data: oiData,
-                        borderColor: '#58a6ff',
-                        backgroundColor: 'rgba(88, 166, 255, 0.05)',
-                        yAxisID: 'yOI',
-                        borderWidth: 2,
-                        tension: 0.1,
-                        pointRadius: 1.5
-                    },
-                    {
-                        label: '과열 위험 기준선 (0.03%)',
-                        data: thresholdArray,
-                        borderColor: '#f85149',
-                        borderWidth: 1.5,
-                        borderDash: [4, 4],
-                        pointRadius: 0,
-                        fill: false,
-                        yAxisID: 'yFR'
-                    }
+                    { label: '펀딩비 (%)', data: frData, borderColor: '#ff9f0a', backgroundColor: 'rgba(255, 159, 10, 0.15)', yAxisID: 'yFR', borderWidth: 2, tension: 0.1, pointRadius: 1.5 },
+                    { label: '미결제약정 (k ₿)', data: oiData, borderColor: '#58a6ff', backgroundColor: 'rgba(88, 166, 255, 0.05)', yAxisID: 'yOI', borderWidth: 2, tension: 0.1, pointRadius: 1.5 },
+                    { label: '과열 위험 기준선 (0.03%)', data: thresholdArray, borderColor: '#f85149', borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0, fill: false, yAxisID: 'yFR' }
                 ]
             },
             options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                animation: false,
-                interaction: { mode: 'index', intersect: false },
+                responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
                 scales: {
-                    x: {
-                        grid: { color: '#2a2a2a' },
-                        ticks: { color: '#8b949e', font: { size: 9 }, maxTicksLimit: 10 },
-                        title: { display: true, text: '기간 (월/일 시간)', color: '#aaa', font: { size: 10 } }
-                    },
-                    yFR: {
-                        type: 'linear',
-                        position: 'left',
-                        grid: { color: '#2a2a2a' },
-                        ticks: { color: '#ff9f0a', font: { size: 10 } },
-                        title: { display: true, text: '펀딩비 (%)', color: '#ff9f0a', font: { size: 10 } }
-                    },
-                    yOI: {
-                        type: 'linear',
-                        position: 'right',
-                        grid: { drawOnChartArea: false },
-                        ticks: { color: '#58a6ff', font: { size: 10 } },
-                        title: { display: true, text: '미결제약정 (k ₿)', color: '#58a6ff', font: { size: 10 } }
-                    }
+                    x: { grid: { color: '#2a2a2a' }, ticks: { color: '#8b949e', font: { size: 9 }, maxTicksLimit: 10 } },
+                    yFR: { type: 'linear', position: 'left', grid: { color: '#2a2a2a' }, ticks: { color: '#ff9f0a', font: { size: 10 } } },
+                    yOI: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#58a6ff', font: { size: 10 } } }
                 },
-                plugins: {
-                    legend: { labels: { color: '#fff', font: { size: 11 } } }
-                }
+                plugins: { legend: { labels: { color: '#fff', font: { size: 11 } } } }
             }
         });
-
         isChartInitialized = true;
     } else if (futuresChartInstance) {
-        // 실시간 최신 수치만 맨 끝에 업데이트
         const lastIdx = futuresChartInstance.data.datasets[0].data.length - 1;
         if (lastIdx >= 0) {
             futuresChartInstance.data.datasets[0].data[lastIdx] = liveFr;
@@ -332,17 +257,12 @@ function updateScenarioTable(netBpsUsd, currentBtc) {
     const tbody = document.getElementById("scenarioTable");
     if (!tbody || !netBpsUsd || !currentBtc) return;
 
-    const fixedBtcTargets = [
-        30000, 40000, 50000, 60000, 70000, 80000, 90000, 
-        100000, 120000, 150000, 180000, 200000, 250000, 300000, 400000, 500000
-    ];
+    const fixedBtcTargets = [30000, 40000, 50000, 60000, 70000, 80000, 90000, 100000, 120000, 150000, 180000, 200000, 250000, 300000, 400000, 500000];
     const mnavMultipliers = [1.0, 1.25, 1.5, 2.0, 2.5, 3.0];
 
     let html = "";
     fixedBtcTargets.forEach(targetBtc => {
-        const ratio = targetBtc / currentBtc;
-        const targetNetBps = netBpsUsd * ratio;
-        
+        const targetNetBps = netBpsUsd * (targetBtc / currentBtc);
         const isCurrentZone = Math.abs(targetBtc - currentBtc) < 5000;
         const rowStyle = isCurrentZone ? 'style="background-color: #26382b; font-weight: bold;"' : '';
 
@@ -368,12 +288,7 @@ window.targetPrice = function() {
     const fdso = getNum("fullyDilutedShares") || currentData.fdso;
     const btcHoldings = getNum("btcHoldings") || currentData.btcHoldings;
 
-    const fdsoShares = fdso * 1_000_000;
-    const usdAssets = currentData.usdAssetsUsdB * 1_000_000_000;
-    const debt = currentData.debtUsdB * 1_000_000_000;
-    const preferred = currentData.preferredUsdB * 1_000_000_000;
-
-    const netBpsUsd = (btcHoldings * targetBtc + usdAssets - debt - preferred) / fdsoShares;
+    const netBpsUsd = (btcHoldings * targetBtc + (currentData.usdAssetsUsdB * 1e9) - (currentData.debtUsdB * 1e9) - (currentData.preferredUsdB * 1e9)) / (fdso * 1e6);
     const predictedMstr = netBpsUsd * targetMnav;
 
     setText("predictedMstrPrice", `$${predictedMstr.toFixed(2)}`);
@@ -384,21 +299,17 @@ window.targetPrice = function() {
 function calculateDashboard() {
     let currentBtcPrice = getNum("btcPrice") || DEFAULT_DATA.fallbackBtcPrice;
     let currentMstrPrice = getNum("mstrPrice") || DEFAULT_DATA.fallbackMstrPrice;
+    
+    // UI에 적힌 값을 최우선으로 사용, 없으면 currentData 사용
     let btcHoldings = getNum("btcHoldings") || currentData.btcHoldings;
     let fdso = getNum("fullyDilutedShares") || currentData.fdso;
 
     const fdsoShares = fdso * 1_000_000;
-    const usdAssets = currentData.usdAssetsUsdB * 1_000_000_000;
-    const debt = currentData.debtUsdB * 1_000_000_000;
-    const preferred = currentData.preferredUsdB * 1_000_000_000;
-
-    const btcValueUsd = btcHoldings * currentBtcPrice;
+    const netReserveUsd = (btcHoldings * currentBtcPrice) + (currentData.usdAssetsUsdB * 1e9) - (currentData.debtUsdB * 1e9) - (currentData.preferredUsdB * 1e9);
+    
     const grossBpsSats = (btcHoldings / fdsoShares) * 100_000_000;
-
-    const netReserveUsd = btcValueUsd + usdAssets - debt - preferred;
     const netBpsUsd = netReserveUsd / fdsoShares;
-    const netBtcHoldings = netReserveUsd / currentBtcPrice;
-    const netBpsSats = (netBtcHoldings / fdsoShares) * 100_000_000;
+    const netBpsSats = ((netReserveUsd / currentBtcPrice) / fdsoShares) * 100_000_000;
 
     setText("grossBpsSats", Math.round(grossBpsSats).toLocaleString());
     setText("netBpsSats", Math.round(netBpsSats).toLocaleString());
@@ -407,39 +318,17 @@ function calculateDashboard() {
     if (currentMstrPrice > 0 && netBpsUsd > 0) {
         const mnav = currentMstrPrice / netBpsUsd;
         const premiumPct = (mnav - 1) * 100;
-
         setText("mnavMultiple", `${mnav.toFixed(2)}×`);
         setText("premium", `프리미엄: ${premiumPct >= 0 ? '+' : ''}${premiumPct.toFixed(1)}%`);
-
-        let signalText = "🟡 중립 (적정 주가 구간)";
-        if (mnav < 1.0) signalText = "🟢 극심한 저평가 (NAV 대비 할인)";
-        else if (mnav > 2.5) signalText = "🔴 과열 주의 (높은 프리미엄)";
-        setText("signal", signalText);
+        setText("signal", mnav < 1.0 ? "🟢 극심한 저평가 (NAV 대비 할인)" : (mnav > 2.5 ? "🔴 과열 주의 (높은 프리미엄)" : "🟡 중립 (적정 주가 구간)"));
     }
 
     updateScenarioTable(netBpsUsd, currentBtcPrice);
     window.targetPrice();
 }
 
-// 10. 메인 수집 실행
+// 10. 메인 수집 실행 (시세 업데이트 전용)
 async function updateDashboard() {
-    try {
-        const res = await fetchWithTimeout("./data.json?cache=" + Date.now(), 2000);
-        if (res && res.ok) {
-            const json = await res.json();
-            currentData.btcHoldings = parseFloat(json.btcHoldings) || currentData.btcHoldings;
-            currentData.adso = parseFloat(json.adso) || currentData.adso;
-            currentData.fdso = parseFloat(json.fdso) || currentData.fdso;
-            currentData.usdAssetsUsdB = parseFloat(json.usdAssetsUsdB) || currentData.usdAssetsUsdB;
-            currentData.debtUsdB = parseFloat(json.debtUsdB) || currentData.debtUsdB;
-            currentData.preferredUsdB = parseFloat(json.preferredUsdB) || currentData.preferredUsdB;
-        }
-    } catch (e) {}
-
-    setVal("btcHoldings", currentData.btcHoldings);
-    setVal("assumedShares", currentData.adso.toFixed(3));
-    setVal("fullyDilutedShares", currentData.fdso.toFixed(3));
-
     try {
         const [fetchedBtc, fetchedMstr, futures] = await Promise.all([
             fetchLiveBtcPrice(),
@@ -457,8 +346,6 @@ async function updateDashboard() {
             setText("futuresRiskText", risk.text);
             const riskStageEl = document.getElementById("futuresRiskStage");
             if (riskStageEl) riskStageEl.style.color = risk.color;
-
-            // 누적 히스토리 차트 초기화 및 갱신 호출
             await initOrUpdateFuturesChart(futures.rawFr, futures.rawOi);
         }
         if (futures.openInterest) {
@@ -467,7 +354,7 @@ async function updateDashboard() {
 
         const now = new Date();
         const timeStr = now.toTimeString().split(' ')[0];
-        setText("dataStatus", `누적 데이터 연동 완료 (${timeStr})`);
+        setText("dataStatus", `시세 및 데이터 연동 완료 (${timeStr})`);
     } catch (e) {
         setText("dataStatus", "시세 연동 대기 중");
     }
@@ -475,17 +362,47 @@ async function updateDashboard() {
     calculateDashboard();
 }
 
+// 11. 초기화 및 이벤트 리스너 세팅
 document.addEventListener("DOMContentLoaded", () => {
-    const savedBtc = localStorage.getItem("savedTargetBtc");
-    const savedMnav = localStorage.getItem("savedTargetMnav");
-    if (savedBtc) setVal("targetBtcPrice", savedBtc);
-    if (savedMnav) setVal("targetMnav", savedMnav);
+    // 폰(브라우저)에 저장된 값 불러오기
+    const savedBtcHoldings = localStorage.getItem("savedBtcHoldings");
+    const savedAdso = localStorage.getItem("savedAdso");
+    const savedFdso = localStorage.getItem("savedFdso");
+    const savedTargetBtc = localStorage.getItem("savedTargetBtc");
+    const savedTargetMnav = localStorage.getItem("savedTargetMnav");
+
+    if (savedBtcHoldings) currentData.btcHoldings = parseFloat(savedBtcHoldings);
+    if (savedAdso) currentData.adso = parseFloat(savedAdso);
+    if (savedFdso) currentData.fdso = parseFloat(savedFdso);
+    
+    // 화면 입력칸에 저장된 값 표시
+    setVal("btcHoldings", currentData.btcHoldings);
+    setVal("assumedShares", currentData.adso.toFixed(3));
+    setVal("fullyDilutedShares", currentData.fdso.toFixed(3));
+    if (savedTargetBtc) setVal("targetBtcPrice", savedTargetBtc);
+    if (savedTargetMnav) setVal("targetMnav", savedTargetMnav);
 
     updateDashboard();
 
+    // 입력값 변경 시 폰에 영구 저장 (로컬 스토리지)
     const inputIds = ["btcPrice", "mstrPrice", "btcHoldings", "assumedShares", "fullyDilutedShares", "targetBtcPrice", "targetMnav"];
     inputIds.forEach(id => {
-        document.getElementById(id)?.addEventListener("input", calculateDashboard);
+        document.getElementById(id)?.addEventListener("input", () => {
+            const val = getNum(id);
+            if (val > 0) {
+                if (id === "btcHoldings") {
+                    currentData.btcHoldings = val;
+                    localStorage.setItem("savedBtcHoldings", val);
+                } else if (id === "assumedShares") {
+                    currentData.adso = val;
+                    localStorage.setItem("savedAdso", val);
+                } else if (id === "fullyDilutedShares") {
+                    currentData.fdso = val;
+                    localStorage.setItem("savedFdso", val);
+                }
+            }
+            calculateDashboard();
+        });
     });
 
     setInterval(updateDashboard, 10000);
