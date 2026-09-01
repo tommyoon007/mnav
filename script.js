@@ -1,19 +1,16 @@
 // =========================================================
-// MSTR mNAV & BTC FUTURES DASHBOARD - MANUAL INPUT & LOCAL SAVE
+// MSTR mNAV & BTC FUTURES DASHBOARD - AUTO SAVE & API FIX
 // =========================================================
 
 const FINNHUB_KEY = "daaruppr01qn50rjdv2gdaaruppr01qn50rjdv30";
 
-// 초기 기본값 (최초 접속 시에만 사용되며, 이후 수동 입력값으로 대체됨)
 const DEFAULT_DATA = {
     btcHoldings: 845050,
     adso: 298.039,
     fdso: 424.479,
     usdAssetsUsdB: 6.690,
     debtUsdB: 6.754,
-    preferredUsdB: 14.966,
-    fallbackBtcPrice: 95000,
-    fallbackMstrPrice: 130
+    preferredUsdB: 14.966
 };
 
 let currentData = { ...DEFAULT_DATA };
@@ -27,6 +24,7 @@ function setText(id, text) {
 
 function setVal(id, val) {
     const el = document.getElementById(id);
+    // 사용자가 입력 칸을 터치하고 있지 않을 때만 값을 업데이트 (입력 방해 방지)
     if (el && document.activeElement !== el) {
         el.value = val;
     }
@@ -76,13 +74,25 @@ async function fetchLiveBtcPrice() {
     return null;
 }
 
-// 2. 실시간 MSTR 주가 수집
+// 2. 실시간 MSTR 주가 수집 (로직 개선)
 async function fetchLiveMstrPrice() {
+    // 1순위: 안정적인 Finnhub API 우선 호출
+    if (FINNHUB_KEY) {
+        try {
+            const res = await fetchWithTimeout(`https://finnhub.io/api/v1/quote?symbol=MSTR&token=${FINNHUB_KEY}`, 3000);
+            if (res && res.ok) {
+                const data = await res.json();
+                const price = (data?.c > 0) ? data.c : data?.pc;
+                if (price && price > 0) return parseFloat(price);
+            }
+        } catch (e) {}
+    }
+
+    // 2순위: 야후 파이낸스 (프록시 우회)
     const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/MSTR?interval=1m&range=1d&includePrePost=true&ts=${Date.now()}`;
     const proxies = [
-        `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`,
-        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(yahooUrl)}`,
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(yahooUrl)}`
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(yahooUrl)}`,
+        `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`
     ];
 
     for (const proxy of proxies) {
@@ -99,18 +109,7 @@ async function fetchLiveMstrPrice() {
         } catch (e) {}
     }
 
-    if (FINNHUB_KEY) {
-        try {
-            const res = await fetchWithTimeout(`https://finnhub.io/api/v1/quote?symbol=MSTR&token=${FINNHUB_KEY}`, 3000);
-            if (res && res.ok) {
-                const data = await res.json();
-                const price = (data?.c > 0) ? data.c : data?.pc;
-                if (price && price > 0) return parseFloat(price);
-            }
-        } catch (e) {}
-    }
-
-    return null;
+    return null; // 모든 API 실패 시 null 반환 (130으로 리셋하지 않음)
 }
 
 // 3. 바이낸스 선물 과거 누적 데이터 수집
@@ -127,9 +126,7 @@ async function fetchFuturesHistory() {
         let oiList = [];
         if (resOI && resOI.ok) oiList = await resOI.json();
 
-        const labels = [];
-        const frData = [];
-        const oiData = [];
+        const labels = [], frData = [], oiData = [];
 
         frList.forEach((item) => {
             const dateObj = new Date(item.fundingTime);
@@ -297,10 +294,13 @@ window.targetPrice = function() {
 
 // 9. 대시보드 메인 계산
 function calculateDashboard() {
-    let currentBtcPrice = getNum("btcPrice") || DEFAULT_DATA.fallbackBtcPrice;
-    let currentMstrPrice = getNum("mstrPrice") || DEFAULT_DATA.fallbackMstrPrice;
+    let currentBtcPrice = getNum("btcPrice");
+    let currentMstrPrice = getNum("mstrPrice");
     
-    // UI에 적힌 값을 최우선으로 사용, 없으면 currentData 사용
+    // 만약 가격이 입력칸에 없다면 로컬 저장소에서 마지막 값을 불러옵니다.
+    if (!currentBtcPrice) currentBtcPrice = parseFloat(localStorage.getItem("savedBtcPrice")) || 95000;
+    if (!currentMstrPrice) currentMstrPrice = parseFloat(localStorage.getItem("savedMstrPrice")) || 130;
+
     let btcHoldings = getNum("btcHoldings") || currentData.btcHoldings;
     let fdso = getNum("fullyDilutedShares") || currentData.fdso;
 
@@ -327,7 +327,7 @@ function calculateDashboard() {
     window.targetPrice();
 }
 
-// 10. 메인 수집 실행 (시세 업데이트 전용)
+// 10. 메인 수집 실행
 async function updateDashboard() {
     try {
         const [fetchedBtc, fetchedMstr, futures] = await Promise.all([
@@ -336,8 +336,15 @@ async function updateDashboard() {
             fetchFuturesData()
         ]);
 
-        if (fetchedBtc && fetchedBtc > 0) setVal("btcPrice", fetchedBtc.toFixed(2));
-        if (fetchedMstr && fetchedMstr > 0) setVal("mstrPrice", fetchedMstr.toFixed(2));
+        // API 수집 성공 시 화면 입력칸에 업데이트하고 스마트폰에 저장 (캐시)
+        if (fetchedBtc && fetchedBtc > 0) {
+            setVal("btcPrice", fetchedBtc.toFixed(2));
+            localStorage.setItem("savedBtcPrice", fetchedBtc.toFixed(2));
+        }
+        if (fetchedMstr && fetchedMstr > 0) {
+            setVal("mstrPrice", fetchedMstr.toFixed(2));
+            localStorage.setItem("savedMstrPrice", fetchedMstr.toFixed(2));
+        }
 
         if (futures.fundingRate) {
             updateCardValue(["fundingRate"], "Funding Rate", futures.fundingRate);
@@ -364,12 +371,14 @@ async function updateDashboard() {
 
 // 11. 초기화 및 이벤트 리스너 세팅
 document.addEventListener("DOMContentLoaded", () => {
-    // 폰(브라우저)에 저장된 값 불러오기
+    // 폰에 저장된 모든 값을 불러오기
     const savedBtcHoldings = localStorage.getItem("savedBtcHoldings");
     const savedAdso = localStorage.getItem("savedAdso");
     const savedFdso = localStorage.getItem("savedFdso");
     const savedTargetBtc = localStorage.getItem("savedTargetBtc");
     const savedTargetMnav = localStorage.getItem("savedTargetMnav");
+    const savedBtcPrice = localStorage.getItem("savedBtcPrice");
+    const savedMstrPrice = localStorage.getItem("savedMstrPrice");
 
     if (savedBtcHoldings) currentData.btcHoldings = parseFloat(savedBtcHoldings);
     if (savedAdso) currentData.adso = parseFloat(savedAdso);
@@ -379,12 +388,15 @@ document.addEventListener("DOMContentLoaded", () => {
     setVal("btcHoldings", currentData.btcHoldings);
     setVal("assumedShares", currentData.adso.toFixed(3));
     setVal("fullyDilutedShares", currentData.fdso.toFixed(3));
+    
     if (savedTargetBtc) setVal("targetBtcPrice", savedTargetBtc);
     if (savedTargetMnav) setVal("targetMnav", savedTargetMnav);
+    if (savedBtcPrice) setVal("btcPrice", savedBtcPrice);
+    if (savedMstrPrice) setVal("mstrPrice", savedMstrPrice);
 
     updateDashboard();
 
-    // 입력값 변경 시 폰에 영구 저장 (로컬 스토리지)
+    // 사용자가 입력칸을 직접 수정했을 때 폰에 즉시 저장
     const inputIds = ["btcPrice", "mstrPrice", "btcHoldings", "assumedShares", "fullyDilutedShares", "targetBtcPrice", "targetMnav"];
     inputIds.forEach(id => {
         document.getElementById(id)?.addEventListener("input", () => {
@@ -399,6 +411,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 } else if (id === "fullyDilutedShares") {
                     currentData.fdso = val;
                     localStorage.setItem("savedFdso", val);
+                } else if (id === "btcPrice") {
+                    localStorage.setItem("savedBtcPrice", val);
+                } else if (id === "mstrPrice") {
+                    localStorage.setItem("savedMstrPrice", val);
                 }
             }
             calculateDashboard();
