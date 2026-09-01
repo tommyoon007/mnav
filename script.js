@@ -126,10 +126,11 @@ async function fetchFuturesHistory(tf = '1M') {
     }
 
     try {
+        // API 엔드포인트 경로 수정 완료 (/futures/data/)
         const [resFR, resOI, resLS] = await Promise.all([
             fetchWithTimeout(`https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=${frLimit}`, 6000),
-            fetchWithTimeout(`https://fapi.binance.com/fapi/v1/openInterestHist?symbol=BTCUSDT&period=${period}&limit=${oiLimit}`, 6000),
-            fetchWithTimeout(`https://fapi.binance.com/fapi/v1/globalLongShortAccountRatio?symbol=BTCUSDT&period=${period}&limit=${oiLimit}`, 6000)
+            fetchWithTimeout(`https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=${period}&limit=${oiLimit}`, 6000),
+            fetchWithTimeout(`https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=BTCUSDT&period=${period}&limit=${oiLimit}`, 6000)
         ]);
 
         if (!resOI || !resOI.ok) return null;
