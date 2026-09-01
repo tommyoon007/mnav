@@ -1,5 +1,5 @@
 // =========================================================
-// MSTR mNAV & BTC DASHBOARD - PERFECT ZERO-PREVENTION CODE
+// MSTR mNAV DASHBOARD - BULLETPROOF AUTO-RECOVERY SCRIPT
 // Portfolio Sync: 97 Shares @ $173.65
 // =========================================================
 
@@ -12,20 +12,48 @@ const DEFAULT_DATA = {
     usdAssetsUsdB: 6.690,
     debtUsdB: 6.754,
     preferredUsdB: 14.966,
-    fallbackBtcPrice: 77990,
+    fallbackBtcPrice: 77954.24,
     fallbackMstrPrice: 132.94
 };
 
 let currentData = { ...DEFAULT_DATA };
+
+// --- 1. 스마트 DOM 요소 탐색 (ID 불일치 및 레이아웃 오류 완벽 방지) ---
+function getInputElement(type) {
+    const targetLabel = type === 'mstr' ? 'MSTR 주가' : 'BTC 가격';
+    const possibleIds = type === 'mstr' 
+        ? ["mstrPrice", "mstr_price", "mstrInput", "mstr"] 
+        : ["btcPrice", "btc_price", "btcInput", "btc"];
+
+    // 1) ID 기반 탐색
+    for (const id of possibleIds) {
+        const el = document.getElementById(id);
+        if (el) return el;
+    }
+
+    // 2) 라벨 텍스트 기반 자동 추적 (ID가 달라도 탐색 가능)
+    const elements = Array.from(document.querySelectorAll('div, label, span, p'));
+    for (const el of elements) {
+        if (el.textContent.includes(targetLabel)) {
+            const container = el.closest('.card, .input-group, div') || el.parentElement;
+            if (container) {
+                const input = container.querySelector('input');
+                if (input) return input;
+            }
+        }
+    }
+    return null;
+}
 
 function setText(id, text) {
     const el = document.getElementById(id);
     if (el) el.textContent = text;
 }
 
-function setVal(id, val) {
-    const el = document.getElementById(id);
+function setInputValue(type, val) {
+    const el = getInputElement(type);
     if (!el) return;
+    // 사용자가 입력 중이 아닐 때만 값 업데이트
     if (document.activeElement !== el) {
         if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
             el.value = val;
@@ -35,15 +63,16 @@ function setVal(id, val) {
     }
 }
 
-function getNum(id) {
-    const el = document.getElementById(id);
+function getInputValue(type) {
+    const el = getInputElement(type);
     if (!el) return 0;
     const val = el.value !== undefined && el.value !== "" ? el.value : el.textContent;
     const num = parseFloat(String(val).replace(/[^0-9.-]+/g, ""));
     return isNaN(num) ? 0 : num;
 }
 
-async function fetchWithTimeout(url, timeoutMs = 3000) {
+// --- 2. 실시간 시세 수집 ---
+async function fetchWithTimeout(url, timeoutMs = 2500) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
@@ -56,33 +85,21 @@ async function fetchWithTimeout(url, timeoutMs = 3000) {
     }
 }
 
-// 1. BTC 실시간 가격 (Binance -> Coinbase)
 async function fetchLiveBtcPrice() {
     try {
-        const res = await fetchWithTimeout("https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT", 2500);
+        const res = await fetchWithTimeout("https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT");
         if (res?.ok) {
             const p = parseFloat((await res.json())?.price);
             if (p > 0) return p;
         }
     } catch (e) {}
-
-    try {
-        const res = await fetchWithTimeout("https://api.coinbase.com/v2/prices/spot?currency=USD", 2500);
-        if (res?.ok) {
-            const p = parseFloat((await res.json())?.data?.amount);
-            if (p > 0) return p;
-        }
-    } catch (e) {}
-
     return null;
 }
 
-// 2. MSTR 실시간 주가 (Finnhub -> 다중 우회 프록시)
 async function fetchLiveMstrPrice() {
-    // Finnhub REST (c: 실시간/종가, pc: 전일 종가)
     if (FINNHUB_KEY) {
         try {
-            const res = await fetchWithTimeout(`https://finnhub.io/api/v1/quote?symbol=MSTR&token=${FINNHUB_KEY}`, 2500);
+            const res = await fetchWithTimeout(`https://finnhub.io/api/v1/quote?symbol=MSTR&token=${FINNHUB_KEY}`);
             if (res?.ok) {
                 const data = await res.json();
                 const price = (data?.c > 0) ? data.c : data?.pc;
@@ -91,75 +108,54 @@ async function fetchLiveMstrPrice() {
         } catch (e) {}
     }
 
-    // Yahoo Finance 다중 프록시 시도
     const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/MSTR?interval=1m&range=1d&ts=${Date.now()}`;
     const proxies = [
         `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`,
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(yahooUrl)}`,
-        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(yahooUrl)}`
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(yahooUrl)}`
     ];
 
     for (const proxy of proxies) {
         try {
-            const res = await fetchWithTimeout(proxy, 2500);
+            const res = await fetchWithTimeout(proxy);
             if (res?.ok) {
                 const data = await res.json();
                 const meta = data?.chart?.result?.[0]?.meta;
-                const price = meta?.preMarketPrice || meta?.postMarketPrice || meta?.regularMarketPrice || meta?.chartPreviousClose;
+                const price = meta?.preMarketPrice || meta?.postMarketPrice || meta?.regularMarketPrice;
                 if (price > 0) return parseFloat(price);
             }
         } catch (e) {}
     }
-
     return null;
 }
 
-// 3. 선물 지표 수집
-async function fetchFuturesData() {
-    let fundingRate = null, openInterest = null;
-    try {
-        const res = await fetchWithTimeout("https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT", 2500);
-        if (res?.ok) {
-            const item = (await res.json())?.result?.list?.[0];
-            if (item) {
-                if (item.fundingRate) fundingRate = (parseFloat(item.fundingRate) * 100).toFixed(4) + "%";
-                if (item.openInterest) openInterest = (parseFloat(item.openInterest) / 1000).toFixed(1) + "k ₿";
-            }
-        }
-    } catch (e) {}
-    return { fundingRate, openInterest };
-}
+// --- 3. 대시보드 계산 로직 ---
+function calculateDashboard() {
+    let currentBtcPrice = getInputValue('btc');
+    let currentMstrPrice = getInputValue('mstr');
 
-// --- 코어 계산 및 예외 방어 ---
-function calculateDashboard(data = currentData) {
-    let currentBtcPrice = getNum("btcPrice");
-    let currentMstrPrice = getNum("mstrPrice");
-
+    // 0이 입력되어 있을 경우 기본 방어 주가로 즉시 복구
     if (currentBtcPrice <= 0) {
         currentBtcPrice = DEFAULT_DATA.fallbackBtcPrice;
-        setVal("btcPrice", currentBtcPrice.toFixed(2));
+        setInputValue('btc', currentBtcPrice.toFixed(2));
     }
-
-    // MSTR 주가가 0이거나 가져오지 못했을 때 최근 주가($132.94)로 자동 복구
     if (currentMstrPrice <= 0) {
         currentMstrPrice = DEFAULT_DATA.fallbackMstrPrice;
-        setVal("mstrPrice", currentMstrPrice.toFixed(2));
+        setInputValue('mstr', currentMstrPrice.toFixed(2));
     }
 
-    const fdsoShares = data.fdso * 1_000_000;
-    const btcValueUsd = data.btcHoldings * currentBtcPrice;
-    const netReserveUsd = btcValueUsd + data.usdAssetsUsdB * 1e9 - data.debtUsdB * 1e9 - data.preferredUsdB * 1e9;
+    const fdsoShares = DEFAULT_DATA.fdso * 1_000_000;
+    const btcValueUsd = DEFAULT_DATA.btcHoldings * currentBtcPrice;
+    const netReserveUsd = btcValueUsd + DEFAULT_DATA.usdAssetsUsdB * 1e9 - DEFAULT_DATA.debtUsdB * 1e9 - DEFAULT_DATA.preferredUsdB * 1e9;
     const netBpsUsd = netReserveUsd / fdsoShares;
 
-    setText("grossBpsSats", Math.round((data.btcHoldings / fdsoShares) * 1e8).toLocaleString());
+    setText("grossBpsSats", Math.round((DEFAULT_DATA.btcHoldings / fdsoShares) * 1e8).toLocaleString());
     setText("netBpsSats", Math.round(((netReserveUsd / currentBtcPrice) / fdsoShares) * 1e8).toLocaleString());
     setText("netBpsUsd", `$${netBpsUsd.toFixed(2)}`);
     setText("btcTotalValue", `$${(btcValueUsd / 1e9).toFixed(2)}B`);
-    setText("seniorClaims", `$${(data.debtUsdB + data.preferredUsdB).toFixed(2)}B`);
-    setText("reserveValue", `$${data.usdAssetsUsdB.toFixed(2)}B`);
+    setText("seniorClaims", `$${(DEFAULT_DATA.debtUsdB + DEFAULT_DATA.preferredUsdB).toFixed(2)}B`);
+    setText("reserveValue", `$${DEFAULT_DATA.usdAssetsUsdB.toFixed(2)}B`);
     setText("netBtc", `${Math.round(netReserveUsd / currentBtcPrice).toLocaleString()} ₿`);
     setText("grossBpsUsd", `$${(btcValueUsd / fdsoShares).toFixed(2)}`);
-    setText("fdsoDisplay", `${data.fdso.toFixed(3)}M`);
 
     if (currentMstrPrice > 0 && netBpsUsd > 0) {
         const mnav = currentMstrPrice / netBpsUsd;
@@ -169,41 +165,42 @@ function calculateDashboard(data = currentData) {
     }
 }
 
+// --- 4. 메인 동기화 주기 ---
 async function updateDashboard() {
-    const [fetchedBtc, fetchedMstr, futures] = await Promise.all([
+    // 1) 수집 전 0 방지 기본값 세팅
+    if (getInputValue('mstr') <= 0) setInputValue('mstr', DEFAULT_DATA.fallbackMstrPrice.toFixed(2));
+    if (getInputValue('btc') <= 0) setInputValue('btc', DEFAULT_DATA.fallbackBtcPrice.toFixed(2));
+    calculateDashboard();
+
+    // 2) 비동기 시세 수집
+    const [fetchedBtc, fetchedMstr] = await Promise.all([
         fetchLiveBtcPrice().catch(() => null),
-        fetchLiveMstrPrice().catch(() => null),
-        fetchFuturesData().catch(() => ({}))
+        fetchLiveMstrPrice().catch(() => null)
     ]);
 
-    if (fetchedBtc > 0) setVal("btcPrice", fetchedBtc.toFixed(2));
-    
-    if (fetchedMstr > 0) {
-        setVal("mstrPrice", fetchedMstr.toFixed(2));
-    } else if (getNum("mstrPrice") <= 0) {
-        // 실시간 연동 실패 시 0으로 남지 않도록 기본 방어 주가 적용
-        setVal("mstrPrice", DEFAULT_DATA.fallbackMstrPrice.toFixed(2));
-    }
-
-    if (futures.fundingRate) {
-        const frEl = document.getElementById("fundingRate") || document.getElementById("frValue");
-        if (frEl) frEl.textContent = futures.fundingRate;
-    }
+    if (fetchedBtc > 0) setInputValue('btc', fetchedBtc.toFixed(2));
+    if (fetchedMstr > 0) setInputValue('mstr', fetchedMstr.toFixed(2));
 
     const now = new Date();
     setText("dataStatus", `하이브리드 실시간 연동 중 (${now.toTimeString().split(' ')[0]})`);
 
-    calculateDashboard(currentData);
+    calculateDashboard();
 }
 
 function initApp() {
+    // 앱 시작 즉시 기본값 주입 (0 화면 표시 차단)
+    setInputValue('mstr', DEFAULT_DATA.fallbackMstrPrice.toFixed(2));
+    setInputValue('btc', DEFAULT_DATA.fallbackBtcPrice.toFixed(2));
+    calculateDashboard();
+
     updateDashboard();
     setInterval(updateDashboard, 10000);
 
-    const inputs = ["mstrPrice", "btcPrice", "btcHoldings", "adso", "fdso"];
-    inputs.forEach(id => {
-        document.getElementById(id)?.addEventListener("input", () => calculateDashboard(currentData));
-    });
+    // 수동 수정 이벤트 연동
+    const mstrEl = getInputElement('mstr');
+    const btcEl = getInputElement('btc');
+    if (mstrEl) mstrEl.addEventListener("input", calculateDashboard);
+    if (btcEl) btcEl.addEventListener("input", calculateDashboard);
 }
 
 if (document.readyState === 'loading') {
