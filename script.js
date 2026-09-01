@@ -1,5 +1,5 @@
 // =========================================================
-// MSTR mNAV & BTC FUTURES DASHBOARD - ULTIMATE OPTIMIZED
+// MSTR mNAV & BTC FUTURES DASHBOARD - EXTENDED TIMEFRAME
 // =========================================================
 
 const FINNHUB_KEY = "daaruppr01qn50rjdv2gdaaruppr01qn50rjdv30";
@@ -16,7 +16,7 @@ const DEFAULT_DATA = {
 let currentData = { ...DEFAULT_DATA };
 let futuresChartInstance = null;
 let currentTf = '1M'; 
-let updateTimer = null; // API 호출 타이머 관리용 변수
+let updateTimer = null;
 
 function setText(id, text) {
     const el = document.getElementById(id);
@@ -110,7 +110,7 @@ async function fetchLiveMstrPrice() {
     return null;
 }
 
-// 3. 바이낸스 선물 과거 누적 데이터 수집
+// 3. 바이낸스 선물 과거 누적 데이터 수집 (기간 확장 지원)
 async function fetchFuturesHistory(tf = '1M') {
     let period = '4h';
     let oiLimit = 180;
@@ -119,10 +119,22 @@ async function fetchFuturesHistory(tf = '1M') {
     if (tf === '1D') {
         period = '15m';
         oiLimit = 96;
-        frLimit = 20;
-    } else if (tf === '1Y') {
+        frLimit = 24;
+    } else if (tf === '1M') {
+        period = '4h';
+        oiLimit = 180;
+        frLimit = 90;
+    } else if (tf === '3M') {
         period = '1d';
-        oiLimit = 365;
+        oiLimit = 90;
+        frLimit = 270;
+    } else if (tf === '6M') {
+        period = '1d';
+        oiLimit = 180;
+        frLimit = 540;
+    } else if (tf === '1Y' || tf === 'ALL') {
+        period = '1d';
+        oiLimit = 500; // 바이낸스 API 최대 제공 한계 (약 500일치)
         frLimit = 1000;
     }
 
@@ -148,7 +160,7 @@ async function fetchFuturesHistory(tf = '1M') {
             let dateStr = "";
             if (tf === '1D') {
                 dateStr = `${dateObj.getHours().toString().padStart(2, '0')}:${dateObj.getMinutes().toString().padStart(2, '0')}`;
-            } else if (tf === '1Y') {
+            } else if (tf === '3M' || tf === '6M' || tf === '1Y' || tf === 'ALL') {
                 dateStr = `${String(dateObj.getFullYear()).slice(2)}/${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
             } else {
                 dateStr = `${dateObj.getMonth() + 1}/${dateObj.getDate()} ${dateObj.getHours().toString().padStart(2, '0')}:00`;
@@ -164,7 +176,7 @@ async function fetchFuturesHistory(tf = '1M') {
                 frData.push(0);
             }
 
-            const matchedLs = lsList.find(l => Math.abs(l.timestamp - oiItem.timestamp) < 300000);
+            const matchedLs = lsList.find(l => Math.abs(l.timestamp - oiItem.timestamp) < 86400000);
             if (matchedLs && matchedLs.longShortRatio) {
                 lsData.push(parseFloat(matchedLs.longShortRatio));
             } else {
@@ -247,7 +259,7 @@ function updateCardValue(possibleIds, labelText, valueText) {
     }
 }
 
-// 6. 선물 지표 히스토리 차트 구동 (실시간 X축 라벨 동기화 포함)
+// 6. 선물 지표 히스토리 차트 구동
 async function initOrUpdateFuturesChart(liveFr, liveOi, liveLs, forceReload = false) {
     const canvas = document.getElementById('futuresChart');
     if (!canvas) return;
@@ -271,22 +283,23 @@ async function initOrUpdateFuturesChart(liveFr, liveOi, liveLs, forceReload = fa
         }
 
         const thresholdArray = new Array(labels.length).fill(riskThreshold);
+        const pointRadiusVal = labels.length > 150 ? 0 : 1; // 장기 데이터 시 선을 깔끔하게 표기
 
         futuresChartInstance = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: labels,
                 datasets: [
-                    { label: '펀딩비 (%)', data: frData, borderColor: '#ff9f0a', backgroundColor: 'rgba(255, 159, 10, 0.15)', yAxisID: 'yFR', borderWidth: 2, tension: 0.1, pointRadius: 1 },
-                    { label: '미결제약정 (k ₿)', data: oiData, borderColor: '#58a6ff', backgroundColor: 'rgba(88, 166, 255, 0.05)', yAxisID: 'yOI', borderWidth: 1.5, tension: 0.1, pointRadius: 1 },
-                    { label: '롱/숏 비율', data: lsData, borderColor: '#a371f7', backgroundColor: 'rgba(163, 113, 247, 0.05)', yAxisID: 'yLS', borderWidth: 1.5, tension: 0.1, pointRadius: 1 },
+                    { label: '펀딩비 (%)', data: frData, borderColor: '#ff9f0a', backgroundColor: 'rgba(255, 159, 10, 0.15)', yAxisID: 'yFR', borderWidth: 2, tension: 0.1, pointRadius: pointRadiusVal },
+                    { label: '미결제약정 (k ₿)', data: oiData, borderColor: '#58a6ff', backgroundColor: 'rgba(88, 166, 255, 0.05)', yAxisID: 'yOI', borderWidth: 1.5, tension: 0.1, pointRadius: pointRadiusVal },
+                    { label: '롱/숏 비율', data: lsData, borderColor: '#a371f7', backgroundColor: 'rgba(163, 113, 247, 0.05)', yAxisID: 'yLS', borderWidth: 1.5, tension: 0.1, pointRadius: pointRadiusVal },
                     { label: '위험 기준선 (0.03%)', data: thresholdArray, borderColor: '#f85149', borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0, fill: false, yAxisID: 'yFR' }
                 ]
             },
             options: {
                 responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
                 scales: {
-                    x: { grid: { color: '#2a2a2a' }, ticks: { color: '#8b949e', font: { size: 9 }, maxTicksLimit: 8 } },
+                    x: { grid: { color: '#2a2a2a' }, ticks: { color: '#8b949e', font: { size: 9 }, maxTicksLimit: 10 } },
                     yFR: { type: 'linear', position: 'left', grid: { color: '#2a2a2a' }, ticks: { color: '#ff9f0a', font: { size: 9 } } },
                     yOI: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#58a6ff', font: { size: 9 } } },
                     yLS: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#a371f7', font: { size: 9 } } }
@@ -301,12 +314,11 @@ async function initOrUpdateFuturesChart(liveFr, liveOi, liveLs, forceReload = fa
             futuresChartInstance.data.datasets[1].data[lastIdx] = liveOi;
             if (liveLs) futuresChartInstance.data.datasets[2].data[lastIdx] = liveLs;
             
-            // X축 마지막 시간 라벨 실시간 업데이트
             const now = new Date();
             let dateStr = "";
             if (currentTf === '1D') {
                 dateStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-            } else if (currentTf === '1Y') {
+            } else if (currentTf === '3M' || currentTf === '6M' || currentTf === '1Y' || currentTf === 'ALL') {
                 dateStr = `${String(now.getFullYear()).slice(2)}/${now.getMonth() + 1}/${now.getDate()}`;
             } else {
                 dateStr = `${now.getMonth() + 1}/${now.getDate()} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
@@ -450,10 +462,10 @@ async function updateDashboard() {
 
 // 11. 초기화 및 백그라운드 제어 세팅
 function startAutoUpdates() {
-    updateDashboard(); // 최초 1회 즉시 실행
+    updateDashboard();
     if (updateTimer) clearInterval(updateTimer);
     updateTimer = setInterval(() => {
-        if (!document.hidden) updateDashboard(); // 탭이 활성화되어 있을 때만 10초마다 갱신
+        if (!document.hidden) updateDashboard();
     }, 10000);
 }
 
@@ -479,7 +491,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (savedBtcPrice) setVal("btcPrice", savedBtcPrice);
     if (savedMstrPrice) setVal("mstrPrice", savedMstrPrice);
 
-    startAutoUpdates(); // 타이머 시작
+    startAutoUpdates();
 
     const inputIds = ["btcPrice", "mstrPrice", "btcHoldings", "assumedShares", "fullyDilutedShares", "targetBtcPrice", "targetMnav"];
     inputIds.forEach(id => {
@@ -505,7 +517,6 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
-    // 탭 이동 감지하여 돌아왔을 때 즉시 최신화
     document.addEventListener("visibilitychange", () => {
         if (!document.hidden) {
             updateDashboard();
