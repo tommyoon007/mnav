@@ -61,7 +61,7 @@ async function fetchLiveBtcPriceFast() {
             if (!res || !res.ok) throw new Error();
             const data = await res.json();
             const p = parseFloat(data?.data?.amount);
-            if (p > 0) return p;
+            if (p > 0) return { price: p, src: "Coinbase" };
             throw new Error();
         },
         // Source 2: Binance Ticker
@@ -70,7 +70,7 @@ async function fetchLiveBtcPriceFast() {
             if (!res || !res.ok) throw new Error();
             const data = await res.json();
             const p = parseFloat(data?.price);
-            if (p > 0) return p;
+            if (p > 0) return { price: p, src: "Binance" };
             throw new Error();
         },
         // Source 3: CoinGecko Public Treasury / Spot
@@ -79,15 +79,17 @@ async function fetchLiveBtcPriceFast() {
             if (!res || !res.ok) throw new Error();
             const data = await res.json();
             const p = parseFloat(data?.bitcoin?.usd);
-            if (p > 0) return p;
+            if (p > 0) return { price: p, src: "CoinGecko" };
             throw new Error();
         }
     ];
 
     try {
-        // 가장 먼저 성공하는 1등 데이터 채택
-        return await Promise.any(sources.map(fn => fn()));
+        const result = await Promise.any(sources.map(fn => fn()));
+        console.log(`[BTC 시세 수집 성공] 출처: ${result.src}, 가격: $${result.price}`);
+        return result.price;
     } catch (e) {
+        console.warn("[BTC 시세 수집 실패] 모든 출처 수집 불가");
         return null;
     }
 }
@@ -135,11 +137,12 @@ async function fetchLiveMstrPriceFast() {
     });
 
     try {
-        // 3개 서버에 동시에 요청을 쏘고, 0.1초라도 먼저 리턴되는 것 바로 채택!
         const result = await Promise.any(sources.map(fn => fn()));
+        console.log(`[MSTR 주가 수집 성공] 출처: ${result.src}, 가격: $${result.price}`);
         return result.price;
     } catch (e) {
-        return null; // 실패 시 기존 저장된 주가 유지를 위해 null 반환
+        console.warn("[MSTR 주가 수집 실패] 기존 주가 유지");
+        return null;
     }
 }
 
@@ -354,7 +357,6 @@ function calculateDashboard() {
 
 async function updateDashboard() {
     try {
-        // [병렬 레이싱 실행] 가장 빠른 응답을 받아옵니다.
         const [fetchedBtc, fetchedMstr, futures] = await Promise.all([
             fetchLiveBtcPriceFast(),
             fetchLiveMstrPriceFast(),
@@ -441,7 +443,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
-    // 5초마다 초고속 갱신 (지연 최소화)
+    // 5초마다 초고속 자동 갱신
     setInterval(updateDashboard, 5000);
 
     document.addEventListener("visibilitychange", () => {
