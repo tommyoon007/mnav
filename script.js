@@ -2,7 +2,9 @@ let myChart = null;
 let currentTf = '1M';
 let btcLivePrice = 0;
 
-// 숫자 변환 보조 함수
+// Strategy.com 부채/우선주 고정값 ($12,500M) - 화면에 입력창을 만들지 않고 내부 처리
+const STRATEGY_DEBT_M = 12500; 
+
 function getNum(id) {
     const el = document.getElementById(id);
     if (!el) return 0;
@@ -12,51 +14,38 @@ function getNum(id) {
     return isNaN(num) ? 0 : num;
 }
 
-// 1. Strategy.com 공식 mNAV 계산 함수
+// Strategy.com 공식 mNAV 계산 (Net BPS 방식)
 function calculateMetrics() {
-    const bPrice = btcLivePrice || getNum('btcPriceText');
-    const mPrice = getNum('mstrPrice');
-    const h = getNum('btcHoldings');         // 예: 845050
-    const adso = getNum('adso');             // 예: 424.479
-    const fdso = getNum('fdso');             // 예: 450.090
-    const debt = getNum('debtPreferred');    // 예: 12500 ($M)
+    const bPrice = btcLivePrice || 88000;
+    const mPrice = getNum('mstrPrice') || 124.88; 
+    const h = getNum('btcHoldings');     // 845050
+    const adso = getNum('adso');         // 424.479
+    const fdso = getNum('fdso');         // 450.090
 
-    if (!bPrice || !mPrice || !h || !adso || !fdso) return;
+    if (!bPrice || !h || !adso || !fdso) return;
 
-    // Strategy.com 공식 수식:
-    // Gross BTC Value = 보유 BTC * BTC 가격
+    // Strategy.com 공식 수식
     const grossBtcValue = h * bPrice;
+    const netBtcReserve = grossBtcValue - (STRATEGY_DEBT_M * 1000000); // 부채 차감
+    const netBpsUsd = netBtcReserve / (fdso * 1000000);                 // Net BPS
 
-    // Gross BPS ($) = Gross BTC Value / ADSO (유통주식수)
-    const grossBpsUsd = grossBtcValue / (adso * 1000000);
-
-    // Net BTC Reserve = Gross BTC Value - 부채/우선주($)
-    const netBtcReserve = grossBtcValue - (debt * 1000000);
-
-    // Net BPS ($) = Net BTC Reserve / FDSO (완전희석주식수)
-    const netBpsUsd = netBtcReserve / (fdso * 1000000);
-
-    // Strategy.com 공식 mNAV = 주가 / Net BPS
     let mnav = 0;
     if (netBpsUsd > 0) {
-        mnav = mPrice / netBpsUsd;
+        mnav = mPrice / netBpsUsd; // 주가 / Net BPS
     }
 
-    // UI 업데이트
-    document.getElementById('mnavValue').textContent = mnav.toFixed(2) + 'x';
-    document.getElementById('grossBpsValue').textContent = '$' + grossBpsUsd.toLocaleString(undefined, {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    });
+    // 기존 디자인 카드 내부 프리미엄 텍스트만 업데이트
+    const mnavBadge = document.getElementById('mnavText');
+    if (mnavBadge) {
+        mnavBadge.textContent = `MSTR 프리미엄: ${mnav.toFixed(2)}x`;
+    }
 
     updateRiskAssessment(mnav);
 }
 
-// 2. 위험도 스펙트럼 업데이트
 function updateRiskAssessment(mnav) {
     const riskBadge = document.getElementById('riskBadge');
     const riskDesc = document.getElementById('riskDesc');
-    const riskSpectrumText = document.getElementById('riskSpectrumText');
 
     let score = 2;
     if (mnav > 2.0) score = 5;
@@ -68,66 +57,57 @@ function updateRiskAssessment(mnav) {
         if (score <= 2) {
             riskBadge.className = 'risk-badge low';
             riskBadge.textContent = `🟢 ${score}단계: 안정적 (저위험)`;
-            riskDesc.textContent = '과도한 레버리지가 해소된 안정적인 시장 상태입니다.';
+            if (riskDesc) riskDesc.textContent = '과도한 레버리지가 해소된 안정적인 시장 상태입니다.';
         } else if (score === 3) {
             riskBadge.className = 'risk-badge mid';
             riskBadge.textContent = `🟡 ${score}단계: 주의 (중위험)`;
-            riskDesc.textContent = '프리미엄 상승에 따른 변동성 확대 주의 구간입니다.';
+            if (riskDesc) riskDesc.textContent = '프리미엄 상승에 따른 변동성 확대 주의 구간입니다.';
         } else {
             riskBadge.className = 'risk-badge high';
             riskBadge.textContent = `🔴 ${score}단계: 과열 (고위험)`;
-            riskDesc.textContent = '과도한 프리미엄 및 레버리지 위험이 감지됩니다.';
+            if (riskDesc) riskDesc.textContent = '과도한 프리미엄 및 레버리지 위험이 감지됩니다.';
         }
-    }
-
-    if (riskSpectrumText) {
-        riskSpectrumText.textContent = `MSTR 프리미엄: ${mnav.toFixed(2)}x`;
     }
 }
 
-// 3. 바이낸스 실시간 지표 수집
 async function fetchBinanceData() {
     try {
-        // BTC 가격
         const resPrice = await fetch('https://api.binance.com/api/3/ticker/price?symbol=BTCUSDT');
         const dataPrice = await resPrice.json();
         btcLivePrice = parseFloat(dataPrice.price);
-        document.getElementById('btcPriceText').textContent = '$' + btcLivePrice.toLocaleString(undefined, {maximumFractionDigits: 1});
 
-        // 펀딩비
         const resFunding = await fetch('https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT');
         const dataFunding = await resFunding.json();
         const funding = (parseFloat(dataFunding.lastFundingRate) * 100).toFixed(4);
-        document.getElementById('fundingRate').textContent = funding + '%';
+        const fundingEl = document.getElementById('fundingRate');
+        if (fundingEl) fundingEl.textContent = funding + '%';
 
-        // 미체결 약정
         const resOI = await fetch('https://fapi.binance.com/fapi/v1/openInterest?symbol=BTCUSDT');
         const dataOI = await resOI.json();
         const oiBtc = (parseFloat(dataOI.openInterest) / 1000).toFixed(1);
-        document.getElementById('openInterest').textContent = oiBtc + 'K BTC';
+        const oiEl = document.getElementById('openInterest');
+        if (oiEl) oiEl.textContent = oiBtc + 'K BTC';
 
-        // 롱/숏 비율
         const resLS = await fetch('https://fapi.binance.com/fapi/v1/globalLongShortAccountRatio?symbol=BTCUSDT&period=5m&limit=1');
         const dataLS = await resLS.json();
         if (dataLS && dataLS.length > 0) {
-            document.getElementById('longShortRatio').textContent = parseFloat(dataLS[0].longShortRatio).toFixed(2);
+            const lsEl = document.getElementById('longShortRatio');
+            if (lsEl) lsEl.textContent = parseFloat(dataLS[0].longShortRatio).toFixed(2);
         }
 
-        // 공포탐욕 지수
         const resFg = await fetch('https://api.alternative.me/fng/?limit=1');
         const dataFg = await resFg.json();
         if (dataFg && dataFg.data) {
-            document.getElementById('fearGreed').textContent = dataFg.data[0].value;
+            const fgEl = document.getElementById('fearGreed');
+            if (fgEl) fgEl.textContent = dataFg.data[0].value;
         }
 
-        // 수치 다시 계산
         calculateMetrics();
     } catch (e) {
         console.error("API Fetch Error:", e);
     }
 }
 
-// 4. 차트 생성 및 업데이트 (Multi-Y 축)
 async function renderChart(timeframe) {
     let limit = 30;
     if (timeframe === '1D') limit = 24;
@@ -142,12 +122,12 @@ async function renderChart(timeframe) {
 
         const labels = dataHist.map(d => new Date(d.fundingTime).toLocaleDateString());
         const fundingData = dataHist.map(d => (parseFloat(d.fundingRate) * 100));
+        const oiData = fundingData.map((_, i) => 108 + Math.sin(i / 2) * 5);
+        const lsData = fundingData.map((_, i) => 1.3 + Math.cos(i / 3) * 0.2);
 
-        // 가상 데이터 매핑 (일관된 스케일)
-        const oiData = fundingData.map((_, i) => 100 + Math.sin(i / 2) * 10);
-        const lsData = fundingData.map((_, i) => 1.2 + Math.cos(i / 3) * 0.3);
-
-        const ctx = document.getElementById('chartCanvas').getContext('2d');
+        const canvas = document.getElementById('chartCanvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
 
         if (myChart) myChart.destroy();
 
@@ -200,13 +180,13 @@ async function renderChart(timeframe) {
                         type: 'linear',
                         position: 'right',
                         ticks: { color: '#00aaff' },
-                        grid: { drawOnChartArea: false } // 축 겹침 및 가로선 방지
+                        grid: { drawOnChartArea: false }
                     },
                     yLS: {
                         type: 'linear',
                         position: 'right',
                         ticks: { color: '#00c853' },
-                        grid: { drawOnChartArea: false } // 축 겹침 및 가로선 방지
+                        grid: { drawOnChartArea: false }
                     }
                 },
                 plugins: {
@@ -219,15 +199,12 @@ async function renderChart(timeframe) {
     }
 }
 
-// 이벤트 리스너 등록
 document.addEventListener('DOMContentLoaded', () => {
-    // 입력값 변경 시 자동 계산
-    ['mstrPrice', 'btcHoldings', 'adso', 'fdso', 'debtPreferred'].forEach(id => {
+    ['btcHoldings', 'adso', 'fdso'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('input', calculateMetrics);
     });
 
-    // 타임프레임 버튼 이벤트
     document.querySelectorAll('.btn-tf').forEach(btn => {
         btn.addEventListener('click', (e) => {
             document.querySelectorAll('.btn-tf').forEach(b => b.classList.remove('active'));
@@ -237,7 +214,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // 최초 실행 및 자동 갱신 (30초)
     fetchBinanceData();
     renderChart(currentTf);
     setInterval(fetchBinanceData, 30000);
