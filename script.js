@@ -105,12 +105,14 @@ async function fetchLiveMstrPrice() {
 }
 
 async function fetchFuturesHistory(tf = '1M') {
-    let period = '4h', oiLimit = 180, frLimit = 90;
+    // API 한계치까지 밀도를 높여 더 많은 데이터를 수집하도록 로직 대폭 수정
+    let period = '2h', oiLimit = 360, frLimit = 120;
 
-    if (tf === '1D') { period = '15m'; oiLimit = 96; frLimit = 24; } 
-    else if (tf === '3M') { period = '1d'; oiLimit = 90; frLimit = 270; } 
-    else if (tf === '6M') { period = '1d'; oiLimit = 180; frLimit = 540; } 
-    else if (tf === '1Y' || tf === 'ALL') { period = '1d'; oiLimit = 500; frLimit = 1000; }
+    if (tf === '1D') { period = '5m'; oiLimit = 288; frLimit = 24; } // 24시간: 5분봉 288개
+    else if (tf === '1M') { period = '2h'; oiLimit = 360; frLimit = 90; } // 30일: 2시간봉 360개
+    else if (tf === '3M') { period = '6h'; oiLimit = 360; frLimit = 270; } // 90일: 6시간봉 360개
+    else if (tf === '6M') { period = '12h'; oiLimit = 360; frLimit = 540; } // 180일: 12시간봉 360개
+    else if (tf === '1Y' || tf === 'ALL') { period = '1d'; oiLimit = 500; frLimit = 1000; } // 최대치: 1일봉 500개 (약 1.4년 API MAX)
 
     try {
         const [resFR, resOI, resLS] = await Promise.all([
@@ -143,8 +145,8 @@ async function fetchFuturesHistory(tf = '1M') {
             let dateStr = "";
             if (tf === '1D') {
                 dateStr = `${dateObj.getHours().toString().padStart(2, '0')}:${dateObj.getMinutes().toString().padStart(2, '0')}`;
-            } else if (tf === '3M' || tf === '6M' || tf === '1Y' || tf === 'ALL') {
-                dateStr = `${String(dateObj.getFullYear()).slice(2)}/${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
+            } else if (tf === '1Y' || tf === 'ALL') {
+                dateStr = `${String(dateObj.getFullYear()).slice(2)}/${dateObj.getMonth() + 1}/${dateObj.getDate()}`; // 연도 포함
             } else {
                 dateStr = `${dateObj.getMonth() + 1}/${dateObj.getDate()} ${dateObj.getHours().toString().padStart(2, '0')}:00`;
             }
@@ -263,7 +265,7 @@ async function initOrUpdateFuturesChart(liveFr, liveOi, liveLs, forceReload = fa
         }
 
         const thresholdArray = new Array(labels.length).fill(riskThreshold);
-        const pointRadiusVal = labels.length > 150 ? 0 : 1; 
+        const pointRadiusVal = labels.length > 200 ? 0 : 1; 
 
         futuresChartInstance = new Chart(ctx, {
             type: 'line',
@@ -335,7 +337,6 @@ window.targetPrice = function() {
     const fdso = getNum("fullyDilutedShares") || currentData.fdso;
     const btcHoldings = getNum("btcHoldings") || currentData.btcHoldings;
     
-    // Division by zero 방어
     if (fdso <= 0) return;
 
     const netBpsUsd = (btcHoldings * targetBtc + (currentData.usdAssetsUsdB * 1e9) - (currentData.debtUsdB * 1e9) - (currentData.preferredUsdB * 1e9)) / (fdso * 1e6);
@@ -355,7 +356,6 @@ function calculateDashboard() {
     let btcHoldings = getNum("btcHoldings") || currentData.btcHoldings;
     let fdso = getNum("fullyDilutedShares") || currentData.fdso;
 
-    // 공백 입력 등 비정상 상황 시 계산 방어 (Infinity/NaN 방지)
     if (fdso <= 0 || currentBtcPrice <= 0) return;
 
     const fdsoShares = fdso * 1_000_000;
@@ -479,7 +479,7 @@ document.addEventListener("DOMContentLoaded", () => {
     inputIds.forEach(id => {
         document.getElementById(id)?.addEventListener("input", () => {
             const val = getNum(id);
-            if (val >= 0) { // 빈칸 방어 통과 후 로컬스토리지 저장
+            if (val >= 0) { 
                 if (id === "btcHoldings") {
                     currentData.btcHoldings = val;
                     localStorage.setItem("savedBtcHoldings", val);
