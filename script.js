@@ -15,6 +15,7 @@ let currentTf = '1M';
 let updateTimer = null;
 let autoSyncEnabled = true;
 
+// UI 보조 함수
 function setText(id, text) { 
     const el = document.getElementById(id); 
     if (el) el.textContent = text; 
@@ -35,6 +36,7 @@ function getNum(id) {
     return isNaN(num) ? 0 : num; 
 }
 
+// 안전한 Fetch 타임아웃 함수
 async function fetchWithTimeout(url, timeoutMs = 5000, options = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -48,6 +50,7 @@ async function fetchWithTimeout(url, timeoutMs = 5000, options = {}) {
     }
 }
 
+// BTC 실시간 가격 수집
 async function fetchLiveBtcPrice() {
     try { 
         const res = await fetchWithTimeout("https://api.coinbase.com/v2/prices/spot?currency=USD", 3000);
@@ -68,6 +71,7 @@ async function fetchLiveBtcPrice() {
     return null;
 }
 
+// MSTR 실시간 주가 수집
 async function fetchLiveMstrPrice() {
     if (FINNHUB_KEY) {
         try { 
@@ -97,6 +101,7 @@ async function fetchLiveMstrPrice() {
     return null;
 }
 
+// 공포 탐욕 지수 수집
 async function fetchFearAndGreed() {
     try {
         const res = await fetchWithTimeout("https://api.alternative.me/fng/?limit=1", 3000);
@@ -108,363 +113,396 @@ async function fetchFearAndGreed() {
     return null;
 }
 
+// 선물 히스토리 차트 데이터 수집 (오류 수정됨)
 async function fetchFuturesHistory(tf = '1M') {
-    let period = '2h', oiLimit = 360, frLimit = 120;
-    if (tf === '1D') { period = '5m'; oiLimit = 288; frLimit = 24; } 
-    else if (tf === '1M') { period = '2h'; oiLimit = 360; frLimit = 90; } 
-    else if (tf === '3M') { period = '6h'; oiLimit = 360; frLimit = 270; } 
-    else if (tf === '6M') { period = '12h'; oiLimit = 360; frLimit = 540; } 
-    else if (tf === '1Y' || tf === 'ALL') { period = '1d'; oiLimit = 500; frLimit = 1000; } 
+    let interval = '2h', period = '2h', limit = 360, frLimit = 90;
+    
+    if (tf === '1D') { interval = '5m'; period = '5m'; limit = 288; frLimit = 24; } 
+    else if (tf === '1M') { interval = '2h'; period = '2h'; limit = 360; frLimit = 90; } 
+    else if (tf === '3M') { interval = '6h'; period = '6h'; limit = 360; frLimit = 270; } 
+    else if (tf === '6M') { interval = '12h'; period = '12h'; limit = 360; frLimit = 540; } 
+    else if (tf === '1Y') { interval = '1d'; period = '1d'; limit = 365; frLimit = 1000; } 
+    else if (tf === 'MAX') { interval = '1d'; period = '1d'; limit = 1500; frLimit = 1000; }
 
     try {
-        const [resFR, resOI, resLS] = await Promise.all([
-            fetchWithTimeout(`https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=${frLimit}`, 6000),
-            fetchWithTimeout(`https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=${period}&limit=${oiLimit}`, 6000),
-            fetchWithTimeout(`https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=BTCUSDT&period=${period}&limit=${oiLimit}`, 6000)
-        ]);
-        if (!resOI || !resOI.ok) return null;
-        const oiList = await resOI.json(); 
-        if (!Array.isArray(oiList)) return null; 
+        const klineUrl = `https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval=${interval}&limit=${limit}`;
+        const frUrl = `https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=${frLimit}`;
+        const oiUrl = `https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=${period}&limit=500`;
+        const lsUrl = `https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=BTCUSDT&period=${period}&limit=500`;
 
-        let frList = []; 
-        if (resFR && resFR.ok) { const parsedFr = await resFR.json(); if (Array.isArray(parsedFr)) frList = parsedFr; }
-        let lsList = []; 
-        if (resLS && resLS.ok) { const parsedLs = await resLS.json(); if (Array.isArray(parsedLs)) lsList = parsedLs; }
+        const [resKline, resFR, resOI, resLS] = await Promise.all([
+            fetchWithTimeout(klineUrl, 6000),
+            fetchWithTimeout(frUrl, 6000),
+            fetchWithTimeout(oiUrl, 6000),
+            fetchWithTimeout(lsUrl, 6000)
+        ]);
+
+        if (!resKline || !resKline.ok) return null;
+        const klines = await resKline.json(); 
+        if (!Array.isArray(klines)) return null; 
+
+        let frList = [], oiList = [], lsList = [];
+        if (resFR && resFR.ok) { const parsed = await resFR.json(); if (Array.isArray(parsed)) frList = parsed; }
+        if (resOI && resOI.ok) { const parsed = await resOI.json(); if (Array.isArray(parsed)) oiList = parsed; }
+        if (resLS && resLS.ok) { const parsed = await resLS.json(); if (Array.isArray(parsed)) lsList = parsed; }
 
         const labels = [], frData = [], oiData = [], lsData = [];
-        oiList.forEach((oiItem) => {
-            const dateObj = new Date(oiItem.timestamp);
-            let dateStr = tf === '1D' ? `${dateObj.getHours().toString().padStart(2, '0')}:${dateObj.getMinutes().toString().padStart(2, '0')}` : 
-                          (tf === '1Y' || tf === 'ALL' ? `${String(dateObj.getFullYear()).slice(2)}/${dateObj.getMonth() + 1}/${dateObj.getDate()}` : 
-                          `${dateObj.getMonth() + 1}/${dateObj.getDate()} ${dateObj.getHours().toString().padStart(2, '0')}:00`);
-            labels.push(dateStr);
-            oiData.push(parseFloat(oiItem.sumOpenInterest) / 1000); 
-            if (frList.length > 0) {
-                let closestFr = frList.reduce((prev, curr) => Math.abs(curr.fundingTime - oiItem.timestamp) < Math.abs(prev.fundingTime - oiItem.timestamp) ? curr : prev, frList[0]);
-                frData.push(parseFloat(closestFr.fundingRate) * 100);
-            } else frData.push(0);
+        
+        // 날짜 오차 범위 보정 매핑 알고리즘
+        const findClosest = (list, timeKey, targetTs, maxDiff) => {
+            if (!list || !list.length) return null;
+            let closest = null, minDiff = Infinity;
+            for (let i = list.length - 1; i >= 0; i--) {
+                const diff = Math.abs(list[i][timeKey] - targetTs);
+                if (diff < minDiff) { minDiff = diff; closest = list[i]; }
+                if (list[i][timeKey] < targetTs - maxDiff) break;
+            }
+            return minDiff <= maxDiff ? closest : null;
+        };
+
+        klines.forEach(k => {
+            const ts = k[0]; 
+            const dateObj = new Date(ts);
             
-            const matchedLs = lsList.find(l => Math.abs(l.timestamp - oiItem.timestamp) < 86400000);
-            lsData.push(matchedLs && matchedLs.longShortRatio ? parseFloat(matchedLs.longShortRatio) : null);
+            let dateStr = "";
+            if (tf === '1D') {
+                dateStr = `${dateObj.getHours().toString().padStart(2, '0')}:${dateObj.getMinutes().toString().padStart(2, '0')}`;
+            } else if (tf === '1Y' || tf === 'MAX') {
+                dateStr = `${String(dateObj.getFullYear()).slice(2)}/${String(dateObj.getMonth() + 1).padStart(2, '0')}/${String(dateObj.getDate()).padStart(2, '0')}`;
+            } else {
+                dateStr = `${dateObj.getMonth() + 1}/${dateObj.getDate()} ${dateObj.getHours().toString().padStart(2, '0')}:00`;
+            }
+            
+            labels.push(dateStr);
+            
+            const cFr = findClosest(frList, 'fundingTime', ts, 12 * 60 * 60 * 1000);
+            frData.push(cFr ? parseFloat(cFr.fundingRate) * 100 : null);
+            
+            const cOi = findClosest(oiList, 'timestamp', ts, 24 * 60 * 60 * 1000);
+            oiData.push(cOi ? parseFloat(cOi.sumOpenInterest) / 1000 : null);
+            
+            const cLs = findClosest(lsList, 'timestamp', ts, 24 * 60 * 60 * 1000);
+            lsData.push(cLs ? parseFloat(cLs.longShortRatio) : null);
         });
+        
         return { labels, frData, oiData, lsData };
     } catch (e) { return null; }
 }
 
+// 실시간 선물 레버리지 지표 수집
 async function fetchFuturesData() {
     let fundingRate = null, openInterest = null, lsRatio = null, rawFr = 0, rawOi = 0, rawLs = 1.0;
     try {
         const [resFR, resOI, resLS] = await Promise.all([
-            fetchWithTimeout("https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT", 3000),
-            fetchWithTimeout("https://fapi.binance.com/fapi/v1/openInterest?symbol=BTCUSDT", 3000),
-            fetchWithTimeout("https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=BTCUSDT&period=5m&limit=1", 3000)
+            fetchWithTimeout("https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT", 4000),
+            fetchWithTimeout("https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=BTCUSDT", 4000),
+            fetchWithTimeout("https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=BTCUSDT&period=5m&limit=1", 4000)
         ]);
-        if (resFR && resFR.ok) { const data = await resFR.json(); if (data?.lastFundingRate !== undefined) { rawFr = parseFloat(data.lastFundingRate) * 100; fundingRate = rawFr.toFixed(4) + "%"; } }
-        if (resOI && resOI.ok) { const data = await resOI.json(); if (data?.openInterest !== undefined) { rawOi = (parseFloat(data.openInterest) / 1000); openInterest = rawOi.toFixed(1) + "k ₿"; } }
-        if (resLS && resLS.ok) { const data = await resLS.json(); if (Array.isArray(data) && data.length > 0 && data[0].longShortRatio !== undefined) { rawLs = parseFloat(data[0].longShortRatio); lsRatio = rawLs.toFixed(4); } }
-    } catch (e) {}
+
+        if (resFR && resFR.ok) { 
+            const dataFR = await resFR.json(); 
+            if (dataFR.lastFundingRate !== undefined) { 
+                rawFr = parseFloat(dataFR.lastFundingRate); 
+                fundingRate = (rawFr * 100).toFixed(4) + "%"; 
+            } 
+        }
+        if (resOI && resOI.ok) { 
+            const dataOI = await resOI.json(); 
+            if (dataOI.openInterest !== undefined) { 
+                rawOi = parseFloat(dataOI.openInterest); 
+                openInterest = (rawOi / 1000).toFixed(1) + "K BTC"; 
+            } 
+        }
+        if (resLS && resLS.ok) { 
+            const dataLS = await resLS.json(); 
+            if (dataLS[0] && dataLS[0].longShortRatio !== undefined) { 
+                rawLs = parseFloat(dataLS[0].longShortRatio); 
+                lsRatio = rawLs.toFixed(2); 
+            } 
+        }
+    } catch (e) {} 
+    
     return { fundingRate, openInterest, lsRatio, rawFr, rawOi, rawLs };
 }
 
-function evaluateMultiRisk(rawFr, rawLs, fng, currentMnav) {
-    if (rawFr === null || isNaN(rawFr)) return { stage: "🟡 분석 대기 중", text: "데이터 수집 중...", color: "#aaa" };
-
-    let score = 0;
-    let textFr = "", textLs = "";
-
-    if (rawFr >= 0.05) { score += 4; textFr = "극단적 롱 쏠림"; }
-    else if (rawFr >= 0.03) { score += 3; textFr = "과열 롱 펀딩비"; }
-    else if (rawFr >= 0.015) { score += 1.5; textFr = "롱 포지션 우위"; }
-    else if (rawFr <= -0.01) { score -= 1; textFr = "숏 우위 (스퀴즈 가능성)"; }
-    else { textFr = "중립적 펀딩비"; }
-
-    if (rawLs >= 2.0) { score += 2; textLs = "개미 롱 극대화"; }
-    else if (rawLs >= 1.5) { score += 1; textLs = "롱 포지션 누적"; }
-    else if (rawLs <= 0.8) { score -= 1; textLs = "숏 포지션 누적"; }
-    else { textLs = "비율 안정화"; }
-
-    if (fng !== null) {
-        if (fng >= 80) score += 2;
-        else if (fng >= 70) score += 1;
-        else if (fng <= 30) score -= 1;
+// Chart.js 렌더링
+function renderChart(chartData) {
+    if (!chartData || !chartData.labels.length) return;
+    const ctx = document.getElementById('futuresChart');
+    if (!ctx) return;
+    
+    if (futuresChartInstance) { 
+        futuresChartInstance.destroy(); 
+        futuresChartInstance = null; 
     }
 
-    if (currentMnav !== null) {
-        if (currentMnav >= 2.5) score += 2;
-        else if (currentMnav >= 2.0) score += 1;
-    }
+    const { labels, frData, oiData } = chartData;
 
-    let stage, color;
-    if (score >= 7) { stage = "🔴 5단계 (극심한 위험)"; color = "#f85149"; }
-    else if (score >= 4.5) { stage = "🟠 4단계 (과열 경고)"; color = "#db6d28"; }
-    else if (score >= 2.5) { stage = "🟡 3단계 (열기 발생)"; color = "#d29922"; }
-    else if (score <= 0 && rawFr <= -0.01) { stage = "🟢 1단계 (숏 과열/기회)"; color = "#2ea043"; }
-    else { stage = "🟢 2단계 (건전/중립)"; color = "#3fb950"; }
-
-    return { stage, text: `선물시장: ${textFr} 및 ${textLs} 진행중`, color };
-}
-
-function updateCardValue(possibleIds, labelText, valueText) {
-    if (!valueText) return;
-    possibleIds.forEach(id => { const el = document.getElementById(id); if (el) el.textContent = valueText; });
-}
-
-async function initOrUpdateFuturesChart(liveFr, liveOi, liveLs, forceReload = false) {
-    const canvas = document.getElementById('futuresChart');
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    const riskThreshold = 0.030;
-
-    if (!futuresChartInstance || forceReload) {
-        if (futuresChartInstance) { futuresChartInstance.destroy(); futuresChartInstance = null; }
-
-        const history = await fetchFuturesHistory(currentTf);
-        let labels = [], frData = [], oiData = [], lsData = [];
-        if (history && history.labels.length > 0) {
-            labels = history.labels; frData = history.frData; oiData = history.oiData; lsData = history.lsData;
-        } else {
-            const now = new Date();
-            labels = [`${now.getMonth()+1}/${now.getDate()} ${now.getHours()}:${now.getMinutes()}`];
-            frData = [liveFr]; oiData = [liveOi]; lsData = [liveLs || 1.0];
-        }
-
-        const thresholdArray = new Array(labels.length).fill(riskThreshold);
-        
-        let gradientFR = ctx.createLinearGradient(0, 0, 0, 320);
-        gradientFR.addColorStop(0, 'rgba(255, 159, 10, 0.4)');
-        gradientFR.addColorStop(1, 'rgba(255, 159, 10, 0.0)');
-
-        let gradientOI = ctx.createLinearGradient(0, 0, 0, 320);
-        gradientOI.addColorStop(0, 'rgba(88, 166, 255, 0.3)');
-        gradientOI.addColorStop(1, 'rgba(88, 166, 255, 0.0)');
-
-        futuresChartInstance = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [
-                    { label: '펀딩비 (%)', data: frData, borderColor: '#ff9f0a', backgroundColor: gradientFR, fill: true, yAxisID: 'yFR', borderWidth: 2, tension: 0.4, pointRadius: 0, pointHoverRadius: 5 },
-                    { label: '미결제약정 (k ₿)', data: oiData, borderColor: '#58a6ff', backgroundColor: gradientOI, fill: true, yAxisID: 'yOI', borderWidth: 1.5, tension: 0.4, pointRadius: 0, pointHoverRadius: 4 },
-                    { label: '롱/숏 비율', data: lsData, borderColor: '#a371f7', backgroundColor: 'transparent', fill: false, yAxisID: 'yLS', borderWidth: 1.5, tension: 0.4, pointRadius: 0, pointHoverRadius: 4, borderDash: [2, 2], spanGaps: true },
-                    { label: '위험 기준선 (0.03%)', data: thresholdArray, borderColor: '#f85149', borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0, pointHoverRadius: 0, fill: false, yAxisID: 'yFR' }
-                ]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
-                scales: {
-                    x: { grid: { color: '#2a2a2a' }, ticks: { color: '#8b949e', font: { size: 10 }, maxTicksLimit: 8 } },
-                    yFR: { type: 'linear', position: 'left', grid: { color: '#2a2a2a' }, ticks: { color: '#ff9f0a', font: { size: 10 } } },
-                    yOI: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#58a6ff', font: { size: 10 } } },
-                    yLS: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#a371f7', font: { size: 10 } } }
-                },
-                plugins: { 
-                    legend: { labels: { color: '#fff', font: { size: 11 }, boxWidth: 12 } },
-                    tooltip: {
-                        backgroundColor: 'rgba(22, 27, 34, 0.95)', titleFont: { size: 13 }, bodyFont: { size: 13, weight: 'bold' },
-                        padding: 12, borderColor: '#30363d', borderWidth: 1, displayColors: true, boxPadding: 4,
-                        callbacks: {
-                            label: function(context) {
-                                let label = context.dataset.label || '';
-                                if (label) label += ': ';
-                                if (context.parsed.y !== null && context.parsed.y !== undefined) {
-                                    if (context.datasetIndex === 0) label += context.parsed.y.toFixed(4) + '%';
-                                    else if (context.datasetIndex === 1) label += context.parsed.y.toFixed(1) + 'k ₿';
-                                    else if (context.datasetIndex === 2) label += context.parsed.y.toFixed(2);
-                                    else if (context.datasetIndex === 3) label += context.parsed.y.toFixed(4) + '%';
-                                } else label += 'N/A';
-                                return label;
-                            }
-                        }
-                    }
-                }
+    futuresChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                { label: 'Funding Rate (%)', data: frData, borderColor: '#ff9f0a', backgroundColor: 'rgba(255, 159, 10, 0.1)', yAxisID: 'yFR', pointRadius: 0, borderWidth: 1, fill: true, tension: 0.2 },
+                { label: 'Open Interest (K)', data: oiData, borderColor: '#58a6ff', backgroundColor: 'transparent', yAxisID: 'yOI', pointRadius: 0, borderWidth: 1.5, tension: 0.2 }
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: { legend: { labels: { color: '#8b949e', boxWidth: 12 } } },
+            scales: {
+                x: { ticks: { color: '#8b949e', maxTicksLimit: 6 }, grid: { color: '#30363d' } },
+                yFR: { type: 'linear', display: true, position: 'left', ticks: { color: '#ff9f0a' }, grid: { color: '#30363d' } },
+                yOI: { type: 'linear', display: true, position: 'right', ticks: { color: '#58a6ff' }, grid: { drawOnChartArea: false } }
             }
-        });
-    } else {
-        const datasets = futuresChartInstance.data.datasets;
-        if (datasets[0].data.length > 0) {
-            datasets[0].data[datasets[0].data.length - 1] = liveFr;
-            datasets[1].data[datasets[1].data.length - 1] = liveOi;
-            datasets[2].data[datasets[2].data.length - 1] = liveLs;
-            futuresChartInstance.update('none');
         }
+    });
+}
+
+// 선물 레버리지 위험도 5단계 측정
+function determineFuturesRiskStage(fng, fr, premium, ls) {
+    let score = 0;
+    if (fng !== null) { 
+        if (fng > 80) score += 3; else if (fng > 70) score += 2; else if (fng > 60) score += 1; else if (fng < 30) score -= 2; 
+    }
+    if (fr !== null) { 
+        if (fr > 0.0005) score += 3; else if (fr > 0.0002) score += 2; else if (fr > 0.0001) score += 1; else if (fr < 0) score -= 1; 
+    }
+    if (premium !== null) { 
+        if (premium > 2.5) score += 3; else if (premium > 2.0) score += 2; else if (premium > 1.5) score += 1; else if (premium < 1.0) score -= 2; 
+    }
+    if (ls !== null) { 
+        if (ls > 2.5) score += 2; else if (ls > 1.5) score += 1; else if (ls < 0.8) score -= 1; 
+    }
+    
+    if (score >= 8) return { stage: "🔥 5단계: 극단적 과열 (초고위험)", color: "#ff4d4d", text: "레버리지 포지션이 포화 상태이며 조정 임박 가능성이 매우 높습니다." };
+    if (score >= 5) return { stage: "⚠️ 4단계: 과열 진입 (고위험)", color: "#ff9f0a", text: "시장 흥분도가 높으며 롱 스퀴즈(연쇄 청산) 위험이 증가하고 있습니다." };
+    if (score >= 2) return { stage: "🟡 3단계: 상승세 (중위험)", color: "#f1e05a", text: "일반적인 강세장 수준으로 레버리지가 적절히 쌓이고 있습니다." };
+    if (score >= -2) return { stage: "🟢 2단계: 안정적 (저위험)", color: "#3fb950", text: "과도한 레버리지가 해소된 안정적인 시장 상태입니다." };
+    return { stage: "🧊 1단계: 극도의 공포 (침체)", color: "#58a6ff", text: "시장이 심하게 위축되었으며 숏 포지션이 지배적인 딥(Dip) 상태일 수 있습니다." };
+}
+
+// MNAV 및 BPS 핵심 계산 로직 (예외 처리 강화)
+function calculateMNAV() {
+    const bPrice = getNum("btcPrice"), mPrice = getNum("mstrPrice");
+    const h = getNum("btcHoldings"), a = getNum("assumedShares"), fd = getNum("fullyDilutedShares");
+
+    if (!bPrice || !mPrice || !h || !a || !fd) {
+        setText("grossBpsSats", "-");
+        setText("netBpsSats", "-");
+        setText("netBpsUsd", "-");
+        setText("mnavMultiple", "-");
+        setText("premium", "입력 대기 중...");
+        setText("signal", "수치를 입력해주세요.");
+        return null;
+    }
+
+    const satsPerBtc = 1e8, grossBpsSats = (h / a) * satsPerBtc;
+    setText("grossBpsSats", grossBpsSats.toLocaleString(undefined, { maximumFractionDigits: 0 }));
+
+    const fdSharesForCalc = (mPrice > 143.4) ? fd : a;
+    const { usdAssetsUsdB, debtUsdB, preferredUsdB } = currentData;
+    const btcValueUsdB = (h * bPrice) / 1e9;
+    const netBtcAssetsUsdB = btcValueUsdB + usdAssetsUsdB - debtUsdB - preferredUsdB;
+    
+    let netBpsUsd = 0, currentPremium = 0, signal = "";
+    
+    if (netBtcAssetsUsdB > 0) {
+        netBpsUsd = (netBtcAssetsUsdB * 1e9) / (fdSharesForCalc * 1e6);
+        currentPremium = mPrice / netBpsUsd;
+        const netBpsSats = (netBpsUsd / bPrice) * satsPerBtc;
+        
+        setText("netBpsSats", netBpsSats.toLocaleString(undefined, { maximumFractionDigits: 0 }));
+        setText("netBpsUsd", "$" + netBpsUsd.toFixed(2));
+        setText("mnavMultiple", currentPremium.toFixed(2) + "×");
+        setText("premium", `현재 Premium: ${(currentPremium * 100).toFixed(1)}%`);
+        
+        if (currentPremium < 1.0) signal = "매수 기회: MNAV 1.0 미만 (역프리미엄)";
+        else if (currentPremium < 1.3) signal = "평균적 밸류에이션 (보통)";
+        else if (currentPremium < 2.0) signal = "프리미엄 확대 구간 (주의)";
+        else signal = "고평가 가능성: MNAV 2.0 이상 (분할 매도 고려)";
+    } else {
+        setText("netBpsSats", "N/A");
+        setText("netBpsUsd", "N/A");
+        setText("mnavMultiple", "N/A");
+        setText("premium", "Net Assets < 0");
+        signal = "리스크 경고: 부채 초과 상태";
+    }
+    
+    const sigEl = document.getElementById("signal");
+    if (sigEl) {
+        sigEl.textContent = signal;
+        sigEl.style.color = currentPremium < 1.0 ? "#3fb950" : (currentPremium >= 2.0 ? "#ff4d4d" : "#58a6ff");
+    }
+    
+    return { currentPremium, fdSharesForCalc };
+}
+
+// 목표가 시뮬레이터 실행
+function runSimulator(fdSharesForCalc) {
+    const targetBtcPrice = getNum("targetBtcPrice"), targetMnav = getNum("targetMnav"), h = getNum("btcHoldings");
+    if (!targetBtcPrice || !targetMnav || !h || !fdSharesForCalc) {
+        setText("predictedMstrPrice", "$0.00");
+        setText("predictedNetBps", "예상 Net BPS: $0.00");
+        return;
+    }
+
+    const { usdAssetsUsdB, debtUsdB, preferredUsdB } = currentData;
+    const targetBtcValueUsdB = (h * targetBtcPrice) / 1e9;
+    const targetNetBtcAssetsUsdB = targetBtcValueUsdB + usdAssetsUsdB - debtUsdB - preferredUsdB;
+    
+    if (targetNetBtcAssetsUsdB > 0) {
+        const targetNetBpsUsd = (targetNetBtcAssetsUsdB * 1e9) / (fdSharesForCalc * 1e6);
+        const predictedMstr = targetNetBpsUsd * targetMnav;
+        setText("predictedMstrPrice", "$" + predictedMstr.toFixed(2));
+        setText("predictedNetBps", "예상 Net BPS: $" + targetNetBpsUsd.toFixed(2));
+    } else {
+        setText("predictedMstrPrice", "N/A");
+        setText("predictedNetBps", "예상 Net BPS: N/A");
     }
 }
 
-window.changeChartTimeframe = async function(tf) {
-    if (currentTf === tf) return; 
-    currentTf = tf;
-    document.querySelectorAll('.tf-btn').forEach(btn => btn.classList.remove('active'));
-    document.getElementById(`tf-${tf}`)?.classList.add('active');
-    const futures = await fetchFuturesData();
-    await initOrUpdateFuturesChart(futures.rawFr, futures.rawOi, futures.rawLs, true);
-};
-
-function updateScenarioTable(netBpsUsd, currentBtc) {
+// 가격별 mNAV 시나리오 표 생성
+function generateScenarioTable(fdSharesForCalc) {
     const tbody = document.getElementById("scenarioTable");
-    if (!tbody || !netBpsUsd || !currentBtc) return;
-    const fixedBtcTargets = [30000, 40000, 50000, 60000, 70000, 80000, 90000, 100000, 120000, 150000, 180000, 200000, 250000, 300000, 400000, 500000];
-    const mnavMultipliers = [1.0, 1.25, 1.5, 2.0, 2.5, 3.0];
+    if (!tbody || !fdSharesForCalc) return;
+    
+    const { usdAssetsUsdB, debtUsdB, preferredUsdB } = currentData;
+    const h = getNum("btcHoldings");
+    const btcPrices = [30000, 50000, 70000, 100000, 150000, 200000, 300000, 500000];
+    const mnavMultiples = [1.0, 1.25, 1.5, 2.0, 2.5, 3.0];
+    
     let html = "";
-    fixedBtcTargets.forEach(targetBtc => {
-        const targetNetBps = netBpsUsd * (targetBtc / currentBtc);
-        const isCurrentZone = Math.abs(targetBtc - currentBtc) < 5000;
-        const rowStyle = isCurrentZone ? 'style="background-color: #26382b; font-weight: bold; color: #3fb950;"' : '';
-        html += `<tr ${rowStyle}><td>$${(targetBtc / 1000).toFixed(0)}k</td>`;
-        mnavMultipliers.forEach(nav => { html += `<td>$${(targetNetBps * nav).toFixed(0)}</td>`; }); 
-        html += `</tr>`;
-    }); 
+    btcPrices.forEach(p => {
+        const valB = (h * p) / 1e9;
+        const netB = valB + usdAssetsUsdB - debtUsdB - preferredUsdB;
+        const bps = (netB > 0) ? (netB * 1e9) / (fdSharesForCalc * 1e6) : 0;
+        
+        let row = `<tr><td style="font-weight:bold;color:#fff;">$${(p/1000).toFixed(0)}k</td>`;
+        mnavMultiples.forEach(m => {
+            if (bps > 0) {
+                const est = bps * m;
+                row += `<td style="color:${m >= 2.0 ? '#ff9f0a' : '#58a6ff'}">$${est.toFixed(0)}</td>`;
+            } else { row += `<td style="color:#666;">-</td>`; }
+        });
+        row += `</tr>`;
+        html += row;
+    });
     tbody.innerHTML = html;
 }
 
-window.targetPrice = function() {
-    const targetBtc = getNum("targetBtcPrice"); 
-    const targetMnav = getNum("targetMnav");
-    if (targetBtc > 0) localStorage.setItem("savedTargetBtc", targetBtc);
-    if (targetMnav > 0) localStorage.setItem("savedTargetMnav", targetMnav);
-    if (!targetBtc || !targetMnav) return;
-
-    const fdso = getNum("fullyDilutedShares") || currentData.fdso;
-    const btcHoldings = getNum("btcHoldings") || currentData.btcHoldings;
-    if (fdso <= 0) return;
-
-    const netBpsUsd = (btcHoldings * targetBtc + (currentData.usdAssetsUsdB * 1e9) - (currentData.debtUsdB * 1e9) - (currentData.preferredUsdB * 1e9)) / (fdso * 1e6);
-    const predictedMstr = netBpsUsd * targetMnav;
-    setText("predictedMstrPrice", `$${predictedMstr.toFixed(2)}`);
-    setText("predictedNetBps", `예상 Net BPS: $${netBpsUsd.toFixed(2)}`);
-};
-
-function calculateDashboard() {
-    let currentBtcPrice = getNum("btcPrice") || parseFloat(localStorage.getItem("savedBtcPrice")) || 95000;
-    let currentMstrPrice = getNum("mstrPrice") || parseFloat(localStorage.getItem("savedMstrPrice")) || 130;
-    let btcHoldings = getNum("btcHoldings") || currentData.btcHoldings;
-    let fdso = getNum("fullyDilutedShares") || currentData.fdso;
-    if (fdso <= 0 || currentBtcPrice <= 0) return null;
-
-    const netReserveUsd = (btcHoldings * currentBtcPrice) + (currentData.usdAssetsUsdB * 1e9) - (currentData.debtUsdB * 1e9) - (currentData.preferredUsdB * 1e9);
-    const grossBpsSats = (btcHoldings / (fdso * 1e6)) * 100_000_000;
-    const netBpsUsd = netReserveUsd / (fdso * 1e6);
-    const netBpsSats = ((netReserveUsd / currentBtcPrice) / (fdso * 1e6)) * 100_000_000;
-
-    setText("grossBpsSats", Math.round(grossBpsSats).toLocaleString());
-    setText("netBpsSats", Math.round(netBpsSats).toLocaleString());
-    setText("netBpsUsd", `$${netBpsUsd.toFixed(2)}`);
-
-    let mnav = null;
-    if (currentMstrPrice > 0 && netBpsUsd > 0) {
-        mnav = currentMstrPrice / netBpsUsd;
-        const premiumPct = (mnav - 1) * 100;
-        setText("mnavMultiple", `${mnav.toFixed(2)}×`);
-        setText("premium", `프리미엄: ${premiumPct >= 0 ? '+' : ''}${premiumPct.toFixed(1)}%`);
-        setText("signal", mnav < 1.0 ? "🟢 극심한 저평가 (NAV 대비 할인)" : (mnav > 2.5 ? "🔴 과열 주의 (높은 프리미엄)" : "🟡 중립 (적정 주가 구간)"));
+// API 호출을 수반하는 대시보드 전체 업데이트
+async function updateDashboard(forceChartRefresh = false) {
+    if (autoSyncEnabled) {
+        const liveBtc = await fetchLiveBtcPrice();
+        if (liveBtc) setVal("btcPrice", liveBtc.toFixed(2));
+        const liveMstr = await fetchLiveMstrPrice();
+        if (liveMstr) setVal("mstrPrice", liveMstr.toFixed(2));
     }
 
-    updateScenarioTable(netBpsUsd, currentBtcPrice);
-    return mnav; 
-}
-
-async function updateDashboard() {
-    try {
-        const futures = await fetchFuturesData();
-        const fngIndex = await fetchFearAndGreed();
-
-        if (autoSyncEnabled) {
-            const [fetchedBtc, fetchedMstr] = await Promise.all([ fetchLiveBtcPrice(), fetchLiveMstrPrice() ]);
-            if (fetchedBtc > 0) { setVal("btcPrice", fetchedBtc.toFixed(2)); localStorage.setItem("savedBtcPrice", fetchedBtc.toFixed(2)); }
-            if (fetchedMstr > 0) { setVal("mstrPrice", fetchedMstr.toFixed(2)); localStorage.setItem("savedMstrPrice", fetchedMstr.toFixed(2)); }
-            
-            const now = new Date();
-            setText("dataStatus", `시세 및 데이터 연동 완료 (${now.toTimeString().split(' ')[0]})`);
-        } else {
-            setText("dataStatus", "자동 동기화 일시 정지 (수동 모드)");
-        }
-
-        const currentMnav = calculateDashboard();
-
-        if (fngIndex !== null) setText("badge-fng", `공포탐욕: ${fngIndex}`);
-        if (currentMnav !== null) setText("badge-premium", `MSTR 프리미엄: ${currentMnav.toFixed(2)}x`);
-        if (futures.rawLs !== null) setText("badge-ls", `L/S 비율: ${futures.rawLs.toFixed(2)}`);
-
-        if (futures.fundingRate !== null) {
-            updateCardValue(["fundingRate"], "Funding Rate", futures.fundingRate);
-            const risk = evaluateMultiRisk(futures.rawFr, futures.rawLs, fngIndex, currentMnav);
-            
-            setText("futuresRiskStage", risk.stage);
-            setText("futuresRiskText", risk.text);
-            const riskStageEl = document.getElementById("futuresRiskStage");
-            if (riskStageEl) riskStageEl.style.color = risk.color;
-            
-            await initOrUpdateFuturesChart(futures.rawFr, futures.rawOi, futures.rawLs);
-        }
-        if (futures.openInterest !== null) updateCardValue(["btcOi"], "BTC OI", futures.openInterest);
-
-    } catch (e) {
-        if (autoSyncEnabled) setText("dataStatus", "시세 연동 대기 중");
-        calculateDashboard();
-    } finally {
-        window.targetPrice();
-    }
-}
-
-function startAutoUpdates() {
-    updateDashboard();
-    if (updateTimer) clearInterval(updateTimer);
-    updateTimer = setInterval(() => { if (!document.hidden) updateDashboard(); }, 30000);
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-    const savedBtcHoldings = localStorage.getItem("savedBtcHoldings");
-    const savedAdso = localStorage.getItem("savedAdso");
-    const savedFdso = localStorage.getItem("savedFdso");
-    const savedTargetBtc = localStorage.getItem("savedTargetBtc");
-    const savedTargetMnav = localStorage.getItem("savedTargetMnav");
-    const savedBtcPrice = localStorage.getItem("savedBtcPrice");
-    const savedMstrPrice = localStorage.getItem("savedMstrPrice");
-
-    if (savedBtcHoldings && !isNaN(parseFloat(savedBtcHoldings))) currentData.btcHoldings = parseFloat(savedBtcHoldings);
-    if (savedAdso && !isNaN(parseFloat(savedAdso))) currentData.adso = parseFloat(savedAdso);
-    if (savedFdso && !isNaN(parseFloat(savedFdso))) currentData.fdso = parseFloat(savedFdso);
+    recalculateOnly();
     
-    setVal("btcHoldings", currentData.btcHoldings);
-    setVal("assumedShares", currentData.adso.toFixed(3));
-    setVal("fullyDilutedShares", currentData.fdso.toFixed(3));
-    if (savedTargetBtc && !isNaN(parseFloat(savedTargetBtc))) setVal("targetBtcPrice", savedTargetBtc);
-    if (savedTargetMnav && !isNaN(parseFloat(savedTargetMnav))) setVal("targetMnav", savedTargetMnav);
-    if (savedBtcPrice && !isNaN(parseFloat(savedBtcPrice))) setVal("btcPrice", savedBtcPrice);
-    if (savedMstrPrice && !isNaN(parseFloat(savedMstrPrice))) setVal("mstrPrice", savedMstrPrice);
+    const calc = calculateMNAV();
+    const currentPremium = calc ? calc.currentPremium : null;
 
-    const toggle = document.getElementById("autoSyncToggle");
-    const toggleLabel = document.getElementById("autoSyncLabel");
-    if (toggle) {
-        toggle.addEventListener("change", (e) => {
-            autoSyncEnabled = e.target.checked;
-            if (toggleLabel) {
-                toggleLabel.textContent = autoSyncEnabled ? "자동 동기화 ON" : "자동 동기화 OFF";
-                toggleLabel.style.color = autoSyncEnabled ? "#ff9f0a" : "#8b949e";
-            }
-            if (autoSyncEnabled) updateDashboard(); 
-        });
+    const fng = await fetchFearAndGreed();
+    const futures = await fetchFuturesData();
+    
+    if (futures) {
+        setText("fundingRate", futures.fundingRate || "-");
+        setText("btcOi", futures.openInterest || "-");
+        
+        const risk = determineFuturesRiskStage(fng, futures.rawFr, currentPremium, futures.rawLs);
+        setText("futuresRiskStage", risk.stage);
+        const stageEl = document.getElementById("futuresRiskStage");
+        if (stageEl) stageEl.style.color = risk.color;
+        setText("futuresRiskText", risk.text);
+        
+        setText("badge-fng", fng !== null ? `공포탐욕: ${fng}` : `공포탐욕: 실패`);
+        setText("badge-premium", currentPremium ? `MSTR 프리미엄: ${currentPremium.toFixed(2)}x` : `MSTR 프리미엄: -`);
+        setText("badge-ls", futures.lsRatio ? `L/S 비율: ${futures.lsRatio}` : `L/S 비율: -`);
     }
 
-    startAutoUpdates();
+    if (!futuresChartInstance || forceChartRefresh) {
+        const cData = await fetchFuturesHistory(currentTf);
+        if (cData) renderChart(cData);
+    }
+}
 
-    const inputIds = ["btcPrice", "mstrPrice", "btcHoldings", "assumedShares", "fullyDilutedShares", "targetBtcPrice", "targetMnav"];
-    inputIds.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) {
-            el.addEventListener("input", () => {
-                const val = getNum(id);
-                if (val >= 0) { 
-                    if (id === "btcHoldings") { currentData.btcHoldings = val; localStorage.setItem("savedBtcHoldings", val); } 
-                    else if (id === "assumedShares") { currentData.adso = val; localStorage.setItem("savedAdso", val); } 
-                    else if (id === "fullyDilutedShares") { currentData.fdso = val; localStorage.setItem("savedFdso", val); } 
-                    else if (id === "btcPrice") localStorage.setItem("savedBtcPrice", val);
-                    else if (id === "mstrPrice") localStorage.setItem("savedMstrPrice", val);
-                }
-                calculateDashboard();
-                window.targetPrice();
-            });
-        }
-    });
+// 입력 즉시 실행되는 빠른 순수 계산 함수 (API 호출 없음)
+function recalculateOnly() {
+    const calc = calculateMNAV();
+    if (calc && calc.fdSharesForCalc) {
+        runSimulator(calc.fdSharesForCalc);
+        generateScenarioTable(calc.fdSharesForCalc);
+    }
+}
 
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) updateDashboard(); });
+// 차트 기간 변경 이벤트
+async function changeChartTimeframe(tf) {
+    currentTf = tf;
+    document.querySelectorAll('.tf-btn').forEach(btn => btn.classList.remove('active'));
+    const activeBtn = document.getElementById('tf-' + tf);
+    if (activeBtn) activeBtn.classList.add('active');
+    
+    const cData = await fetchFuturesHistory(tf);
+    if (cData) renderChart(cData);
+}
+
+// 사용자가 숫자를 수정할 때 (API 호출 폭주 방지 로직)
+function handleInput() {
+    recalculateOnly();
+}
+
+// 실시간 가격을 사용자가 직접 입력할 때 (자동 동기화 OFF 전환)
+function handlePriceInput() {
+    if (autoSyncEnabled) {
+        const toggle = document.getElementById("autoSyncToggle");
+        if (toggle) toggle.checked = false;
+        setText("autoSyncLabel", "자동 동기화 OFF");
+        const label = document.getElementById("autoSyncLabel");
+        if (label) label.style.color = "#8b949e";
+        setText("dataStatus", "사용자 직접 입력 (수동 모드)");
+        autoSyncEnabled = false;
+    }
+    recalculateOnly();
+}
+
+// 자동 동기화 토글 스위치 이벤트
+function toggleAutoSync() {
+    const toggle = document.getElementById("autoSyncToggle");
+    const isChecked = toggle ? toggle.checked : false;
+    autoSyncEnabled = isChecked;
+    
+    const label = document.getElementById("autoSyncLabel");
+    if (isChecked) {
+        setText("autoSyncLabel", "자동 동기화 ON");
+        if (label) label.style.color = "#ff9f0a";
+        setText("dataStatus", "실시간 데이터 연동 중...");
+        updateDashboard(false); 
+    } else {
+        setText("autoSyncLabel", "자동 동기화 OFF");
+        if (label) label.style.color = "#8b949e";
+        setText("dataStatus", "사용자 직접 입력 (수동 모드)");
+    }
+}
+
+// 이벤트 리스너 바인딩 (수정됨)
+document.querySelectorAll('input').forEach(input => {
+    if (input.id === "btcPrice" || input.id === "mstrPrice") {
+        input.addEventListener('input', handlePriceInput);
+    } else if (input.id !== "autoSyncToggle") {
+        input.addEventListener('input', handleInput);
+    }
+});
+
+const syncToggle = document.getElementById("autoSyncToggle");
+if (syncToggle) syncToggle.addEventListener('change', toggleAutoSync);
+
+// 페이지 로드 시 초기화 및 30초 주기 타이머 실행
+document.addEventListener("DOMContentLoaded", () => {
+    updateDashboard(true);
+    if (updateTimer) clearInterval(updateTimer);
+    updateTimer = setInterval(() => updateDashboard(false), 30000);
 });
