@@ -1,188 +1,283 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="ko" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MSTR mNAV & BTC Futures Dashboard</title>
+    <title>Crypto & MSTR Realtime Analytics Dashboard</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            dark: '#0f172a',
+                            card: '#1e293b',
+                            border: '#334155'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
     <style>
-        body { background-color: #121212; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 16px; }
-        .card { background-color: #1e1e1e; border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid #2a2a2a; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-        .card-title { font-size: 14px; color: #ff9f0a; font-weight: bold; margin-bottom: 12px; }
-        .status-box { font-size: 13px; color: #aaa; margin-bottom: 16px; line-height: 1.4; display: flex; justify-content: space-between; align-items: center; }
-        .input-group { margin-bottom: 12px; }
-        .input-group label { display: block; font-size: 13px; color: #aaa; margin-bottom: 4px; }
-        .input-group input { width: 100%; padding: 12px; background-color: #0d1117; border: 1px solid #30363d; border-radius: 8px; color: #fff; font-size: 16px; font-weight: bold; box-sizing: border-box; transition: border-color 0.2s; }
-        .input-group input:focus { border-color: #58a6ff; outline: none; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .result-card { background: #161b22; padding: 12px; border-radius: 8px; border: 1px solid #30363d; position: relative; overflow: hidden; }
-        .result-label { font-size: 11px; color: #8b949e; font-weight: bold; }
-        .result-val { font-size: 18px; font-weight: bold; margin-top: 4px; }
-        .result-sub { font-size: 11px; color: #8b949e; margin-top: 2px; }
-        .signal-box { margin-top: 12px; padding: 12px; background: #161b22; border-radius: 8px; text-align: center; font-weight: bold; border: 1px solid #30363d; }
-        .risk-card { background: #1c2128; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-top: 12px; text-align: center; }
-        .risk-factors { display: flex; gap: 8px; margin-top: 12px; justify-content: center; flex-wrap: wrap; }
-        .badge { font-size: 11px; padding: 4px 8px; border-radius: 6px; background: #0d1117; border: 1px solid #30363d; color: #8b949e; font-weight: bold; }
-        table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
-        th, td { border: 1px solid #30363d; padding: 8px 6px; text-align: center; }
-        th { background: #161b22; color: #8b949e; }
-        .chart-container { position: relative; height: 320px; width: 100%; margin-top: 12px; }
-        .timeframe-group { display: flex; gap: 4px; flex-wrap: wrap; }
-        .tf-btn { background: #161b22; border: 1px solid #30363d; color: #8b949e; padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        .tf-btn:hover { background: #2a2a2a; color: #fff; }
-        .tf-btn.active { background: #ff9f0a; color: #0d1117; border-color: #ff9f0a; }
-        .toggle-label { display: flex; align-items: center; cursor: pointer; user-select: none; }
-        .toggle-input { margin-right: 6px; cursor: pointer; }
-        .toggle-text { font-weight: bold; font-size: 12px; color: #ff9f0a; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
     </style>
 </head>
-<body>
-
-    <div class="card">
-        <h2 style="margin:0 0 8px 0; letter-spacing: -0.5px;">₿ MSTR mNAV & BTC Futures</h2>
-        <p style="margin:0; font-size:13px; color:#aaa;">Strategy 공식 Net Reserve 기반 다중 지표 대시보드</p>
-    </div>
-
-    <div class="card">
-        <div class="card-title">⚡ 자동 수집 데이터 및 입력</div>
-        <div class="status-box">
-            <div id="dataStatus">실시간 데이터 연동 중...</div>
-            <label class="toggle-label">
-                <input type="checkbox" id="autoSyncToggle" class="toggle-input" checked>
-                <span id="autoSyncLabel" class="toggle-text">자동 동기화 ON</span>
-            </label>
-        </div>
-
-        <div class="input-group">
-            <label for="btcPrice">BTC 실시간 가격 ($)</label>
-            <input type="text" id="btcPrice" value="95000">
-        </div>
-
-        <div class="input-group">
-            <label for="mstrPrice">MSTR 실시간 주가 ($)</label>
-            <input type="text" id="mstrPrice" value="130">
-        </div>
-
-        <div class="input-group">
-            <label for="btcHoldings">BTC 보유량</label>
-            <input type="text" id="btcHoldings" value="845050">
-        </div>
-
-        <div class="input-group">
-            <label for="assumedShares">ADSO (M)</label>
-            <input type="text" id="assumedShares" value="298.039">
-        </div>
-
-        <div class="input-group">
-            <label for="fullyDilutedShares">FDSO (M)</label>
-            <input type="text" id="fullyDilutedShares" value="424.479">
-        </div>
-    </div>
-
-    <div class="card">
-        <div class="card-title">🔥 다중 지표 레버리지 위험도 (종합 분석)</div>
-        <div class="grid">
-            <div class="result-card">
-                <div class="result-label">FUNDING RATE (8H)</div>
-                <div class="result-val" id="fundingRate" style="color: #ff9f0a;">-</div>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased custom-scrollbar">
+    <!-- Application Header -->
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="p-2 bg-indigo-600/20 text-indigo-400 rounded-lg border border-indigo-500/30">
+                    <i class="fa-solid fa-chart-line text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg text-white leading-tight">Crypto & MSTR Dashboard</h1>
+                    <p class="text-xs text-slate-400">실시간 가상자산 & MSTR 프레미엄 정밀 분석 터미널</p>
+                </div>
             </div>
-            <div class="result-card">
-                <div class="result-label">BTC OPEN INTEREST</div>
-                <div class="result-val" id="btcOi" style="color: #58a6ff;">-</div>
+            <div class="flex items-center space-x-4">
+                <span id="connection-status" class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    <span class="w-2 h-2 mr-1.5 bg-emerald-400 rounded-full animate-pulse"></span> WebSocket 연결됨
+                </span>
+                <button id="refresh-btn" class="p-2 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition border border-slate-700 text-sm flex items-center gap-1.5">
+                    <i class="fa-solid fa-rotate"></i>
+                    <span class="hidden sm:inline">새로고침</span>
+                </button>
             </div>
         </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         
-        <div class="risk-card">
-            <div class="result-label">시장 종합 위험 스펙트럼 (5단계)</div>
-            <div class="result-val" id="futuresRiskStage" style="color:#ff9f0a; margin-top:6px; font-size: 20px;">분석 중...</div>
-            <div class="result-sub" id="futuresRiskText" style="margin-top: 6px; font-size: 13px;">-</div>
-            <div class="risk-factors">
-                <span class="badge" id="badge-fng">공포탐욕: 연동중</span>
-                <span class="badge" id="badge-premium">MSTR 프리미엄: 계산중</span>
-                <span class="badge" id="badge-ls">L/S 비율: -</span>
+        <!-- TOP KPI CARDS -->
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- BTC Price -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-lg hover:border-slate-700 transition">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">BTC / USDT</span>
+                    <i class="fa-brands fa-bitcoin text-amber-500 text-lg"></i>
+                </div>
+                <div id="btc-price" class="text-2xl font-bold text-white tracking-tight">$0.00</div>
+                <div class="flex items-center justify-between mt-2 text-xs">
+                    <span id="btc-change" class="font-semibold text-slate-400">0.00%</span>
+                    <span id="btc-24h-vol" class="text-slate-500">24H Vol: -</span>
+                </div>
             </div>
-        </div>
-    </div>
 
-    <div class="card">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
-            <div class="card-title" style="margin-bottom: 0;">📊 프로 차트 (펀딩비 & 미결제약정)</div>
-            <div class="timeframe-group">
-                <button class="tf-btn" id="tf-1D" onclick="changeChartTimeframe('1D')">1D</button>
-                <button class="tf-btn active" id="tf-1M" onclick="changeChartTimeframe('1M')">1M</button>
-                <button class="tf-btn" id="tf-3M" onclick="changeChartTimeframe('3M')">3M</button>
-                <button class="tf-btn" id="tf-6M" onclick="changeChartTimeframe('6M')">6M</button>
-                <button class="tf-btn" id="tf-1Y" onclick="changeChartTimeframe('1Y')">MAX</button>
+            <!-- Open Interest -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-lg hover:border-slate-700 transition">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">비트코인 미결제약정 (OI)</span>
+                    <i class="fa-solid fa-layer-group text-blue-400 text-lg"></i>
+                </div>
+                <div id="oi-value" class="text-2xl font-bold text-white tracking-tight">$0.00B</div>
+                <div class="flex items-center justify-between mt-2 text-xs">
+                    <span id="oi-btc-count" class="text-slate-400">0 BTC</span>
+                    <span id="oi-change" class="text-slate-500">실시간 집계</span>
+                </div>
             </div>
-        </div>
-        <div class="chart-container">
-            <canvas id="futuresChart"></canvas>
-        </div>
-    </div>
 
-    <div class="card">
-        <div class="card-title">📊 핵심 계산 결과</div>
-        <div class="grid">
-            <div class="result-card">
-                <div class="result-label">GROSS BTC / SHARE</div>
-                <div class="result-val" id="grossBpsSats" style="color: #58a6ff;">-</div>
-                <div class="result-sub">Sats</div>
+            <!-- Funding Rate -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-lg hover:border-slate-700 transition">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">펀딩 비율 (Funding Rate)</span>
+                    <i class="fa-solid fa-percent text-purple-400 text-lg"></i>
+                </div>
+                <div id="funding-rate" class="text-2xl font-bold text-white tracking-tight">0.0000%</div>
+                <div class="flex items-center justify-between mt-2 text-xs">
+                    <span id="next-funding-timer" class="text-slate-400">다음 정산: --:--:--</span>
+                    <span id="funding-annualized" class="text-slate-500">연율: -</span>
+                </div>
             </div>
-            <div class="result-card">
-                <div class="result-label">NET BTC / SHARE</div>
-                <div class="result-val" id="netBpsSats" style="color: #58a6ff;">-</div>
-                <div class="result-sub">Sats</div>
-            </div>
-            <div class="result-card">
-                <div class="result-label">NET BPS (USD)</div>
-                <div class="result-val" id="netBpsUsd" style="color: #58a6ff;">-</div>
-            </div>
-            <div class="result-card">
-                <div class="result-label">현재 MNAV</div>
-                <div class="result-val" id="mnavMultiple" style="color: #ff9f0a;">-</div>
-                <div class="result-sub" id="premium">프리미엄: -</div>
-            </div>
-        </div>
-        <div class="signal-box" id="signal">계산 중...</div>
-    </div>
 
-    <div class="card">
-        <div class="card-title">🎯 MSTR 목표가 시뮬레이터</div>
-        <div class="input-group">
-            <label for="targetBtcPrice">목표 비트코인 가격 ($)</label>
-            <input type="text" id="targetBtcPrice" value="100000">
-        </div>
-        <div class="input-group">
-            <label for="targetMnav">목표 mNAV 배수 (×)</label>
-            <input type="text" id="targetMnav" value="1.5">
-        </div>
-        <div class="risk-card" style="margin-top:0;">
-            <div class="result-label">예상 MSTR 주가</div>
-            <div class="result-val" id="predictedMstrPrice" style="color:#3fb950; font-size:24px;">$0.00</div>
-            <div class="result-sub" id="predictedNetBps">예상 Net BPS: $0.00</div>
-        </div>
-    </div>
+            <!-- MSTR Price & mNAV -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-lg hover:border-slate-700 transition">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">MSTR 주가 & mNAV 프리미엄</span>
+                    <i class="fa-solid fa-building-columns text-emerald-400 text-lg"></i>
+                </div>
+                <div id="mstr-price" class="text-2xl font-bold text-white tracking-tight">$0.00</div>
+                <div class="flex items-center justify-between mt-2 text-xs">
+                    <span id="mnav-premium" class="font-semibold text-amber-400">mNAV 프리미엄: -</span>
+                    <span id="mstr-nav-per-share" class="text-slate-500">주당 NAV: -</span>
+                </div>
+            </div>
+        </section>
 
-    <div class="card">
-        <div class="card-title">📈 BTC 가격별 mNAV 시나리오 표 ($30k ~ $500k)</div>
-        <div style="overflow-x:auto;">
-            <table>
-                <thead>
-                    <tr>
-                        <th>BTC 가격</th>
-                        <th>1.0×</th>
-                        <th>1.25×</th>
-                        <th>1.5×</th>
-                        <th>2.0×</th>
-                        <th>2.5×</th>
-                        <th>3.0×</th>
-                    </tr>
-                </thead>
-                <tbody id="scenarioTable"></tbody>
-            </table>
-        </div>
-    </div>
+        <!-- FUTURES CHART SECTION -->
+        <section class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl relative overflow-hidden">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 border-b border-slate-800 pb-4">
+                <div>
+                    <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-chart-area text-indigo-400"></i>
+                        비트코인 선물 종합 지표 (가격 / 미결제약정 / 펀딩비 / 롱·숏 비율)
+                    </h2>
+                    <p class="text-xs text-slate-400 mt-1">바이낸스 선물 시장의 자금 흐름과 레버리지 포지셔닝을 시간대별로 정밀 분석합니다.</p>
+                </div>
 
+                <!-- Timeframe Selector -->
+                <div class="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 self-start md:self-auto" id="timeframe-container">
+                    <button data-period="1D" class="tf-btn px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition">1D</button>
+                    <button data-period="1M" class="tf-btn px-3 py-1.5 text-xs font-semibold rounded-lg text-white bg-indigo-600 shadow transition">1M</button>
+                    <button data-period="3M" class="tf-btn px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition">3M</button>
+                    <button data-period="6M" class="tf-btn px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition">6M</button>
+                    <button data-period="1Y" class="tf-btn px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition">1Y</button>
+                    <button data-period="MAX" class="tf-btn px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition">MAX</button>
+                </div>
+            </div>
+
+            <!-- Chart Loading Overlay -->
+            <div id="chart-loader" class="hidden absolute inset-0 bg-slate-900/70 backdrop-blur-sm z-10 flex flex-col items-center justify-center">
+                <i class="fa-solid fa-circle-notch animate-spin text-indigo-500 text-3xl mb-2"></i>
+                <span class="text-xs text-slate-300 font-medium">데이터 로딩 및 타임스탬프 동기화 중...</span>
+            </div>
+
+            <!-- Chart Canvas Container -->
+            <div class="relative w-full h-[420px]">
+                <canvas id="futuresChart"></canvas>
+            </div>
+
+            <!-- Chart Legend & Controls Toggle -->
+            <div class="mt-4 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between text-xs text-slate-400 gap-3">
+                <div class="flex items-center gap-4">
+                    <label class="flex items-center gap-1.5 cursor-pointer hover:text-slate-200">
+                        <input type="checkbox" id="toggle-price" checked class="rounded border-slate-700 bg-slate-800 text-indigo-600 focus:ring-0">
+                        <span class="inline-block w-2.5 h-2.5 rounded-full bg-amber-400"></span> BTC 가격
+                    </label>
+                    <label class="flex items-center gap-1.5 cursor-pointer hover:text-slate-200">
+                        <input type="checkbox" id="toggle-oi" checked class="rounded border-slate-700 bg-slate-800 text-indigo-600 focus:ring-0">
+                        <span class="inline-block w-2.5 h-2.5 rounded-full bg-indigo-500"></span> 미결제약정 (OI)
+                    </label>
+                    <label class="flex items-center gap-1.5 cursor-pointer hover:text-slate-200">
+                        <input type="checkbox" id="toggle-fr" checked class="rounded border-slate-700 bg-slate-800 text-indigo-600 focus:ring-0">
+                        <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400"></span> 펀딩 비율
+                    </label>
+                    <label class="flex items-center gap-1.5 cursor-pointer hover:text-slate-200">
+                        <input type="checkbox" id="toggle-ls" checked class="rounded border-slate-700 bg-slate-800 text-indigo-600 focus:ring-0">
+                        <span class="inline-block w-2.5 h-2.5 rounded-full bg-purple-400"></span> 롱/숏 비율
+                    </label>
+                </div>
+                <div id="chart-date-range" class="text-slate-500 font-mono text-[11px]">
+                    표시 범위: 동기화 중...
+                </div>
+            </div>
+        </section>
+
+        <!-- MSTR TREASURY & SIMULATOR SECTION -->
+        <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Left: MicroStrategy Treasury Metrics -->
+            <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <h2 class="text-base font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-vault text-amber-400"></i>
+                        MicroStrategy (MSTR) 자산 & 시가총액 비교
+                    </h2>
+                    <span class="text-xs bg-slate-800 text-slate-300 px-2.5 py-1 rounded-md border border-slate-700">
+                        BTC 보유량: <strong id="mstr-btc-holdings" class="text-amber-400">471,000 BTC</strong>
+                    </span>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+                        <div class="text-xs text-slate-400 mb-1">MSTR 시가총액</div>
+                        <div id="mstr-market-cap" class="text-lg font-bold text-slate-100">$0.00B</div>
+                        <div class="text-[11px] text-slate-500 mt-1">발행 주식수 기준</div>
+                    </div>
+                    <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+                        <div class="text-xs text-slate-400 mb-1">보유 비트코인 평가액</div>
+                        <div id="mstr-btc-value" class="text-lg font-bold text-amber-400">$0.00B</div>
+                        <div id="mstr-btc-pct-mcap" class="text-[11px] text-slate-500 mt-1">시가총액 대비 -%</div>
+                    </div>
+                    <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+                        <div class="text-xs text-slate-400 mb-1">순자산가치 (mNAV)</div>
+                        <div id="mstr-mnav-val" class="text-lg font-bold text-emerald-400">$0.00B</div>
+                        <div id="mstr-nav-multiple" class="text-[11px] text-slate-500 mt-1">P/NAV 배수: -</div>
+                    </div>
+                </div>
+
+                <!-- Formula Explanation Box -->
+                <div class="bg-indigo-950/30 border border-indigo-900/50 rounded-xl p-3.5 text-xs text-indigo-200/90 leading-relaxed">
+                    <div class="font-semibold text-indigo-300 mb-1 flex items-center gap-1.5">
+                        <i class="fa-solid fa-circle-info"></i> mNAV (MicroStrategy NAV) 산출 공식
+                    </div>
+                    <p>mNAV = (보유 BTC 개수 × 현재 BTC 가격 + 순현금 - 부채) / 희석 주식수</p>
+                    <p class="text-indigo-300/70 text-[11px] mt-1">현재 시장 프리미엄: MSTR 주가가 주당 NAV 대비 얼마나 비싸게 거래되는지 진단합니다.</p>
+                </div>
+            </div>
+
+            <!-- Right: Personal Holding Simulator -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
+                <div>
+                    <h2 class="text-base font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3 mb-4">
+                        <i class="fa-solid fa-calculator text-indigo-400"></i>
+                        내 MSTR 포트폴리오 시뮬레이터
+                    </h2>
+
+                    <div class="space-y-3 text-xs">
+                        <div>
+                            <label class="block text-slate-400 mb-1 font-medium">보유 주식 수 (주)</label>
+                            <input type="number" id="user-shares" value="97" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500 font-semibold">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 mb-1 font-medium">평균 매수 단가 ($)</label>
+                            <input type="number" id="user-avg-price" value="173.65" step="0.01" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500 font-semibold">
+                        </div>
+                    </div>
+
+                    <div class="mt-5 p-3.5 bg-slate-950 rounded-xl border border-slate-800/80 space-y-2 text-xs">
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">총 투자 금액:</span>
+                            <span id="user-total-cost" class="font-mono text-slate-200">$0.00</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">현재 평가 금액:</span>
+                            <span id="user-current-val" class="font-mono text-slate-100 font-bold">$0.00</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">평가 손익 (수익률):</span>
+                            <span id="user-pnl" class="font-mono font-bold text-emerald-400">+$0.00 (0.00%)</span>
+                        </div>
+                        <div class="flex justify-between border-t border-slate-800/60 pt-2">
+                            <span class="text-slate-400">내 주식에 내장된 비트코인:</span>
+                            <span id="user-implied-btc" class="font-mono text-amber-400 font-bold">0.0000 BTC</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="text-[11px] text-slate-500 text-center mt-4">
+                    * MSTR 평단가 $173.65 기준 실시간 시뮬레이션
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-800 bg-slate-900 py-4 text-center text-xs text-slate-500">
+        <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+            <div>© 2026 Crypto & MSTR Precision Analytics Terminal. All rights reserved.</div>
+            <div class="flex items-center gap-3">
+                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> Binance API</span>
+                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-blue-500"></span> CoinGecko / Yahoo API</span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Main Application Logic -->
     <script src="script.js"></script>
 </body>
 </html>
