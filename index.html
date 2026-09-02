@@ -40,7 +40,7 @@
 <body>
     <div class="card">
         <h2 style="margin:0 0 8px 0; letter-spacing: -0.5px;">₿ MSTR mNAV & BTC Futures</h2>
-        <p style="margin:0; font-size:13px; color:#aaa;">Strategy 공식 Net Reserve 기반 다중 지표 대시보드</p>
+        <p style="margin:0; font-size:13px; color:#aaa;">Strategy.com 동기화 다중 지표 대시보드</p>
     </div>
 
     <div class="card">
@@ -109,7 +109,7 @@
 
     <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
-            <div class="card-title" style="margin-bottom: 0;">📊 프로 차트 (펀딩비 / OI / 롱숏비율)</div>
+            <div class="card-title" style="margin-bottom: 0;">📊 프로 차트 (좌: 펀딩비 / 우1: OI / 우2: 롱숏비율)</div>
             <div class="timeframe-group">
                 <button class="tf-btn" id="tf-1D" onclick="changeChartTimeframe('1D')">1D</button>
                 <button class="tf-btn active" id="tf-1M" onclick="changeChartTimeframe('1M')">1M</button>
@@ -125,26 +125,27 @@
     </div>
 
     <div class="card">
-        <div class="card-title">📊 핵심 계산 결과</div>
+        <div class="card-title">📊 핵심 계산 결과 (Strategy.com 일치)</div>
         <div class="grid">
             <div class="result-card">
                 <div class="result-label">GROSS BTC / SHARE</div>
                 <div class="result-val" id="grossBpsSats" style="color: #58a6ff;">-</div>
-                <div class="result-sub">Sats</div>
+                <div class="result-sub">Sats (ADSO 기준)</div>
             </div>
             <div class="result-card">
-                <div class="result-label">NET BTC / SHARE</div>
-                <div class="result-val" id="netBpsSats" style="color: #58a6ff;">-</div>
-                <div class="result-sub">Sats</div>
+                <div class="result-label">GROSS BTC VALUE</div>
+                <div class="result-val" id="grossBpsUsd" style="color: #58a6ff;">-</div>
+                <div class="result-sub">주당 BTC 가치 ($)</div>
             </div>
             <div class="result-card">
-                <div class="result-label">NET BPS (USD)</div>
-                <div class="result-val" id="netBpsUsd" style="color: #58a6ff;">-</div>
-            </div>
-            <div class="result-card">
-                <div class="result-label">현재 MNAV</div>
+                <div class="result-label">Strategy.com mNAV</div>
                 <div class="result-val" id="mnavMultiple" style="color: #ff9f0a;">-</div>
                 <div class="result-sub" id="premium">프리미엄: -</div>
+            </div>
+            <div class="result-card">
+                <div class="result-label">NET BPS (순자산)</div>
+                <div class="result-val" id="netBpsUsd" style="color: #3fb950;">-</div>
+                <div class="result-sub" id="netBpsSats">Sats: -</div>
             </div>
         </div>
         <div class="signal-box" id="signal">계산 중...</div>
@@ -163,7 +164,7 @@
         <div class="risk-card" style="margin-top:0;">
             <div class="result-label">예상 MSTR 주가</div>
             <div class="result-val" id="predictedMstrPrice" style="color:#3fb950; font-size:24px;">$0.00</div>
-            <div class="result-sub" id="predictedNetBps">예상 Net BPS: $0.00</div>
+            <div class="result-sub" id="predictedNetBps">예상 Gross BTC Value: $0.00</div>
         </div>
     </div>
 
