@@ -7,25 +7,28 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { background-color: #121212; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 16px; }
-        .card { background-color: #1e1e1e; border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid #2a2a2a; }
+        .card { background-color: #1e1e1e; border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid #2a2a2a; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
         .card-title { font-size: 14px; color: #ff9f0a; font-weight: bold; margin-bottom: 12px; }
         .status-box { font-size: 13px; color: #aaa; margin-bottom: 16px; line-height: 1.4; display: flex; justify-content: space-between; align-items: center; }
         .input-group { margin-bottom: 12px; }
         .input-group label { display: block; font-size: 13px; color: #aaa; margin-bottom: 4px; }
-        .input-group input { width: 100%; padding: 12px; background-color: #0d1117; border: 1px solid #30363d; border-radius: 8px; color: #fff; font-size: 16px; font-weight: bold; box-sizing: border-box; }
+        .input-group input { width: 100%; padding: 12px; background-color: #0d1117; border: 1px solid #30363d; border-radius: 8px; color: #fff; font-size: 16px; font-weight: bold; box-sizing: border-box; transition: border-color 0.2s; }
+        .input-group input:focus { border-color: #58a6ff; outline: none; }
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .result-card { background: #161b22; padding: 12px; border-radius: 8px; border: 1px solid #30363d; }
+        .result-card { background: #161b22; padding: 12px; border-radius: 8px; border: 1px solid #30363d; position: relative; overflow: hidden; }
         .result-label { font-size: 11px; color: #8b949e; font-weight: bold; }
         .result-val { font-size: 18px; font-weight: bold; margin-top: 4px; }
         .result-sub { font-size: 11px; color: #8b949e; margin-top: 2px; }
-        .signal-box { margin-top: 12px; padding: 12px; background: #161b22; border-radius: 8px; text-align: center; font-weight: bold; }
-        .risk-card { background: #1c2128; border: 1px solid #30363d; border-radius: 8px; padding: 12px; margin-top: 12px; }
+        .signal-box { margin-top: 12px; padding: 12px; background: #161b22; border-radius: 8px; text-align: center; font-weight: bold; border: 1px solid #30363d; }
+        .risk-card { background: #1c2128; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-top: 12px; text-align: center; }
+        .risk-factors { display: flex; gap: 8px; margin-top: 12px; justify-content: center; flex-wrap: wrap; }
+        .badge { font-size: 11px; padding: 4px 8px; border-radius: 6px; background: #0d1117; border: 1px solid #30363d; color: #8b949e; font-weight: bold; }
         table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
-        th, td { border: 1px solid #30363d; padding: 6px; text-align: center; }
+        th, td { border: 1px solid #30363d; padding: 8px 6px; text-align: center; }
         th { background: #161b22; color: #8b949e; }
-        .chart-container { position: relative; height: 280px; width: 100%; margin-top: 8px; }
+        .chart-container { position: relative; height: 320px; width: 100%; margin-top: 12px; }
         .timeframe-group { display: flex; gap: 4px; flex-wrap: wrap; }
-        .tf-btn { background: #161b22; border: 1px solid #30363d; color: #8b949e; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .tf-btn { background: #161b22; border: 1px solid #30363d; color: #8b949e; padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; transition: 0.2s; }
         .tf-btn:hover { background: #2a2a2a; color: #fff; }
         .tf-btn.active { background: #ff9f0a; color: #0d1117; border-color: #ff9f0a; }
         .toggle-label { display: flex; align-items: center; cursor: pointer; user-select: none; }
@@ -36,8 +39,8 @@
 <body>
 
     <div class="card">
-        <h2 style="margin:0 0 8px 0;">₿ MSTR mNAV & BTC Futures</h2>
-        <p style="margin:0; font-size:13px; color:#aaa;">Strategy 공식 Net Reserve 기반 대시보드</p>
+        <h2 style="margin:0 0 8px 0; letter-spacing: -0.5px;">₿ MSTR mNAV & BTC Futures</h2>
+        <p style="margin:0; font-size:13px; color:#aaa;">Strategy 공식 Net Reserve 기반 다중 지표 대시보드</p>
     </div>
 
     <div class="card">
@@ -77,7 +80,7 @@
     </div>
 
     <div class="card">
-        <div class="card-title">🔥 BTC 선물 파생 지표 & 레버리지 위험도</div>
+        <div class="card-title">🔥 다중 지표 레버리지 위험도 (종합 분석)</div>
         <div class="grid">
             <div class="result-card">
                 <div class="result-label">FUNDING RATE (8H)</div>
@@ -90,21 +93,26 @@
         </div>
         
         <div class="risk-card">
-            <div class="result-label">BTC 레버리지 위험 스펙트럼 (5단계)</div>
-            <div class="result-val" id="futuresRiskStage" style="color:#ff9f0a; margin-top:4px;">분석 중...</div>
-            <div class="result-sub" id="futuresRiskText">-</div>
+            <div class="result-label">시장 종합 위험 스펙트럼 (5단계)</div>
+            <div class="result-val" id="futuresRiskStage" style="color:#ff9f0a; margin-top:6px; font-size: 20px;">분석 중...</div>
+            <div class="result-sub" id="futuresRiskText" style="margin-top: 6px; font-size: 13px;">-</div>
+            <div class="risk-factors">
+                <span class="badge" id="badge-fng">공포탐욕: 연동중</span>
+                <span class="badge" id="badge-premium">MSTR 프리미엄: 계산중</span>
+                <span class="badge" id="badge-ls">L/S 비율: -</span>
+            </div>
         </div>
     </div>
 
     <div class="card">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-            <div class="card-title" style="margin-bottom: 0;">📊 펀딩비 추이 차트</div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+            <div class="card-title" style="margin-bottom: 0;">📊 프로 차트 (펀딩비 & 미결제약정)</div>
             <div class="timeframe-group">
                 <button class="tf-btn" id="tf-1D" onclick="changeChartTimeframe('1D')">1D</button>
                 <button class="tf-btn active" id="tf-1M" onclick="changeChartTimeframe('1M')">1M</button>
                 <button class="tf-btn" id="tf-3M" onclick="changeChartTimeframe('3M')">3M</button>
                 <button class="tf-btn" id="tf-6M" onclick="changeChartTimeframe('6M')">6M</button>
-                <button class="tf-btn" id="tf-1Y" onclick="changeChartTimeframe('1Y')">MAX (최대 500일)</button>
+                <button class="tf-btn" id="tf-1Y" onclick="changeChartTimeframe('1Y')">MAX</button>
             </div>
         </div>
         <div class="chart-container">
@@ -148,9 +156,9 @@
             <label for="targetMnav">목표 mNAV 배수 (×)</label>
             <input type="text" id="targetMnav" value="1.5">
         </div>
-        <div class="risk-card" style="text-align: center;">
+        <div class="risk-card" style="margin-top:0;">
             <div class="result-label">예상 MSTR 주가</div>
-            <div class="result-val" id="predictedMstrPrice" style="color:#3fb950; font-size:22px;">$0.00</div>
+            <div class="result-val" id="predictedMstrPrice" style="color:#3fb950; font-size:24px;">$0.00</div>
             <div class="result-sub" id="predictedNetBps">예상 Net BPS: $0.00</div>
         </div>
     </div>
