@@ -629,5 +629,5 @@ document.addEventListener("DOMContentLoaded", () => {
     loadInputsFromStorage();
     updateDashboard(true);
     if (updateTimer) clearInterval(updateTimer);
-    updateTimer = setInterval(() => updateDashboard(false), 30000);
+    updateTimer = setInterval(() => updateDashboard(false), 15000);
 });
