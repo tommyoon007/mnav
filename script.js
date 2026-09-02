@@ -15,6 +15,28 @@ let currentTf = '1M';
 let updateTimer = null;
 let autoSyncEnabled = true;
 
+// 로컬 스토리지에 직접 입력값 저장 키 목록
+const USER_STORAGE_KEYS = ["btcHoldings", "assumedShares", "fullyDilutedShares", "targetBtcPrice", "targetMnav"];
+
+// 사용자 입력값 로컬 스토리지 저장
+function saveInputsToStorage() {
+    USER_STORAGE_KEYS.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) localStorage.setItem("mstr_app_" + id, el.value);
+    });
+}
+
+// 사용자 입력값 로컬 스토리지 복원
+function loadInputsFromStorage() {
+    USER_STORAGE_KEYS.forEach(id => {
+        const saved = localStorage.getItem("mstr_app_" + id);
+        const el = document.getElementById(id);
+        if (saved !== null && el) {
+            el.value = saved;
+        }
+    });
+}
+
 // UI 보조 함수
 function setText(id, text) { 
     const el = document.getElementById(id); 
@@ -113,7 +135,7 @@ async function fetchFearAndGreed() {
     return null;
 }
 
-// 선물 히스토리 차트 데이터 수집 (오류 수정됨)
+// 선물 히스토리 차트 데이터 수집
 async function fetchFuturesHistory(tf = '1M') {
     let interval = '2h', period = '2h', limit = 360, frLimit = 90;
     
@@ -148,7 +170,6 @@ async function fetchFuturesHistory(tf = '1M') {
 
         const labels = [], frData = [], oiData = [], lsData = [];
         
-        // 날짜 오차 범위 보정 매핑 알고리즘
         const findClosest = (list, timeKey, targetTs, maxDiff) => {
             if (!list || !list.length) return null;
             let closest = null, minDiff = Infinity;
@@ -175,13 +196,13 @@ async function fetchFuturesHistory(tf = '1M') {
             
             labels.push(dateStr);
             
-            const cFr = findClosest(frList, 'fundingTime', ts, 12 * 60 * 60 * 1000);
+            const cFr = findClosest(frList, 'fundingTime', ts, 24 * 60 * 60 * 1000);
             frData.push(cFr ? parseFloat(cFr.fundingRate) * 100 : null);
             
-            const cOi = findClosest(oiList, 'timestamp', ts, 24 * 60 * 60 * 1000);
+            const cOi = findClosest(oiList, 'timestamp', ts, 48 * 60 * 60 * 1000);
             oiData.push(cOi ? parseFloat(cOi.sumOpenInterest) / 1000 : null);
             
-            const cLs = findClosest(lsList, 'timestamp', ts, 24 * 60 * 60 * 1000);
+            const cLs = findClosest(lsList, 'timestamp', ts, 48 * 60 * 60 * 1000);
             lsData.push(cLs ? parseFloat(cLs.longShortRatio) : null);
         });
         
@@ -225,7 +246,7 @@ async function fetchFuturesData() {
     return { fundingRate, openInterest, lsRatio, rawFr, rawOi, rawLs };
 }
 
-// Chart.js 렌더링
+// Chart.js 렌더링 (3개 지표 및 Y축 잘림 방지 반영)
 function renderChart(chartData) {
     if (!chartData || !chartData.labels.length) return;
     const ctx = document.getElementById('futuresChart');
@@ -236,25 +257,86 @@ function renderChart(chartData) {
         futuresChartInstance = null; 
     }
 
-    const { labels, frData, oiData } = chartData;
+    const { labels, frData, oiData, lsData } = chartData;
 
     futuresChartInstance = new Chart(ctx, {
         type: 'line',
         data: {
             labels: labels,
             datasets: [
-                { label: 'Funding Rate (%)', data: frData, borderColor: '#ff9f0a', backgroundColor: 'rgba(255, 159, 10, 0.1)', yAxisID: 'yFR', pointRadius: 0, borderWidth: 1, fill: true, tension: 0.2 },
-                { label: 'Open Interest (K)', data: oiData, borderColor: '#58a6ff', backgroundColor: 'transparent', yAxisID: 'yOI', pointRadius: 0, borderWidth: 1.5, tension: 0.2 }
+                { 
+                    label: 'Funding Rate (%)', 
+                    data: frData, 
+                    borderColor: '#ff9f0a', 
+                    backgroundColor: 'rgba(255, 159, 10, 0.1)', 
+                    yAxisID: 'yFR', 
+                    pointRadius: 0, 
+                    borderWidth: 1.5, 
+                    fill: true, 
+                    tension: 0.2,
+                    spanGaps: true
+                },
+                { 
+                    label: 'Open Interest (K)', 
+                    data: oiData, 
+                    borderColor: '#58a6ff', 
+                    backgroundColor: 'transparent', 
+                    yAxisID: 'yOI', 
+                    pointRadius: 0, 
+                    borderWidth: 1.5, 
+                    tension: 0.2,
+                    spanGaps: true
+                },
+                { 
+                    label: 'Long/Short Ratio', 
+                    data: lsData, 
+                    borderColor: '#3fb950', 
+                    backgroundColor: 'transparent', 
+                    yAxisID: 'yLS', 
+                    pointRadius: 0, 
+                    borderWidth: 1.5, 
+                    tension: 0.2,
+                    spanGaps: true
+                }
             ]
         },
         options: {
-            responsive: true, maintainAspectRatio: false,
+            responsive: true, 
+            maintainAspectRatio: false,
+            layout: { padding: { top: 10, bottom: 10, left: 5, right: 5 } },
             interaction: { mode: 'index', intersect: false },
-            plugins: { legend: { labels: { color: '#8b949e', boxWidth: 12 } } },
+            plugins: { 
+                legend: { labels: { color: '#8b949e', boxWidth: 12 } } 
+            },
             scales: {
-                x: { ticks: { color: '#8b949e', maxTicksLimit: 6 }, grid: { color: '#30363d' } },
-                yFR: { type: 'linear', display: true, position: 'left', ticks: { color: '#ff9f0a' }, grid: { color: '#30363d' } },
-                yOI: { type: 'linear', display: true, position: 'right', ticks: { color: '#58a6ff' }, grid: { drawOnChartArea: false } }
+                x: { 
+                    ticks: { color: '#8b949e', maxTicksLimit: 6 }, 
+                    grid: { color: '#30363d' } 
+                },
+                yFR: { 
+                    type: 'linear', 
+                    display: true, 
+                    position: 'left', 
+                    grace: '15%',
+                    ticks: { color: '#ff9f0a' }, 
+                    grid: { color: '#30363d' } 
+                },
+                yOI: { 
+                    type: 'linear', 
+                    display: true, 
+                    position: 'right', 
+                    grace: '15%',
+                    ticks: { color: '#58a6ff' }, 
+                    grid: { drawOnChartArea: false } 
+                },
+                yLS: { 
+                    type: 'linear', 
+                    display: true, 
+                    position: 'right', 
+                    grace: '15%',
+                    ticks: { color: '#3fb950' }, 
+                    grid: { drawOnChartArea: false } 
+                }
             }
         }
     });
@@ -283,7 +365,7 @@ function determineFuturesRiskStage(fng, fr, premium, ls) {
     return { stage: "🧊 1단계: 극도의 공포 (침체)", color: "#58a6ff", text: "시장이 심하게 위축되었으며 숏 포지션이 지배적인 딥(Dip) 상태일 수 있습니다." };
 }
 
-// MNAV 및 BPS 핵심 계산 로직 (예외 처리 강화)
+// MNAV 및 BPS 핵심 계산 로직
 function calculateMNAV() {
     const bPrice = getNum("btcPrice"), mPrice = getNum("mstrPrice");
     const h = getNum("btcHoldings"), a = getNum("assumedShares"), fd = getNum("fullyDilutedShares");
@@ -430,7 +512,7 @@ async function updateDashboard(forceChartRefresh = false) {
     }
 }
 
-// 입력 즉시 실행되는 빠른 순수 계산 함수 (API 호출 없음)
+// 순수 빠른 계산 로직
 function recalculateOnly() {
     const calc = calculateMNAV();
     if (calc && calc.fdSharesForCalc) {
@@ -450,12 +532,13 @@ async function changeChartTimeframe(tf) {
     if (cData) renderChart(cData);
 }
 
-// 사용자가 숫자를 수정할 때 (API 호출 폭주 방지 로직)
+// 키보드 수치 변경 시 (로컬 저장 및 즉시 재계산)
 function handleInput() {
+    saveInputsToStorage();
     recalculateOnly();
 }
 
-// 실시간 가격을 사용자가 직접 입력할 때 (자동 동기화 OFF 전환)
+// 가격 직접 입력 시 (수동 모드 전환 및 저장)
 function handlePriceInput() {
     if (autoSyncEnabled) {
         const toggle = document.getElementById("autoSyncToggle");
@@ -466,7 +549,7 @@ function handlePriceInput() {
         setText("dataStatus", "사용자 직접 입력 (수동 모드)");
         autoSyncEnabled = false;
     }
-    recalculateOnly();
+    handleInput();
 }
 
 // 자동 동기화 토글 스위치 이벤트
@@ -488,7 +571,7 @@ function toggleAutoSync() {
     }
 }
 
-// 이벤트 리스너 바인딩 (수정됨)
+// 이벤트 리스너 바인딩
 document.querySelectorAll('input').forEach(input => {
     if (input.id === "btcPrice" || input.id === "mstrPrice") {
         input.addEventListener('input', handlePriceInput);
@@ -500,8 +583,9 @@ document.querySelectorAll('input').forEach(input => {
 const syncToggle = document.getElementById("autoSyncToggle");
 if (syncToggle) syncToggle.addEventListener('change', toggleAutoSync);
 
-// 페이지 로드 시 초기화 및 30초 주기 타이머 실행
+// 페이지 로드 시 초기화
 document.addEventListener("DOMContentLoaded", () => {
+    loadInputsFromStorage(); // 저장해둔 수치 먼저 복원
     updateDashboard(true);
     if (updateTimer) clearInterval(updateTimer);
     updateTimer = setInterval(() => updateDashboard(false), 30000);
