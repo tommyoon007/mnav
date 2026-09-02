@@ -2,176 +2,173 @@
     box-sizing: border-box;
     margin: 0;
     padding: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 body {
-    background-color: #121318;
+    background-color: #0c0d10;
     color: #e1e3e6;
-    padding: 20px;
+    padding: 12px;
 }
 
 .container {
-    max-width: 1200px;
+    max-width: 500px;
     margin: 0 auto;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 14px;
 }
 
-.header {
-    text-align: center;
-    margin-bottom: 10px;
-}
-
-.header h1 {
-    font-size: 1.8rem;
-    color: #f7931a;
-}
-
-.header .subtitle {
-    font-size: 0.9rem;
-    color: #8a8d93;
-    margin-top: 5px;
-}
-
-/* 카드 공통 */
 .card {
-    background-color: #1e2029;
+    background-color: #161821;
     border-radius: 12px;
-    padding: 20px;
-    border: 1px solid #2a2d3d;
-}
-
-.card.highlight {
-    border: 1px solid #f7931a;
-    background: linear-gradient(145deg, #1e2029 0%, #2b2218 100%);
-}
-
-.grid-cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 15px;
-}
-
-.card-title {
-    font-size: 0.85rem;
-    color: #8a8d93;
-    margin-bottom: 8px;
-}
-
-.card-value {
-    font-size: 1.6rem;
-    font-weight: bold;
-    color: #ffffff;
-}
-
-.card-sub {
-    font-size: 0.75rem;
-    color: #6c707d;
-    margin-top: 6px;
-}
-
-/* 입력 섹션 */
-.input-section h2, .risk-section h2, .chart-header h2 {
-    font-size: 1.1rem;
-    margin-bottom: 15px;
-    color: #f7931a;
-}
-
-.input-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 15px;
+    padding: 16px;
+    border: 1px solid #232636;
 }
 
 .input-group {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.input-group:last-child {
+    margin-bottom: 0;
 }
 
 .input-group label {
-    font-size: 0.8rem;
-    color: #a0a3bd;
+    display: block;
+    font-size: 0.75rem;
+    color: #8a8d93;
+    margin-bottom: 6px;
 }
 
 .input-group input {
-    background-color: #121318;
-    border: 1px solid #34374c;
+    width: 100%;
+    background-color: #0e0f14;
+    border: 1px solid #232636;
     border-radius: 6px;
-    padding: 10px;
+    padding: 12px;
     color: #ffffff;
     font-size: 1rem;
     font-weight: bold;
     outline: none;
 }
 
-.input-group input:focus {
-    border-color: #f7931a;
+.card-title {
+    font-size: 0.9rem;
+    font-weight: bold;
+    color: #f7931a;
+    margin-bottom: 14px;
 }
 
-/* 위험도 분석 */
-.risk-section {
+.sub-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.sub-card {
+    background-color: #0e0f14;
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.sub-title {
+    font-size: 0.65rem;
+    color: #8a8d93;
+    margin-bottom: 6px;
+}
+
+.sub-value {
+    font-size: 1.1rem;
+    font-weight: bold;
+}
+
+.sub-value.orange { color: #f7931a; }
+.sub-value.blue { color: #29b6f6; }
+
+.risk-center {
     text-align: center;
+    margin-bottom: 16px;
+}
+
+.risk-title {
+    font-size: 0.75rem;
+    color: #8a8d93;
+    margin-bottom: 10px;
 }
 
 .risk-badge {
     display: inline-block;
-    padding: 10px 20px;
-    border-radius: 30px;
-    font-size: 1.2rem;
+    font-size: 1.1rem;
     font-weight: bold;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
 }
 
-.risk-badge.low { background-color: #1b382b; color: #00e676; border: 1px solid #00e676; }
-.risk-badge.mid { background-color: #3d351a; color: #ffd600; border: 1px solid #ffd600; }
-.risk-badge.high { background-color: #3d1a1a; color: #ff5252; border: 1px solid #ff5252; }
-
-.risk-sub-info {
-    display: flex;
-    justify-content: center;
-    gap: 20px;
-    margin-top: 15px;
-    font-size: 0.85rem;
-    color: #8a8d93;
+.risk-desc {
+    font-size: 0.75rem;
+    color: #a0a3bd;
 }
 
-/* 차트 섹션 */
-.chart-header {
+.pills-row {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 10px;
+    gap: 6px;
+}
+
+.pill {
+    background-color: #0e0f14;
+    border: 1px solid #232636;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 0.7rem;
+    color: #8a8d93;
+    flex: 1;
+    text-align: center;
+}
+
+.pill.highlight {
+    background-color: #1a1c26;
+    color: #ffffff;
+    border-color: #34374c;
+}
+
+.chart-header {
+    margin-bottom: 12px;
+}
+
+.chart-title {
+    font-size: 0.85rem;
+    font-weight: bold;
+    color: #f7931a;
+    margin-bottom: 10px;
 }
 
 .timeframe-buttons {
     display: flex;
-    gap: 6px;
+    gap: 4px;
 }
 
 .btn-tf {
-    background-color: #121318;
-    border: 1px solid #34374c;
+    flex: 1;
+    background-color: #0e0f14;
+    border: 1px solid #232636;
     color: #8a8d93;
-    padding: 6px 12px;
+    padding: 6px 0;
     border-radius: 6px;
-    cursor: pointer;
-    font-size: 0.8rem;
+    font-size: 0.7rem;
     font-weight: bold;
+    cursor: pointer;
 }
 
-.btn-tf.active, .btn-tf:hover {
+.btn-tf.active {
     background-color: #f7931a;
-    color: #121318;
+    color: #000000;
     border-color: #f7931a;
 }
 
 .chart-wrapper {
     position: relative;
-    height: 380px;
+    height: 260px;
     width: 100%;
-    margin-top: 15px;
 }
