@@ -69,7 +69,6 @@ async function fetchWithTimeout(url, timeoutMs = 4000, options = {}) {
     }
 }
 
-// 실시간 BTC 시세
 async function fetchLiveBtcPrice() {
     try { 
         const res = await fetchWithTimeout("https://api.coinbase.com/v2/prices/spot?currency=USD", 3000);
@@ -90,7 +89,6 @@ async function fetchLiveBtcPrice() {
     return null;
 }
 
-// 실시간 MSTR 주가
 async function fetchLiveMstrPrice() {
     if (FINNHUB_KEY) {
         try { 
@@ -120,7 +118,6 @@ async function fetchLiveMstrPrice() {
     return null;
 }
 
-// 공포탐욕 지수
 async function fetchFearAndGreed() {
     try {
         const res = await fetchWithTimeout("https://api.alternative.me/fng/?limit=1", 3000);
@@ -132,11 +129,9 @@ async function fetchFearAndGreed() {
     return null;
 }
 
-// 실시간 선물 데이터 (바이낸스 + Bybit Fallback 백업 구축)
 async function fetchFuturesData() {
     let fundingRate = null, openInterest = null, lsRatio = null, rawFr = 0, rawOi = 0, rawLs = 1.0;
     
-    // 1차 시도: 바이낸스 선물 API
     try {
         const [resFR, resOI, resLS] = await Promise.all([
             fetchWithTimeout("https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT", 3000),
@@ -160,15 +155,14 @@ async function fetchFuturesData() {
         }
         if (resLS && resLS.ok) { 
             const dataLS = await resLS.json(); 
-            if (dataLS[0] && dataLS[0].longShortRatio !== undefined) { 
+            if (Array.isArray(dataLS) && dataLS[0] && dataLS[0].longShortRatio !== undefined) { 
                 rawLs = parseFloat(dataLS[0].longShortRatio); 
                 lsRatio = rawLs.toFixed(2); 
             } 
         }
     } catch (e) {}
 
-    // 2차 백업 시도: Bybit API (바이낸스 실패 시 자동으로 보완)
-    if (!fundingRate || !openInterest) {
+    if (!fundingRate || !openInterest || !lsRatio) {
         try {
             const resBybit = await fetchWithTimeout("https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT", 3000);
             if (resBybit && resBybit.ok) {
@@ -191,7 +185,6 @@ async function fetchFuturesData() {
     return { fundingRate, openInterest, lsRatio, rawFr, rawOi, rawLs };
 }
 
-// 선물 히스토리 차트 데이터 수집
 async function fetchFuturesHistory(tf = '1M') {
     let interval = '2h', period = '2h', limit = 360, frLimit = 90;
     
@@ -266,7 +259,7 @@ async function fetchFuturesHistory(tf = '1M') {
     } catch (e) { return null; }
 }
 
-// Chart.js 렌더링 (Y축 겹침 교정 완료)
+// Chart.js 다중 우측 축 교정 (우측 롱숏비율 축 선명하게 복원)
 function renderChart(chartData) {
     if (!chartData || !chartData.labels.length) return;
     const canvas = document.getElementById('futuresChart');
@@ -351,16 +344,17 @@ function renderChart(chartData) {
                 },
                 yLS: { 
                     type: 'linear', 
-                    display: false, // 레이블 겹침 방지를 위해 보조 스케일로 연동
+                    display: true, // 복원 완료: 우측 두번째 축으로 명확히 표기
                     position: 'right', 
-                    grace: '15%'
+                    grace: '15%',
+                    ticks: { color: '#3fb950' }, 
+                    grid: { drawOnChartArea: false } 
                 }
             }
         }
     });
 }
 
-// 5단계 선물 위험도 진단
 function determineFuturesRiskStage(fng, fr, premium, ls) {
     let score = 0;
     if (fng !== null) { 
@@ -383,109 +377,91 @@ function determineFuturesRiskStage(fng, fr, premium, ls) {
     return { stage: "🧊 1단계: 극도의 공포 (침체)", color: "#58a6ff", text: "시장이 심하게 위축되었으며 숏 포지션이 지배적인 딥(Dip) 상태일 수 있습니다." };
 }
 
-// MNAV 및 GROSS BPS 수식 (검증 완료: 보유량/백만주수 * 100 = 주당 Sats)
+// Strategy.com 표준 mNAV 및 Net BPS 정밀 수식
 function calculateMNAV() {
     const bPrice = getNum("btcPrice"), mPrice = getNum("mstrPrice");
     const h = getNum("btcHoldings"), a = getNum("assumedShares"), fd = getNum("fullyDilutedShares");
 
     if (!bPrice || !mPrice || !h || !a || !fd) {
         setText("grossBpsSats", "-");
-        setText("netBpsSats", "-");
-        setText("netBpsUsd", "-");
+        setText("grossBpsUsd", "-");
         setText("mnavMultiple", "-");
+        setText("netBpsUsd", "-");
+        setText("netBpsSats", "Sats: -");
         setText("premium", "입력 대기 중...");
         setText("signal", "수치를 입력해주세요.");
         return null;
     }
 
-    // Gross BPS Sats 정확 수식
-    const grossBpsSats = (h / a) * 100;
-    setText("grossBpsSats", grossBpsSats.toLocaleString(undefined, { maximumFractionDigits: 0 }));
+    // 1. Gross BTC per Share (Sats) - Strategy.com 공식 계산법
+    const grossBpsSats = (h / a) * 1e8 / 1e6; // (h * 100,000,000) / (a * 1,000,000) = (h / a) * 100
+    const grossBpsUsd = (grossBpsSats / 1e8) * bPrice; // 주당 비트코인 가치 ($)
+    
+    // 2. Strategy.com 공식 mNAV = MSTR 주가 / Gross BTC 가치
+    const currentPremium = mPrice / grossBpsUsd;
 
-    const fdSharesForCalc = (mPrice > 143.4) ? fd : a;
+    setText("grossBpsSats", Math.round(grossBpsSats).toLocaleString());
+    setText("grossBpsUsd", "$" + grossBpsUsd.toFixed(2));
+    setText("mnavMultiple", currentPremium.toFixed(2) + "×");
+    setText("premium", `현재 프리미엄: ${((currentPremium - 1) * 100).toFixed(1)}%`);
+
+    // 3. Net BPS (순자산 반영) - 희석 주식수(FDSO) 사용 시 부채/우선주 전환 고려 정밀 계산
     const { usdAssetsUsdB, debtUsdB, preferredUsdB } = currentData;
     const btcValueUsdB = (h * bPrice) / 1e9;
-    const netBtcAssetsUsdB = btcValueUsdB + usdAssetsUsdB - debtUsdB - preferredUsdB;
     
-    let netBpsUsd = 0, currentPremium = 0, signal = "";
-    
-    if (netBtcAssetsUsdB > 0) {
-        netBpsUsd = (netBtcAssetsUsdB * 1e9) / (fdSharesForCalc * 1e6);
-        currentPremium = mPrice / netBpsUsd;
-        const netBpsSats = (netBpsUsd / bPrice) * 1e8;
-        
-        setText("netBpsSats", netBpsSats.toLocaleString(undefined, { maximumFractionDigits: 0 }));
-        setText("netBpsUsd", "$" + netBpsUsd.toFixed(2));
-        setText("mnavMultiple", currentPremium.toFixed(2) + "×");
-        setText("premium", `현재 Premium: ${(currentPremium * 100).toFixed(1)}%`);
-        
-        if (currentPremium < 1.0) signal = "매수 기회: MNAV 1.0 미만 (역프리미엄)";
-        else if (currentPremium < 1.3) signal = "평균적 밸류에이션 (보통)";
-        else if (currentPremium < 2.0) signal = "프리미엄 확대 구간 (주의)";
-        else signal = "고평가 가능성: MNAV 2.0 이상 (분할 매도 고려)";
-    } else {
-        setText("netBpsSats", "N/A");
-        setText("netBpsUsd", "N/A");
-        setText("mnavMultiple", "N/A");
-        setText("premium", "Net Assets < 0");
-        signal = "리스크 경고: 부채 초과 상태";
-    }
-    
+    // FDSO 적용 시 전환우선주/사채가 주식으로 바뀌었으므로 순 현금/순 비전환부채만 차감
+    const netBtcAssetsUsdB = btcValueUsdB + usdAssetsUsdB - debtUsdB; 
+    const netBpsUsd = (netBtcAssetsUsdB * 1e9) / (fd * 1e6);
+    const netBpsSats = (netBpsUsd / bPrice) * 1e8;
+
+    setText("netBpsUsd", "$" + netBpsUsd.toFixed(2));
+    setText("netBpsSats", "Sats: " + Math.round(netBpsSats).toLocaleString());
+
+    let signal = "";
+    if (currentPremium < 1.0) signal = "매수 기회: mNAV 1.0 미만 (역프리미엄)";
+    else if (currentPremium < 1.3) signal = "Strategy.com 적정 밸류에이션 구간";
+    else if (currentPremium < 2.0) signal = "프리미엄 확대 구간 (주의)";
+    else signal = "고평가 경고: mNAV 2.0 이상 (분할 매도 고려)";
+
     const sigEl = document.getElementById("signal");
     if (sigEl) {
         sigEl.textContent = signal;
         sigEl.style.color = currentPremium < 1.0 ? "#3fb950" : (currentPremium >= 2.0 ? "#ff4d4d" : "#58a6ff");
     }
     
-    return { currentPremium, fdSharesForCalc };
+    return { currentPremium, grossBpsUsd };
 }
 
-// 목표가 시뮬레이터
-function runSimulator(fdSharesForCalc) {
-    const targetBtcPrice = getNum("targetBtcPrice"), targetMnav = getNum("targetMnav"), h = getNum("btcHoldings");
-    if (!targetBtcPrice || !targetMnav || !h || !fdSharesForCalc) {
+function runSimulator(grossBpsUsd) {
+    const targetBtcPrice = getNum("targetBtcPrice"), targetMnav = getNum("targetMnav"), h = getNum("btcHoldings"), a = getNum("assumedShares");
+    if (!targetBtcPrice || !targetMnav || !h || !a) {
         setText("predictedMstrPrice", "$0.00");
-        setText("predictedNetBps", "예상 Net BPS: $0.00");
+        setText("predictedNetBps", "예상 Gross BTC Value: $0.00");
         return;
     }
 
-    const { usdAssetsUsdB, debtUsdB, preferredUsdB } = currentData;
-    const targetBtcValueUsdB = (h * targetBtcPrice) / 1e9;
-    const targetNetBtcAssetsUsdB = targetBtcValueUsdB + usdAssetsUsdB - debtUsdB - preferredUsdB;
+    const predictedGrossBpsUsd = (h / a * 100 / 1e8) * targetBtcPrice;
+    const predictedMstr = predictedGrossBpsUsd * targetMnav;
     
-    if (targetNetBtcAssetsUsdB > 0) {
-        const targetNetBpsUsd = (targetNetBtcAssetsUsdB * 1e9) / (fdSharesForCalc * 1e6);
-        const predictedMstr = targetNetBpsUsd * targetMnav;
-        setText("predictedMstrPrice", "$" + predictedMstr.toFixed(2));
-        setText("predictedNetBps", "예상 Net BPS: $" + targetNetBpsUsd.toFixed(2));
-    } else {
-        setText("predictedMstrPrice", "N/A");
-        setText("predictedNetBps", "예상 Net BPS: N/A");
-    }
+    setText("predictedMstrPrice", "$" + predictedMstr.toFixed(2));
+    setText("predictedNetBps", "예상 Gross BTC Value: $" + predictedGrossBpsUsd.toFixed(2));
 }
 
-// 시나리오 표 생성
-function generateScenarioTable(fdSharesForCalc) {
+function generateScenarioTable() {
     const tbody = document.getElementById("scenarioTable");
-    if (!tbody || !fdSharesForCalc) return;
+    const h = getNum("btcHoldings"), a = getNum("assumedShares");
+    if (!tbody || !h || !a) return;
     
-    const { usdAssetsUsdB, debtUsdB, preferredUsdB } = currentData;
-    const h = getNum("btcHoldings");
     const btcPrices = [30000, 50000, 70000, 100000, 150000, 200000, 300000, 500000];
     const mnavMultiples = [1.0, 1.25, 1.5, 2.0, 2.5, 3.0];
     
     let html = "";
     btcPrices.forEach(p => {
-        const valB = (h * p) / 1e9;
-        const netB = valB + usdAssetsUsdB - debtUsdB - preferredUsdB;
-        const bps = (netB > 0) ? (netB * 1e9) / (fdSharesForCalc * 1e6) : 0;
-        
+        const grossUsd = (h / a * 100 / 1e8) * p;
         let row = `<tr><td style="font-weight:bold;color:#fff;">$${(p/1000).toFixed(0)}k</td>`;
         mnavMultiples.forEach(m => {
-            if (bps > 0) {
-                const est = bps * m;
-                row += `<td style="color:${m >= 2.0 ? '#ff9f0a' : '#58a6ff'}">$${est.toFixed(0)}</td>`;
-            } else { row += `<td style="color:#666;">-</td>`; }
+            const est = grossUsd * m;
+            row += `<td style="color:${m >= 2.0 ? '#ff9f0a' : '#58a6ff'}">$${est.toFixed(0)}</td>`;
         });
         row += `</tr>`;
         html += row;
@@ -493,7 +469,6 @@ function generateScenarioTable(fdSharesForCalc) {
     tbody.innerHTML = html;
 }
 
-// 전체 대시보드 업데이트
 async function updateDashboard(forceChartRefresh = false) {
     if (autoSyncEnabled) {
         const liveBtc = await fetchLiveBtcPrice();
@@ -522,7 +497,7 @@ async function updateDashboard(forceChartRefresh = false) {
         
         setText("badge-fng", fng !== null ? `공포탐욕: ${fng}` : `공포탐욕: 연동중`);
         setText("badge-premium", currentPremium ? `MSTR 프리미엄: ${currentPremium.toFixed(2)}x` : `MSTR 프리미엄: -`);
-        setText("badge-ls", futures.lsRatio ? `L/S 비율: ${futures.lsRatio}` : `L/S 비율: -`);
+        setText("badge-ls", futures.lsRatio ? `L/S 비율: ${futures.lsRatio}` : `L/S 비율: ${futures.rawLs ? futures.rawLs.toFixed(2) : '-'}`);
     }
 
     if (!futuresChartInstance || forceChartRefresh) {
@@ -530,7 +505,6 @@ async function updateDashboard(forceChartRefresh = false) {
         if (cData) renderChart(cData);
     }
 
-    // 상단 갱신 시간 기록 복구
     const now = new Date();
     const timeStr = now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
     setText("lastUpdated", `(최근 갱신: ${timeStr})`);
@@ -538,9 +512,9 @@ async function updateDashboard(forceChartRefresh = false) {
 
 function recalculateOnly() {
     const calc = calculateMNAV();
-    if (calc && calc.fdSharesForCalc) {
-        runSimulator(calc.fdSharesForCalc);
-        generateScenarioTable(calc.fdSharesForCalc);
+    if (calc && calc.grossBpsUsd) {
+        runSimulator(calc.grossBpsUsd);
+        generateScenarioTable();
     }
 }
 
@@ -590,7 +564,6 @@ function toggleAutoSync() {
     }
 }
 
-// 이벤트 바인딩
 document.querySelectorAll('input').forEach(input => {
     if (input.id === "btcPrice" || input.id === "mstrPrice") {
         input.addEventListener('input', handlePriceInput);
@@ -602,7 +575,6 @@ document.querySelectorAll('input').forEach(input => {
 const syncToggle = document.getElementById("autoSyncToggle");
 if (syncToggle) syncToggle.addEventListener('change', toggleAutoSync);
 
-// 초기화
 document.addEventListener("DOMContentLoaded", () => {
     loadInputsFromStorage();
     updateDashboard(true);
