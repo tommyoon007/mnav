@@ -2,20 +2,24 @@ name: Auto Update MSTR Data
 
 on:
   schedule:
-    - cron: '0 0 * * *' # 매일 UTC 자정(한국시간 오전 9시)에 자동 실행
-  workflow_dispatch: # 내가 원할 때 깃허브에서 버튼을 눌러 수동 실행 가능
+    - cron: '0 0 * * *' # 매일 UTC 자정(한국시간 오전 9시)
+  workflow_dispatch: # 수동 실행 버튼
+
+# 봇이 코드를 덮어쓸 수 있도록 명시적인 쓰기 권한(write) 강제 부여
+permissions:
+  contents: write
 
 jobs:
   update-data:
     runs-on: ubuntu-latest
     steps:
-      - name: 저장소 코드 가져오기
-        uses: actions/checkout@v3
+      - name: 저장소 코드 가져오기 (최신 v4 버전)
+        uses: actions/checkout@v4
 
-      - name: 파이썬 환경 세팅하기
-        uses: actions/setup-python@v4
+      - name: 파이썬 환경 세팅하기 (최신 v5 버전)
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.10'
 
       - name: 파이썬 스크립트 실행 (보유량 데이터 긁어오기)
         run: python update_mstr_data.py
@@ -26,4 +30,3 @@ jobs:
           git config --global user.email "action@github.com"
           git add script.js
           git diff --quiet && git diff --staged --quiet || (git commit -m "자동 업데이트: MSTR 비트코인 보유량 갱신" && git push)
-
