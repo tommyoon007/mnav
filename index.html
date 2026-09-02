@@ -3,100 +3,73 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MSTR & BTC Pro 대시보드</title>
+    <title>MSTR Dashboard</title>
     <link rel="stylesheet" href="style.css">
-    <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <div class="container">
-        <!-- 헤더 -->
-        <header class="header">
-            <h1>Strategy<sup>B</sup> MSTR & BTC 대시보드</h1>
-            <p class="subtitle">실시간 비트코인 시세 및 Strategy.com 공식 mNAV 연동</p>
-        </header>
+        <!-- 1. 입력 카드 -->
+        <div class="card">
+            <div class="input-group">
+                <label>BTC 보유량</label>
+                <input type="number" id="btcHoldings" value="845050">
+            </div>
+            <div class="input-group">
+                <label>ADSO (M)</label>
+                <input type="number" id="adso" value="424.479" step="0.001">
+            </div>
+            <div class="input-group">
+                <label>FDSO (M)</label>
+                <input type="number" id="fdso" value="450.090" step="0.001">
+            </div>
+        </div>
 
-        <!-- 1. 주요 지표 요약 카드 -->
-        <section class="grid-cards">
-            <div class="card highlight">
-                <div class="card-title">Strategy 공식 mNAV</div>
-                <div class="card-value" id="mnavValue">1.05x</div>
-                <div class="card-sub" id="grossBpsText">Gross BPS: <span id="grossBpsValue">-</span></div>
+        <!-- 2. 종합 분석 카드 -->
+        <div class="card">
+            <div class="card-title">🔥 다중 지표 레버리지 위험도 (종합 분석)</div>
+            
+            <div class="sub-cards">
+                <div class="sub-card">
+                    <div class="sub-title">FUNDING RATE (8H)</div>
+                    <div class="sub-value orange" id="fundingRate">0.0057%</div>
+                </div>
+                <div class="sub-card">
+                    <div class="sub-title">BTC OPEN INTEREST</div>
+                    <div class="sub-value blue" id="openInterest">108.1K BTC</div>
+                </div>
             </div>
-            <div class="card">
-                <div class="card-title">BTC 실시간 시세</div>
-                <div class="card-value" id="btcPriceText">$0</div>
-                <div class="card-sub">바이낸스 실시간</div>
-            </div>
-            <div class="card">
-                <div class="card-title">펀딩비 (8H)</div>
-                <div class="card-value" id="fundingRate">0.0000%</div>
-                <div class="card-sub">무기한 선물</div>
-            </div>
-            <div class="card">
-                <div class="card-title">미체결 약정 (OI)</div>
-                <div class="card-value" id="openInterest">0 K BTC</div>
-                <div class="card-sub">바이낸스 선물</div>
-            </div>
-        </section>
 
-        <!-- 2. Strategy.com 변수 입력 설정 -->
-        <section class="card input-section">
-            <h2>⚙️ Strategy.com 데이터 입력 (mNAV 실시간 계산용)</h2>
-            <div class="input-grid">
-                <div class="input-group">
-                    <label for="mstrPrice">MSTR 주가 ($)</label>
-                    <input type="number" id="mstrPrice" value="124.88" step="0.01">
-                </div>
-                <div class="input-group">
-                    <label for="btcHoldings">BTC 보유량 (개)</label>
-                    <input type="number" id="btcHoldings" value="845050">
-                </div>
-                <div class="input-group">
-                    <label for="adso">ADSO (유통주식 M)</label>
-                    <input type="number" id="adso" value="424.479" step="0.001">
-                </div>
-                <div class="input-group">
-                    <label for="fdso">FDSO (희석주식 M)</label>
-                    <input type="number" id="fdso" value="450.090" step="0.001">
-                </div>
-                <div class="input-group">
-                    <label for="debtPreferred">부채/우선주 ($M)</label>
-                    <input type="number" id="debtPreferred" value="12500" step="10">
-                </div>
-            </div>
-        </section>
-
-        <!-- 3. 종합 위험도 스펙트럼 -->
-        <section class="card risk-section">
-            <h2>🔥 다중 지표 레버리지 위험도 (종합 분석)</h2>
-            <div class="risk-badge-box">
+            <div class="risk-center">
+                <div class="risk-title">시장 종합 위험 스펙트럼 (5단계)</div>
                 <div id="riskBadge" class="risk-badge low">🟢 2단계: 안정적 (저위험)</div>
-                <p id="riskDesc">과도한 레버리지가 해소된 안정적인 시장 상태입니다.</p>
+                <div id="riskDesc" class="risk-desc">과도한 레버리지가 해소된 안정적인 시장 상태입니다.</div>
             </div>
-            <div class="risk-sub-info">
-                <span>공포탐욕: <strong id="fearGreed">50</strong></span>
-                <span id="riskSpectrumText">MSTR 프리미엄: 1.05x</span>
-                <span>L/S 비율: <strong id="longShortRatio">1.00</strong></span>
-            </div>
-        </section>
 
-        <!-- 4. 프로 차트 섹션 -->
-        <section class="card chart-section">
+            <div class="pills-row">
+                <span class="pill">공포탐욕: <strong id="fearGreed">63</strong></span>
+                <span class="pill highlight" id="mnavText">MSTR 프리미엄: 1.05x</span>
+                <span class="pill">L/S 비율: <strong id="longShortRatio">1.34</strong></span>
+            </div>
+        </div>
+
+        <!-- 3. 차트 카드 -->
+        <div class="card">
             <div class="chart-header">
-                <h2>📊 프로 차트 (좌: 펀딩비 / 우1: OI / 우2: 롱숏비율)</h2>
+                <div class="chart-title">📊 프로 차트 (좌: 펀딩비 / 우1: OI / 우2: 롱숏비율)</div>
                 <div class="timeframe-buttons">
                     <button class="btn-tf" data-tf="1D">1D</button>
                     <button class="btn-tf active" data-tf="1M">1M</button>
                     <button class="btn-tf" data-tf="3M">3M</button>
                     <button class="btn-tf" data-tf="6M">6M</button>
                     <button class="btn-tf" data-tf="1Y">1Y</button>
+                    <button class="btn-tf" data-tf="MAX">MAX</button>
                 </div>
             </div>
             <div class="chart-wrapper">
                 <canvas id="chartCanvas"></canvas>
             </div>
-        </section>
+        </div>
     </div>
 
     <script src="script.js"></script>
