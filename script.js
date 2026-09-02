@@ -1,12 +1,13 @@
 const FINNHUB_KEY = "daaruppr01qn50rjdv2gdaaruppr01qn50rjdv30";
 
+// MicroStrategy (Strategy.com) 기준 주요 재무 데이터 Default
 const DEFAULT_DATA = {
-    btcHoldings: 845050,
-    adso: 298.039,
-    fdso: 424.479,
-    usdAssetsUsdB: 6.690,
-    debtUsdB: 6.754,
-    preferredUsdB: 14.966
+    btcHoldings: 845050,      // 보유 BTC 수량
+    adso: 298.039,           // Basic Shares (M)
+    fdso: 424.479,           // Fully Diluted Shares (M)
+    usdAssetsUsdB: 6.690,    // 현금 및 USD 자산 ($B)
+    debtUsdB: 6.754,         // 총 부채 ($B)
+    preferredUsdB: 14.966    // 우선주/Convertible Preferred ($B)
 };
 
 let currentData = { ...DEFAULT_DATA };
@@ -15,8 +16,9 @@ let currentTf = '1M';
 let updateTimer = null;
 let autoSyncEnabled = true;
 
-const USER_STORAGE_KEYS = ["btcHoldings", "assumedShares", "fullyDilutedShares", "targetBtcPrice", "targetMnav"];
+const USER_STORAGE_KEYS = ["btcHoldings", "assumedShares", "fullyDilutedShares", "targetBtcPrice", "targetMnav", "btcPrice", "mstrPrice"];
 
+// LocalStorage 저장/불러오기
 function saveInputsToStorage() {
     USER_STORAGE_KEYS.forEach(id => {
         const el = document.getElementById(id);
@@ -36,6 +38,7 @@ function loadInputsFromStorage() {
     });
 }
 
+// Helper Functions
 function setText(id, text) { 
     const el = document.getElementById(id); 
     if (el) el.textContent = text; 
@@ -69,7 +72,7 @@ async function fetchWithTimeout(url, timeoutMs = 4000, options = {}) {
     }
 }
 
-// 실시간 BTC 시세
+// 실시간 BTC 시세 (Coinbase -> Binance 순 fallback)
 async function fetchLiveBtcPrice() {
     try { 
         const res = await fetchWithTimeout("https://api.coinbase.com/v2/prices/spot?currency=USD", 3000);
@@ -90,7 +93,7 @@ async function fetchLiveBtcPrice() {
     return null;
 }
 
-// 실시간 MSTR 주가
+// 실시간 MSTR 주가 (Finnhub -> Yahoo Finance Proxy fallback)
 async function fetchLiveMstrPrice() {
     if (FINNHUB_KEY) {
         try { 
@@ -103,7 +106,10 @@ async function fetchLiveMstrPrice() {
         } catch (e) {}
     }
     const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/MSTR?interval=1m&range=1d&includePrePost=true&ts=${Date.now()}`;
-    const proxies = [`https://api.allorigins.win/raw?url=${encodeURIComponent(yahooUrl)}`, `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`];
+    const proxies = [
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(yahooUrl)}`, 
+        `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`
+    ];
     for (const proxy of proxies) {
         try { 
             const res = await fetchWithTimeout(proxy, 3000);
@@ -132,11 +138,10 @@ async function fetchFearAndGreed() {
     return null;
 }
 
-// 실시간 선물 데이터 (바이낸스 + Bybit Fallback 백업 구축)
+// 선물 실시간 데이터 (Binance + Bybit Fallback)
 async function fetchFuturesData() {
     let fundingRate = null, openInterest = null, lsRatio = null, rawFr = 0, rawOi = 0, rawLs = 1.0;
     
-    // 1차 시도: 바이낸스 선물 API
     try {
         const [resFR, resOI, resLS] = await Promise.all([
             fetchWithTimeout("https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT", 3000),
@@ -167,7 +172,7 @@ async function fetchFuturesData() {
         }
     } catch (e) {}
 
-    // 2차 백업 시도: Bybit API (바이낸스 실패 시 자동으로 보완)
+    // Bybit Fallback
     if (!fundingRate || !openInterest) {
         try {
             const resBybit = await fetchWithTimeout("https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT", 3000);
@@ -191,7 +196,7 @@ async function fetchFuturesData() {
     return { fundingRate, openInterest, lsRatio, rawFr, rawOi, rawLs };
 }
 
-// 선물 히스토리 차트 데이터 수집
+// 선물 히스토리 수집
 async function fetchFuturesHistory(tf = '1M') {
     let interval = '2h', period = '2h', limit = 360, frLimit = 90;
     
@@ -266,7 +271,7 @@ async function fetchFuturesHistory(tf = '1M') {
     } catch (e) { return null; }
 }
 
-// Chart.js 렌더링 (수정: yLS 스케일 display: true 및 초록색 눈금 활성화)
+// Chart.js 렌더링
 function renderChart(chartData) {
     if (!chartData || !chartData.labels.length) return;
     const canvas = document.getElementById('futuresChart');
@@ -351,10 +356,10 @@ function renderChart(chartData) {
                 },
                 yLS: { 
                     type: 'linear', 
-                    display: true, // 수정: Y축 수치 표시 활성화
-                    position: 'left', 
+                    display: true, 
+                    position: 'right', 
                     grace: '15%',
-                    ticks: { color: '#3fb950' }, // 초록색 눈금 수치
+                    ticks: { color: '#3fb950' }, 
                     grid: { drawOnChartArea: false }
                 }
             }
@@ -362,7 +367,7 @@ function renderChart(chartData) {
     });
 }
 
-// 5단계 선물 위험도 진단
+// 선물 위험도 진단
 function determineFuturesRiskStage(fng, fr, premium, ls) {
     let score = 0;
     if (fng !== null) { 
@@ -385,7 +390,7 @@ function determineFuturesRiskStage(fng, fr, premium, ls) {
     return { stage: "🧊 1단계: 극도의 공포 (침체)", color: "#58a6ff", text: "시장이 심하게 위축되었으며 숏 포지션이 지배적인 딥(Dip) 상태일 수 있습니다." };
 }
 
-// MNAV 및 GROSS BPS 수식 (수정: GROSS BTC VALUE 계산 및 화면 연동 추가)
+// Strategy.com 기준 MNAV 산출 및 화면 업데이트
 function calculateMNAV() {
     const bPrice = getNum("btcPrice"), mPrice = getNum("mstrPrice");
     const h = getNum("btcHoldings"), a = getNum("assumedShares"), fd = getNum("fullyDilutedShares");
@@ -401,43 +406,31 @@ function calculateMNAV() {
         return null;
     }
 
-    // Gross BPS Sats 정확 수식
+    // 1. Gross BTC per Share (Sats): 주당 비트코인 보유량 (Satoshis)
+    // Formula: (Total BTC / Shares in Millions) * 100
     const grossBpsSats = (h / a) * 100;
     setText("grossBpsSats", grossBpsSats.toLocaleString(undefined, { maximumFractionDigits: 0 }));
 
-    // Gross BTC Value ($) 계산 및 표시
+    // 2. Gross BTC Value ($): 주당 비트코인 평가액
+    // Formula: (Total BTC * BTC Price) / (Shares in Millions * 1,000,000)
     const grossBtcValueUsd = (h * bPrice) / (a * 1e6);
     const formattedGrossUsd = "$" + grossBtcValueUsd.toFixed(2);
     
     const grossBtcIds = ["grossBtcValue", "grossValue", "grossBpsUsd", "grossBtcUsd"];
-    let grossUpdated = false;
-    grossBtcIds.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) { 
-            el.textContent = formattedGrossUsd; 
-            grossUpdated = true; 
-        }
-    });
+    grossBtcIds.forEach(id => setText(id, formattedGrossUsd));
 
-    if (!grossUpdated) {
-        document.querySelectorAll('div, p, span').forEach(el => {
-            if (el.children.length === 0 && el.textContent.trim() === '-') {
-                const parentText = el.parentElement ? el.parentElement.textContent : '';
-                if (parentText.includes('GROSS BTC VALUE')) {
-                    el.textContent = formattedGrossUsd;
-                }
-            }
-        });
-    }
-
+    // 3. Net Assets Calculation (Strategy.com 기준)
+    // 주가 희석 구간 조건 판단 (주가 상승 시 Fully Diluted 적용)
     const fdSharesForCalc = (mPrice > 143.4) ? fd : a;
     const { usdAssetsUsdB, debtUsdB, preferredUsdB } = currentData;
+    
     const btcValueUsdB = (h * bPrice) / 1e9;
     const netBtcAssetsUsdB = btcValueUsdB + usdAssetsUsdB - debtUsdB - preferredUsdB;
     
     let netBpsUsd = 0, currentPremium = 0, signal = "";
     
     if (netBtcAssetsUsdB > 0) {
+        // Net BPS ($) = Net BTC Assets ($) / Diluted Shares
         netBpsUsd = (netBtcAssetsUsdB * 1e9) / (fdSharesForCalc * 1e6);
         currentPremium = mPrice / netBpsUsd;
         const netBpsSats = (netBpsUsd / bPrice) * 1e8;
@@ -492,7 +485,7 @@ function runSimulator(fdSharesForCalc) {
     }
 }
 
-// 시나리오 표 생성
+// 시나리오 시뮬레이션 표 생성
 function generateScenarioTable(fdSharesForCalc) {
     const tbody = document.getElementById("scenarioTable");
     if (!tbody || !fdSharesForCalc) return;
@@ -513,7 +506,9 @@ function generateScenarioTable(fdSharesForCalc) {
             if (bps > 0) {
                 const est = bps * m;
                 row += `<td style="color:${m >= 2.0 ? '#ff9f0a' : '#58a6ff'}">$${est.toFixed(0)}</td>`;
-            } else { row += `<td style="color:#666;">-</td>`; }
+            } else { 
+                row += `<td style="color:#666;">-</td>`; 
+            }
         });
         row += `</tr>`;
         html += row;
@@ -521,7 +516,7 @@ function generateScenarioTable(fdSharesForCalc) {
     tbody.innerHTML = html;
 }
 
-// 전체 대시보드 업데이트
+// 대시보드 전체 업데이트
 async function updateDashboard(forceChartRefresh = false) {
     if (autoSyncEnabled) {
         const liveBtc = await fetchLiveBtcPrice();
@@ -558,7 +553,7 @@ async function updateDashboard(forceChartRefresh = false) {
         if (cData) renderChart(cData);
     }
 
-    // 상단 갱신 시간 기록 복구
+    // 상단 갱신 시간 기록
     const now = new Date();
     const timeStr = now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
     setText("lastUpdated", `(최근 갱신: ${timeStr})`);
@@ -618,7 +613,7 @@ function toggleAutoSync() {
     }
 }
 
-// 이벤트 바인딩
+// 이벤트 리스너 바인딩 및 초기화
 document.querySelectorAll('input').forEach(input => {
     if (input.id === "btcPrice" || input.id === "mstrPrice") {
         input.addEventListener('input', handlePriceInput);
@@ -630,7 +625,6 @@ document.querySelectorAll('input').forEach(input => {
 const syncToggle = document.getElementById("autoSyncToggle");
 if (syncToggle) syncToggle.addEventListener('change', toggleAutoSync);
 
-// 초기화
 document.addEventListener("DOMContentLoaded", () => {
     loadInputsFromStorage();
     updateDashboard(true);
