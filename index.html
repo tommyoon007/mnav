@@ -4,13 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MSTR mNAV & BTC Futures Dashboard</title>
-    <!-- Chart.js 라이브러리 -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { background-color: #121212; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 16px; }
         .card { background-color: #1e1e1e; border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid #2a2a2a; }
         .card-title { font-size: 14px; color: #ff9f0a; font-weight: bold; margin-bottom: 12px; }
-        .status-box { font-size: 13px; color: #aaa; margin-bottom: 16px; line-height: 1.4; }
+        .status-box { font-size: 13px; color: #aaa; margin-bottom: 16px; line-height: 1.4; display: flex; justify-content: space-between; align-items: center; }
         .input-group { margin-bottom: 12px; }
         .input-group label { display: block; font-size: 13px; color: #aaa; margin-bottom: 4px; }
         .input-group input { width: 100%; padding: 12px; background-color: #0d1117; border: 1px solid #30363d; border-radius: 8px; color: #fff; font-size: 16px; font-weight: bold; box-sizing: border-box; }
@@ -25,12 +24,13 @@
         th, td { border: 1px solid #30363d; padding: 6px; text-align: center; }
         th { background: #161b22; color: #8b949e; }
         .chart-container { position: relative; height: 280px; width: 100%; margin-top: 8px; }
-        
-        /* 기간 선택 버튼 스타일 (확장) */
         .timeframe-group { display: flex; gap: 4px; flex-wrap: wrap; }
         .tf-btn { background: #161b22; border: 1px solid #30363d; color: #8b949e; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; transition: 0.2s; }
         .tf-btn:hover { background: #2a2a2a; color: #fff; }
         .tf-btn.active { background: #ff9f0a; color: #0d1117; border-color: #ff9f0a; }
+        .toggle-label { display: flex; align-items: center; cursor: pointer; user-select: none; }
+        .toggle-input { margin-right: 6px; cursor: pointer; }
+        .toggle-text { font-weight: bold; font-size: 12px; color: #ff9f0a; }
     </style>
 </head>
 <body>
@@ -44,6 +44,10 @@
         <div class="card-title">⚡ 자동 수집 데이터 및 입력</div>
         <div class="status-box">
             <div id="dataStatus">실시간 데이터 연동 중...</div>
+            <label class="toggle-label">
+                <input type="checkbox" id="autoSyncToggle" class="toggle-input" checked>
+                <span id="autoSyncLabel" class="toggle-text">자동 동기화 ON</span>
+            </label>
         </div>
 
         <div class="input-group">
@@ -72,7 +76,6 @@
         </div>
     </div>
 
-    <!-- BTC 선물 파생 지표 & 레버리지 위험도 -->
     <div class="card">
         <div class="card-title">🔥 BTC 선물 파생 지표 & 레버리지 위험도</div>
         <div class="grid">
@@ -93,7 +96,6 @@
         </div>
     </div>
 
-    <!-- BTC 선물 파생 지표 & 위험 기준선 추이 차트 -->
     <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
             <div class="card-title" style="margin-bottom: 0;">📊 펀딩비 추이 차트</div>
@@ -173,7 +175,6 @@
         </div>
     </div>
 
-    <!-- 스크립트 연결 -->
     <script src="script.js"></script>
 </body>
 </html>
