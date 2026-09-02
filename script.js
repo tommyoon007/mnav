@@ -266,7 +266,7 @@ async function fetchFuturesHistory(tf = '1M') {
     } catch (e) { return null; }
 }
 
-// Chart.js 렌더링 (Y축 겹침 교정 완료)
+// Chart.js 렌더링 (수정: yLS 스케일 display: true 및 초록색 눈금 활성화)
 function renderChart(chartData) {
     if (!chartData || !chartData.labels.length) return;
     const canvas = document.getElementById('futuresChart');
@@ -351,9 +351,11 @@ function renderChart(chartData) {
                 },
                 yLS: { 
                     type: 'linear', 
-                    display: false, // 레이블 겹침 방지를 위해 보조 스케일로 연동
-                    position: 'right', 
-                    grace: '15%'
+                    display: true, // 수정: Y축 수치 표시 활성화
+                    position: 'left', 
+                    grace: '15%',
+                    ticks: { color: '#3fb950' }, // 초록색 눈금 수치
+                    grid: { drawOnChartArea: false }
                 }
             }
         }
@@ -383,13 +385,14 @@ function determineFuturesRiskStage(fng, fr, premium, ls) {
     return { stage: "🧊 1단계: 극도의 공포 (침체)", color: "#58a6ff", text: "시장이 심하게 위축되었으며 숏 포지션이 지배적인 딥(Dip) 상태일 수 있습니다." };
 }
 
-// MNAV 및 GROSS BPS 수식 (검증 완료: 보유량/백만주수 * 100 = 주당 Sats)
+// MNAV 및 GROSS BPS 수식 (수정: GROSS BTC VALUE 계산 및 화면 연동 추가)
 function calculateMNAV() {
     const bPrice = getNum("btcPrice"), mPrice = getNum("mstrPrice");
     const h = getNum("btcHoldings"), a = getNum("assumedShares"), fd = getNum("fullyDilutedShares");
 
     if (!bPrice || !mPrice || !h || !a || !fd) {
         setText("grossBpsSats", "-");
+        setText("grossBtcValue", "-");
         setText("netBpsSats", "-");
         setText("netBpsUsd", "-");
         setText("mnavMultiple", "-");
@@ -401,6 +404,31 @@ function calculateMNAV() {
     // Gross BPS Sats 정확 수식
     const grossBpsSats = (h / a) * 100;
     setText("grossBpsSats", grossBpsSats.toLocaleString(undefined, { maximumFractionDigits: 0 }));
+
+    // Gross BTC Value ($) 계산 및 표시
+    const grossBtcValueUsd = (h * bPrice) / (a * 1e6);
+    const formattedGrossUsd = "$" + grossBtcValueUsd.toFixed(2);
+    
+    const grossBtcIds = ["grossBtcValue", "grossValue", "grossBpsUsd", "grossBtcUsd"];
+    let grossUpdated = false;
+    grossBtcIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { 
+            el.textContent = formattedGrossUsd; 
+            grossUpdated = true; 
+        }
+    });
+
+    if (!grossUpdated) {
+        document.querySelectorAll('div, p, span').forEach(el => {
+            if (el.children.length === 0 && el.textContent.trim() === '-') {
+                const parentText = el.parentElement ? el.parentElement.textContent : '';
+                if (parentText.includes('GROSS BTC VALUE')) {
+                    el.textContent = formattedGrossUsd;
+                }
+            }
+        });
+    }
 
     const fdSharesForCalc = (mPrice > 143.4) ? fd : a;
     const { usdAssetsUsdB, debtUsdB, preferredUsdB } = currentData;
