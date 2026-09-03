@@ -201,6 +201,7 @@ async function fetchFuturesHistory(tf = '1M') {
     let interval = '2h', period = '2h', limit = 360, frLimit = 90;
     
     if (tf === '1D') { interval = '5m'; period = '5m'; limit = 288; frLimit = 24; } 
+    else if (tf === '1W') { interval = '1h'; period = '1h'; limit = 168; frLimit = 21; }
     else if (tf === '1M') { interval = '2h'; period = '2h'; limit = 360; frLimit = 90; } 
     else if (tf === '3M') { interval = '6h'; period = '6h'; limit = 360; frLimit = 270; } 
     else if (tf === '6M') { interval = '12h'; period = '12h'; limit = 360; frLimit = 540; } 
