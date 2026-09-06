@@ -5,8 +5,6 @@
   "usdAssetsUsdB": 6.69,
   "debtUsdB": 6.754,
   "preferredUsdB": 14.966,
-  "source": "Strategy / SEC",
-  "asOf": "2026-09-06",
-  "updatedAt": "2026-09-06T04:14:49.142253+00:00",
-  "notes": "BTC holdings and capital-stack snapshot refreshed from Strategy SEC 8-K filings."
+  "source": "SEC XBRL API Fallback",
+  "asOf": "2026-09-06"
 }
