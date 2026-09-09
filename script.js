@@ -1,4 +1,4 @@
-const FINNHUB_KEY = "daaruppr01qn50rjdv2gdaaruppr01qn50rjdv30";
+const FINNHUB_KEY = "daas3khr01qn50rjehkgdaas3khr01qn50rjehl0";
 
 // MicroStrategy (Strategy.com) 기준 주요 재무 데이터 Default
 const DEFAULT_DATA = {
