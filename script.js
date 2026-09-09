@@ -95,34 +95,60 @@ async function fetchLiveBtcPrice() {
 
 // 실시간 MSTR 주가 (Finnhub -> Yahoo Finance Proxy fallback)
 async function fetchLiveMstrPrice() {
+    // 1차: Finnhub
     if (FINNHUB_KEY) {
-        try { 
-            const res = await fetchWithTimeout(`https://finnhub.io/api/v1/quote?symbol=MSTR&token=${FINNHUB_KEY}`, 3000);
-            if (res && res.ok) { 
-                const data = await res.json(); 
-                const price = (data?.c > 0) ? data.c : data?.pc; 
-                if (price > 0) return parseFloat(price); 
-            }
-        } catch (e) {}
-    }
-    const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/MSTR?interval=1m&range=1d&includePrePost=true&ts=${Date.now()}`;
-    const proxies = [
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(yahooUrl)}`, 
-        `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`
-    ];
-    for (const proxy of proxies) {
-        try { 
-            const res = await fetchWithTimeout(proxy, 3000);
-            if (res && res.ok) { 
-                const data = await res.json(); 
-                const meta = data?.chart?.result?.[0]?.meta;
-                if (meta) { 
-                    const price = meta.postMarketPrice || meta.preMarketPrice || meta.regularMarketPrice || meta.chartPreviousClose; 
-                    if (price > 0) return parseFloat(price); 
+        try {
+            const finnhubUrl =
+                `https://finnhub.io/api/v1/quote?symbol=MSTR&token=${FINNHUB_KEY}&_=${Date.now()}`;
+
+            const res = await fetchWithTimeout(finnhubUrl, 4000);
+
+            if (res && res.ok) {
+                const data = await res.json();
+                const price = Number(data?.c);
+
+                // 현재가 c만 사용
+                // 이전 종가 pc는 사용하지 않음
+                if (Number.isFinite(price) && price > 0) {
+                    return price;
                 }
             }
         } catch (e) {}
-    } 
+    }
+
+    // 2차: Yahoo Finance
+    const yahooUrl =
+        `https://query1.finance.yahoo.com/v8/finance/chart/MSTR?interval=1m&range=1d&includePrePost=true&_=${Date.now()}`;
+
+    const proxies = [
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(yahooUrl)}`,
+        `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`
+    ];
+
+    for (const proxy of proxies) {
+        try {
+            const res = await fetchWithTimeout(proxy, 5000);
+
+            if (res && res.ok) {
+                const data = await res.json();
+                const meta = data?.chart?.result?.[0]?.meta;
+
+                if (meta) {
+                    const price =
+                        Number(meta.postMarketPrice) ||
+                        Number(meta.preMarketPrice) ||
+                        Number(meta.regularMarketPrice);
+
+                    // 이전 종가 chartPreviousClose는 사용하지 않음
+                    if (Number.isFinite(price) && price > 0) {
+                        return price;
+                    }
+                }
+            }
+        } catch (e) {}
+    }
+
+    // 모든 API 실패 시 null 반환
     return null;
 }
 
