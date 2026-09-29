@@ -483,5 +483,20 @@
     "fdso": 298.039,
     "capitalDataSource": "SEC XBRL API Fallback",
     "capitalDataDate": "2026-09-28"
+  },
+  {
+    "date": "2026-09-29",
+    "timestamp": "2026-09-29T00:45:19.478879+00:00",
+    "btc": 83498.68,
+    "mstr": 157.14,
+    "btcValueUsd": 70560563759.25,
+    "grossBpsUsd": 236.7494,
+    "netBpsUsd": 186.3198,
+    "btcPerShare": 0.0028353672,
+    "mnav": 0.8434,
+    "adso": 424.479,
+    "fdso": 298.039,
+    "capitalDataSource": "SEC XBRL API Fallback",
+    "capitalDataDate": "2026-09-29"
   }
 ]
