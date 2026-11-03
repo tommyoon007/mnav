@@ -1,10 +1,10 @@
 {
   "btcHoldings": 845050,
   "adso": 424.479,
-  "fdso": 298.039,
+  "fdso": 303.986,
   "usdAssetsUsdB": 6.69,
   "debtUsdB": 6.754,
   "preferredUsdB": 14.966,
   "source": "SEC XBRL API Fallback",
-  "asOf": "2026-11-02"
+  "asOf": "2026-11-03"
 }
