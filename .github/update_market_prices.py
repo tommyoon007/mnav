@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -76,7 +77,27 @@ def get_btc_price():
 
 
 def get_mstr_price():
-    # 1. Yahoo Finance query1
+    # 1. (선택) Finnhub — 저장소 시크릿 FINNHUB_KEY 가 등록돼 있을 때만 사용한다.
+    #    시크릿이 없으면 이 단계는 조용히 건너뛰고 Yahoo Finance 로 넘어간다.
+    #    키는 헤더로만 보내고, 로그에 절대 출력하지 않는다.
+    finnhub_key = os.environ.get("FINNHUB_KEY", "").strip()
+    if finnhub_key:
+        try:
+            url = "https://finnhub.io/api/v1/quote"
+            res = requests.get(
+                url,
+                params={"symbol": "MSTR"},
+                headers={**HEADERS, "X-Finnhub-Token": finnhub_key},
+                timeout=TIMEOUT
+            )
+            res.raise_for_status()
+            price = float(res.json().get("c") or 0)
+            if price > 0:
+                return price, "Finnhub"
+        except Exception as exc:
+            print(f"Finnhub 조회 실패({type(exc).__name__}) — Yahoo Finance 로 넘어갑니다.")
+
+    # 2. Yahoo Finance query1
     try:
         url = "https://query1.finance.yahoo.com/v8/finance/chart/MSTR?range=1d&interval=1m"
         res = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
@@ -123,8 +144,10 @@ def main():
     except Exception as exc:
         print("MSTR 주가 업데이트 실패:", exc)
 
-    if previous.get("btcPrice") is None or previous.get("mstrPrice") is None:
-        raise RuntimeError("유효한 시장 가격을 확보하지 못했습니다.")
+    if previous.get("btcPrice") is None and previous.get("mstrPrice") is None:
+        # 시세를 하나도 못 받아도 워크플로를 실패시키지 않는다. live.json 은 그대로 둔다.
+        print("경고: 유효한 시장 가격을 확보하지 못했습니다. live.json 을 수정하지 않고 종료합니다.")
+        return
 
     previous["updatedAt"] = now
 
