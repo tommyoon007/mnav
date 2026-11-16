@@ -18,17 +18,38 @@ function getUserFinnhubKey() {
 }
 
 // 저장소 live.json (워크플로가 서버에서 갱신) — 같은 출처라 프록시 없이 읽힙니다.
+// live.json 이 비어 있으면 history.json 의 마지막 기록(하루 단위)을 쓴다.
 async function fetchRepoLivePrices() {
     try {
         const res = await fetchWithTimeout("live.json?_=" + Date.now(), 3000, { cache: "no-store" });
+        if (res && res.ok) {
+            const data = await res.json();
+            const btcPrice = Number(data?.btcPrice);
+            const mstrPrice = Number(data?.mstrPrice);
+            if ((Number.isFinite(btcPrice) && btcPrice > 0) || (Number.isFinite(mstrPrice) && mstrPrice > 0)) {
+                return {
+                    btcPrice: Number.isFinite(btcPrice) && btcPrice > 0 ? btcPrice : null,
+                    mstrPrice: Number.isFinite(mstrPrice) && mstrPrice > 0 ? mstrPrice : null,
+                    updatedAt: data?.updatedAt || null
+                };
+            }
+        }
+    } catch (e) {}
+
+    // 마지막 수단: history.json 의 가장 최근 기록
+    try {
+        const res = await fetchWithTimeout("history.json?_=" + Date.now(), 4000, { cache: "no-store" });
         if (!res || !res.ok) return null;
-        const data = await res.json();
-        const btcPrice = Number(data?.btcPrice);
-        const mstrPrice = Number(data?.mstrPrice);
+        const rows = await res.json();
+        const last = Array.isArray(rows) && rows.length ? rows[rows.length - 1] : null;
+        if (!last) return null;
+        const btcPrice = Number(last.btc);
+        const mstrPrice = Number(last.mstr);
+        if (!(btcPrice > 0) && !(mstrPrice > 0)) return null;
         return {
-            btcPrice: Number.isFinite(btcPrice) && btcPrice > 0 ? btcPrice : null,
-            mstrPrice: Number.isFinite(mstrPrice) && mstrPrice > 0 ? mstrPrice : null,
-            updatedAt: data?.updatedAt || null
+            btcPrice: btcPrice > 0 ? btcPrice : null,
+            mstrPrice: mstrPrice > 0 ? mstrPrice : null,
+            updatedAt: last.timestamp || null
         };
     } catch (e) {
         return null;
