@@ -5,7 +5,6 @@
 // (선택) 자기 Finnhub 키를 쓰고 싶을 때만, 이 브라우저에만 저장해서 쓰면 됩니다:
 //   localStorage.setItem("mstr_app_finnhubKey", "발급받은_키")
 const FINNHUB_KEY_STORAGE = "mstr_app_finnhubKey";
-const priceSources = { btc: "", mstr: "" };
 
 // 사용자가 브라우저에만 저장해 둔 Finnhub 키 (없으면 null). 코드/저장소에는 남지 않습니다.
 function getUserFinnhubKey() {
@@ -135,7 +134,7 @@ async function fetchLiveBtcPrice() {
         if (res && res.ok) { 
             const data = await res.json(); 
             const p = parseFloat(data?.data?.amount); 
-            if (p > 0) { priceSources.btc = "Coinbase"; return p; } 
+            if (p > 0) return p; 
         }
     } catch (e) {}
     try { 
@@ -143,7 +142,7 @@ async function fetchLiveBtcPrice() {
         if (res && res.ok) { 
             const data = await res.json(); 
             const p = parseFloat(data?.price); 
-            if (p > 0) { priceSources.btc = "Binance"; return p; } 
+            if (p > 0) return p; 
         }
     } catch (e) {} 
     return null;
@@ -169,7 +168,6 @@ async function fetchLiveMstrPrice() {
                 // 현재가 c만 사용
                 // 이전 종가 pc는 사용하지 않음
                 if (Number.isFinite(price) && price > 0) {
-                    priceSources.mstr = "Finnhub(내 키)";
                     return price;
                 }
             }
@@ -201,7 +199,6 @@ async function fetchLiveMstrPrice() {
 
                     // 이전 종가 chartPreviousClose는 사용하지 않음
                     if (Number.isFinite(price) && price > 0) {
-                        priceSources.mstr = "Yahoo Finance";
                         return price;
                     }
                 }
@@ -609,8 +606,8 @@ async function updateDashboard(forceChartRefresh = false) {
     if (autoSyncEnabled) {
         // 0) 저장소 live.json 스냅샷을 먼저 넣어 화면이 비지 않게 한다.
         const repoLive = await fetchRepoLivePrices();
-        if (repoLive?.btcPrice) { setVal("btcPrice", repoLive.btcPrice.toFixed(2)); priceSources.btc = "저장소 스냅샷"; }
-        if (repoLive?.mstrPrice) { setVal("mstrPrice", repoLive.mstrPrice.toFixed(2)); priceSources.mstr = "저장소 스냅샷"; }
+        if (repoLive?.btcPrice) setVal("btcPrice", repoLive.btcPrice.toFixed(2));
+        if (repoLive?.mstrPrice) setVal("mstrPrice", repoLive.mstrPrice.toFixed(2));
         // 스냅샷이 있으면 먼저 한 번 계산해 화면을 바로 채운다 (실시간 시도는 그 다음).
         if (repoLive?.btcPrice || repoLive?.mstrPrice) recalculateOnly();
 
@@ -621,10 +618,6 @@ async function updateDashboard(forceChartRefresh = false) {
         ]);
         if (liveBtc) setVal("btcPrice", liveBtc.toFixed(2));
         if (liveMstr) setVal("mstrPrice", liveMstr.toFixed(2));
-
-        if (priceSources.btc || priceSources.mstr) {
-            setText("dataStatus", `연동: BTC ${priceSources.btc || "미확인"} · MSTR ${priceSources.mstr || "미확인"}`);
-        }
     }
 
     recalculateOnly();
