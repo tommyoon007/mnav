@@ -1,4 +1,39 @@
-const FINNHUB_KEY = "daas3khr01qn50rjehkgdaas3khr01qn50rjehl0";
+// ── 시세를 가져오는 경로 ─────────────────────────────────────────────
+// 이 파일에는 어떤 API 키도 넣지 않습니다. (공개 페이지 소스는 누구나 볼 수 있습니다)
+//   1) 저장소의 live.json : 워크플로가 서버에서 갱신해 두는 최신 시세 (같은 출처라 CORS 없음)
+//   2) 공개 시세 API      : 브라우저에서 직접 호출 (BTC=Coinbase/Binance, MSTR=Yahoo Finance)
+// (선택) 자기 Finnhub 키를 쓰고 싶을 때만, 이 브라우저에만 저장해서 쓰면 됩니다:
+//   localStorage.setItem("mstr_app_finnhubKey", "발급받은_키")
+const FINNHUB_KEY_STORAGE = "mstr_app_finnhubKey";
+const priceSources = { btc: "", mstr: "" };
+
+// 사용자가 브라우저에만 저장해 둔 Finnhub 키 (없으면 null). 코드/저장소에는 남지 않습니다.
+function getUserFinnhubKey() {
+    try {
+        const key = localStorage.getItem(FINNHUB_KEY_STORAGE);
+        return key && key.trim() ? key.trim() : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+// 저장소 live.json (워크플로가 서버에서 갱신) — 같은 출처라 프록시 없이 읽힙니다.
+async function fetchRepoLivePrices() {
+    try {
+        const res = await fetchWithTimeout("live.json?_=" + Date.now(), 3000, { cache: "no-store" });
+        if (!res || !res.ok) return null;
+        const data = await res.json();
+        const btcPrice = Number(data?.btcPrice);
+        const mstrPrice = Number(data?.mstrPrice);
+        return {
+            btcPrice: Number.isFinite(btcPrice) && btcPrice > 0 ? btcPrice : null,
+            mstrPrice: Number.isFinite(mstrPrice) && mstrPrice > 0 ? mstrPrice : null,
+            updatedAt: data?.updatedAt || null
+        };
+    } catch (e) {
+        return null;
+    }
+}
 
 // MicroStrategy (Strategy.com) 기준 주요 재무 데이터 Default
 const DEFAULT_DATA = {
@@ -79,7 +114,7 @@ async function fetchLiveBtcPrice() {
         if (res && res.ok) { 
             const data = await res.json(); 
             const p = parseFloat(data?.data?.amount); 
-            if (p > 0) return p; 
+            if (p > 0) { priceSources.btc = "Coinbase"; return p; } 
         }
     } catch (e) {}
     try { 
@@ -87,19 +122,22 @@ async function fetchLiveBtcPrice() {
         if (res && res.ok) { 
             const data = await res.json(); 
             const p = parseFloat(data?.price); 
-            if (p > 0) return p; 
+            if (p > 0) { priceSources.btc = "Binance"; return p; } 
         }
     } catch (e) {} 
     return null;
 }
 
-// 실시간 MSTR 주가 (Finnhub -> Yahoo Finance Proxy fallback)
+// 실시간 MSTR 주가
+// 1차: (선택) 사용자가 자기 브라우저에만 저장해 둔 Finnhub 키
+// 2차: Yahoo Finance (CORS 프록시 경유)
+// 모두 실패하면 null → 저장소 live.json 값이 그대로 표시됩니다.
 async function fetchLiveMstrPrice() {
-    // 1차: Finnhub
-    if (FINNHUB_KEY) {
+    const userKey = getUserFinnhubKey();
+    if (userKey) {
         try {
             const finnhubUrl =
-                `https://finnhub.io/api/v1/quote?symbol=MSTR&token=${FINNHUB_KEY}&_=${Date.now()}`;
+                `https://finnhub.io/api/v1/quote?symbol=MSTR&token=${encodeURIComponent(userKey)}&_=${Date.now()}`;
 
             const res = await fetchWithTimeout(finnhubUrl, 4000);
 
@@ -110,6 +148,7 @@ async function fetchLiveMstrPrice() {
                 // 현재가 c만 사용
                 // 이전 종가 pc는 사용하지 않음
                 if (Number.isFinite(price) && price > 0) {
+                    priceSources.mstr = "Finnhub(내 키)";
                     return price;
                 }
             }
@@ -141,6 +180,7 @@ async function fetchLiveMstrPrice() {
 
                     // 이전 종가 chartPreviousClose는 사용하지 않음
                     if (Number.isFinite(price) && price > 0) {
+                        priceSources.mstr = "Yahoo Finance";
                         return price;
                     }
                 }
@@ -546,10 +586,24 @@ function generateScenarioTable(fdSharesForCalc) {
 // 대시보드 전체 업데이트
 async function updateDashboard(forceChartRefresh = false) {
     if (autoSyncEnabled) {
-        const liveBtc = await fetchLiveBtcPrice();
+        // 0) 저장소 live.json 스냅샷을 먼저 넣어 화면이 비지 않게 한다.
+        const repoLive = await fetchRepoLivePrices();
+        if (repoLive?.btcPrice) { setVal("btcPrice", repoLive.btcPrice.toFixed(2)); priceSources.btc = "저장소 스냅샷"; }
+        if (repoLive?.mstrPrice) { setVal("mstrPrice", repoLive.mstrPrice.toFixed(2)); priceSources.mstr = "저장소 스냅샷"; }
+        // 스냅샷이 있으면 먼저 한 번 계산해 화면을 바로 채운다 (실시간 시도는 그 다음).
+        if (repoLive?.btcPrice || repoLive?.mstrPrice) recalculateOnly();
+
+        // 1) 실시간 시세를 동시에 시도하고, 성공한 값만 덮어쓴다 (실패하면 위 스냅샷 값 유지).
+        const [liveBtc, liveMstr] = await Promise.all([
+            fetchLiveBtcPrice(),
+            fetchLiveMstrPrice()
+        ]);
         if (liveBtc) setVal("btcPrice", liveBtc.toFixed(2));
-        const liveMstr = await fetchLiveMstrPrice();
         if (liveMstr) setVal("mstrPrice", liveMstr.toFixed(2));
+
+        if (priceSources.btc || priceSources.mstr) {
+            setText("dataStatus", `연동: BTC ${priceSources.btc || "미확인"} · MSTR ${priceSources.mstr || "미확인"}`);
+        }
     }
 
     recalculateOnly();
