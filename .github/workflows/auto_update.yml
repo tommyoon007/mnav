@@ -9,15 +9,26 @@ on:
 permissions:
   contents: write
 
+# main에 커밋을 푸시하는 워크플로가 3개라, 같은 그룹으로 묶어 동시에 push하다
+# 서로 충돌(rejected)하지 않도록 순서대로 실행되게 한다.
+concurrency:
+  group: mnav-main-write
+  cancel-in-progress: false
+
 jobs:
   update-data:
     runs-on: ubuntu-latest
-    steps:
-      - name: 저장소 코드 가져오기 (최신 v4 버전)
-        uses: actions/checkout@v4
+    timeout-minutes: 10
 
-      - name: 파이썬 환경 세팅하기 (최신 v5 버전)
-        uses: actions/setup-python@v5
+    steps:
+      - name: 저장소 코드 가져오기
+        uses: actions/checkout@v5
+        with:
+          # push 재시도 시 rebase가 안전하게 동작하도록 전체 히스토리를 받아온다.
+          fetch-depth: 0
+
+      - name: 파이썬 환경 세팅하기
+        uses: actions/setup-python@v6
         with:
           python-version: '3.10'
 
@@ -26,7 +37,53 @@ jobs:
 
       - name: 변경된 코드를 GitHub에 자동 저장 (Commit & Push)
         run: |
+          set -uo pipefail
+
           git config --global user.name "GitHub Action Bot"
           git config --global user.email "action@github.com"
+
           git add script.js
-          git diff --quiet && git diff --staged --quiet || (git commit -m "자동 업데이트: MSTR 비트코인 보유량 갱신" && git push)
+
+          # 바뀐 게 없으면 실패가 아니라 정상 종료로 처리한다.
+          if git diff --staged --quiet; then
+            echo "변경 사항이 없어 커밋을 건너뜁니다."
+            exit 0
+          fi
+
+          git commit -m "자동 업데이트: MSTR 비트코인 보유량 갱신"
+
+          # push가 실패해도 최신 main으로 리베이스해서 최대 3번까지 다시 시도한다.
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              echo "푸시 성공 (시도 ${attempt}/3)"
+              exit 0
+            fi
+
+            echo "푸시 실패 (시도 ${attempt}/3) - 최신 main으로 리베이스 후 재시도합니다."
+            sleep $((attempt * 5))
+
+            if git pull --rebase --autostash origin main; then
+              continue
+            fi
+
+            # 충돌이 아니라 일시적인 네트워크 오류라면 다음 시도에서 다시 push한다.
+            if [ ! -d "$(git rev-parse --git-path rebase-merge)" ] && [ ! -d "$(git rev-parse --git-path rebase-apply)" ]; then
+              echo "리베이스 실패(충돌 아님) - 다음 시도에서 다시 푸시합니다."
+              continue
+            fi
+
+            # 같은 파일을 다른 워크플로가 먼저 바꿔 충돌한 경우:
+            # 지금 실행에서 새로 만든 데이터를 우선 적용한다 (리베이스 중 'theirs' = 우리 커밋).
+            echo "충돌 발생 - 이번 실행에서 만든 데이터로 덮어씁니다."
+            git checkout --theirs -- script.js 2>/dev/null || true
+            git add script.js
+
+            if ! git -c core.editor=true rebase --continue; then
+              git rebase --abort 2>/dev/null || true
+              echo "::error::리베이스 충돌을 해결하지 못했습니다."
+              exit 1
+            fi
+          done
+
+          echo "::error::3회 재시도 후에도 푸시에 실패했습니다."
+          exit 1
