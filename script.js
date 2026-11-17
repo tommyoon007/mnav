@@ -249,8 +249,11 @@ async function fetchYahooPrice(proxyUrl) {
 // 여러 프록시를 동시에 던지고 가장 먼저 성공한 값을 쓴다. 한 번 더 시도한다.
 // 모두 실패하면 1분 동안은 프록시 호출을 쉬어(과도한 요청으로 막히지 않게) live.json 값을 유지한다.
 let yahooRetryAfter = 0;
+let yahooLastPrice = { price: null, at: 0 };
 
 async function fetchLiveMstrFromYahoo() {
+    // 방금 받은 값이 있으면 프록시를 다시 부르지 않고 그대로 쓴다 (요청량 절반).
+    if (yahooLastPrice.price && Date.now() - yahooLastPrice.at < 20000) return yahooLastPrice.price;
     if (Date.now() < yahooRetryAfter) return null;
 
     for (let round = 0; round < YAHOO_PROXY_ROUNDS; round++) {
@@ -275,7 +278,10 @@ async function fetchLiveMstrFromYahoo() {
             });
         });
 
-        if (price) return price;
+        if (price) {
+            yahooLastPrice = { price: price, at: Date.now() };
+            return price;
+        }
     }
 
     yahooRetryAfter = Date.now() + 60000;
