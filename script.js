@@ -3,7 +3,8 @@
 //   1) 저장소의 live.json : 워크플로가 서버에서 갱신해 두는 최신 시세 (같은 출처라 CORS 없음)
 //   2) 공개 시세 API      : 브라우저에서 직접 호출 (BTC=Coinbase/Binance, MSTR=Yahoo Finance)
 // (선택) 자기 Finnhub 키를 쓰고 싶을 때만, 이 브라우저에만 저장해서 쓰면 됩니다:
-//   localStorage.setItem("mstr_app_finnhubKey", "발급받은_키")
+//   ① 주소창에  https://tommyoon007.github.io/mnav/?finnhub=발급받은_키  로 한 번 열면 저장되고 키는 주소창에서 지워집니다.
+//   ② 콘솔에서  localStorage.setItem("mstr_app_finnhubKey", "발급받은_키")
 const FINNHUB_KEY_STORAGE = "mstr_app_finnhubKey";
 
 // 사용자가 브라우저에만 저장해 둔 Finnhub 키 (없으면 null). 코드/저장소에는 남지 않습니다.
@@ -145,12 +146,145 @@ async function fetchLiveBtcPrice() {
             if (p > 0) return p; 
         }
     } catch (e) {} 
+    try { 
+        const res = await fetchWithTimeout("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd", 3000);
+        if (res && res.ok) { 
+            const data = await res.json(); 
+            const p = parseFloat(data?.bitcoin?.usd); 
+            if (p > 0) return p; 
+        }
+    } catch (e) {}
+    return null;
+}
+
+// 주소창에 ?finnhub=발급받은키 를 붙여 열면 이 브라우저에만 키를 저장한다.
+// 저장한 뒤에는 주소창에서 키를 지워서(history.replaceState) 뒤로가기·공유로 키가 새지 않게 한다.
+function applyFinnhubKeyFromUrl() {
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const rawKey = params.get("finnhub");
+        if (rawKey === null) return;
+
+        const key = rawKey.trim();
+        if (key) localStorage.setItem(FINNHUB_KEY_STORAGE, key);
+
+        params.delete("finnhub");
+        const query = params.toString();
+        const cleanUrl =
+            window.location.pathname +
+            (query ? "?" + query : "") +
+            window.location.hash;
+        window.history.replaceState(null, "", cleanUrl);
+    } catch (e) {}
+}
+
+// Yahoo Finance 가 돌려준 meta 에서 지금 보여줄 값을 고른다.
+// 정규장 / 프리장 / 애프터장 값 중 '가장 최근 시각'의 값을 쓴다.
+// (장중인데 어제 애프터장 값이 남아 있어 그 값이 잡히는 경우를 막는다)
+function pickLatestYahooPrice(meta) {
+    if (!meta || typeof meta !== "object") return null;
+
+    const candidates = [
+        { price: Number(meta.regularMarketPrice), time: Number(meta.regularMarketTime) || 0 },
+        { price: Number(meta.postMarketPrice), time: Number(meta.postMarketTime) || 0 },
+        { price: Number(meta.preMarketPrice), time: Number(meta.preMarketTime) || 0 }
+    ];
+
+    let picked = null;
+    for (const c of candidates) {
+        if (!Number.isFinite(c.price) || c.price <= 0) continue;
+        if (!picked || c.time > picked.time) picked = c;
+    }
+
+    // 이전 종가 chartPreviousClose / previousClose 는 쓰지 않는다.
+    return picked ? picked.price : null;
+}
+
+function parseYahooChartMeta(data) {
+    let body = data;
+
+    // allorigins 의 /get 은 본문을 contents 문자열로 감싸서 준다.
+    if (body && typeof body === "object" && typeof body.contents === "string") {
+        try { body = JSON.parse(body.contents); } catch (e) { return null; }
+    } else if (typeof body === "string") {
+        try { body = JSON.parse(body); } catch (e) { return null; }
+    }
+
+    const meta = body && body.chart && body.chart.result && body.chart.result[0] && body.chart.result[0].meta;
+    return meta && typeof meta === "object" ? meta : null;
+}
+
+// 무료 CORS 프록시는 수시로 막히므로, query1/query2 를 여러 프록시로 동시에 호출한다.
+const YAHOO_CHART_PATH = "/v8/finance/chart/MSTR?interval=1m&range=1d&includePrePost=true";
+const YAHOO_PROXY_TIMEOUT_MS = 4000;
+const YAHOO_PROXY_ROUNDS = 2;
+
+function buildYahooProxyUrls(round) {
+    const stamp = `${Date.now()}${round}`;
+    const q1 = encodeURIComponent(`https://query1.finance.yahoo.com${YAHOO_CHART_PATH}&_=${stamp}`);
+    const q2 = encodeURIComponent(`https://query2.finance.yahoo.com${YAHOO_CHART_PATH}&_=${stamp}`);
+
+    return [
+        `https://api.allorigins.win/raw?url=${q1}`,
+        `https://api.allorigins.win/get?url=${q2}`,
+        `https://api.codetabs.com/v1/proxy?quest=${q1}`,
+        `https://api.cors.lol/?url=${q2}`
+    ];
+}
+
+async function fetchYahooPrice(proxyUrl) {
+    try {
+        const res = await fetchWithTimeout(proxyUrl, YAHOO_PROXY_TIMEOUT_MS, { cache: "no-store" });
+        if (!res || !res.ok) return null;
+
+        let data;
+        try { data = await res.json(); } catch (e) { return null; }
+
+        return pickLatestYahooPrice(parseYahooChartMeta(data));
+    } catch (e) {
+        return null;
+    }
+}
+
+// 여러 프록시를 동시에 던지고 가장 먼저 성공한 값을 쓴다. 한 번 더 시도한다.
+// 모두 실패하면 1분 동안은 프록시 호출을 쉬어(과도한 요청으로 막히지 않게) live.json 값을 유지한다.
+let yahooRetryAfter = 0;
+
+async function fetchLiveMstrFromYahoo() {
+    if (Date.now() < yahooRetryAfter) return null;
+
+    for (let round = 0; round < YAHOO_PROXY_ROUNDS; round++) {
+        const urls = buildYahooProxyUrls(round);
+
+        const price = await new Promise(resolve => {
+            let remaining = urls.length;
+            let settled = false;
+
+            urls.forEach(url => {
+                fetchYahooPrice(url).then(p => {
+                    if (settled || !p) return;
+                    settled = true;
+                    resolve(p);
+                }).catch(() => {}).finally(() => {
+                    remaining -= 1;
+                    if (!settled && remaining === 0) {
+                        settled = true;
+                        resolve(null);
+                    }
+                });
+            });
+        });
+
+        if (price) return price;
+    }
+
+    yahooRetryAfter = Date.now() + 60000;
     return null;
 }
 
 // 실시간 MSTR 주가
 // 1차: (선택) 사용자가 자기 브라우저에만 저장해 둔 Finnhub 키
-// 2차: Yahoo Finance (CORS 프록시 경유)
+// 2차: Yahoo Finance (CORS 프록시 여러 개를 동시에 경유)
 // 모두 실패하면 null → 저장소 live.json 값이 그대로 표시됩니다.
 async function fetchLiveMstrPrice() {
     const userKey = getUserFinnhubKey();
@@ -174,39 +308,11 @@ async function fetchLiveMstrPrice() {
         } catch (e) {}
     }
 
-    // 2차: Yahoo Finance
-    const yahooUrl =
-        `https://query1.finance.yahoo.com/v8/finance/chart/MSTR?interval=1m&range=1d&includePrePost=true&_=${Date.now()}`;
+    // 2차: Yahoo Finance (프록시 동시 호출)
+    const yahooPrice = await fetchLiveMstrFromYahoo();
+    if (yahooPrice) return yahooPrice;
 
-    const proxies = [
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(yahooUrl)}`,
-        `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`
-    ];
-
-    for (const proxy of proxies) {
-        try {
-            const res = await fetchWithTimeout(proxy, 5000);
-
-            if (res && res.ok) {
-                const data = await res.json();
-                const meta = data?.chart?.result?.[0]?.meta;
-
-                if (meta) {
-                    const price =
-                        Number(meta.postMarketPrice) ||
-                        Number(meta.preMarketPrice) ||
-                        Number(meta.regularMarketPrice);
-
-                    // 이전 종가 chartPreviousClose는 사용하지 않음
-                    if (Number.isFinite(price) && price > 0) {
-                        return price;
-                    }
-                }
-            }
-        } catch (e) {}
-    }
-
-    // 모든 API 실패 시 null 반환
+    // 모든 경로 실패 시 null 반환 → 화면은 live.json 스냅샷 값을 유지
     return null;
 }
 
@@ -721,6 +827,8 @@ const syncToggle = document.getElementById("autoSyncToggle");
 if (syncToggle) syncToggle.addEventListener('change', toggleAutoSync);
 
 document.addEventListener("DOMContentLoaded", () => {
+    // 주소의 ?finnhub=키 는 시세 조회 전에 먼저 저장하고 주소창에서 지운다.
+    applyFinnhubKeyFromUrl();
     loadInputsFromStorage();
     updateDashboard(true);
     if (updateTimer) clearInterval(updateTimer);
