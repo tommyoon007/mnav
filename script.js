@@ -61,9 +61,9 @@ const DEFAULT_DATA = {
     btcHoldings: 845050,      // 보유 BTC 수량
     adso: 298.039,           // Basic Shares (M)
     fdso: 424.479,           // Fully Diluted Shares (M)
-    usdAssetsUsdB: 6.690,    // 현금 및 USD 자산 ($B)
-    debtUsdB: 6.754,         // 총 부채 ($B)
-    preferredUsdB: 14.966    // 우선주/Convertible Preferred ($B)
+    usdAssetsUsdB: 4.900,    // 현금 및 USD 자산 ($B) — Strategy.com USD Reserve 4,749 + USD Cash 151
+    debtUsdB: 6.714,         // 총 부채 ($B) — Strategy.com Debt 6,714
+    preferredUsdB: 12.709    // 우선주/Convertible Preferred ($B) — Strategy.com Pref 12,709
 };
 
 let currentData = { ...DEFAULT_DATA };
