@@ -181,7 +181,7 @@ function applyFinnhubKeyFromUrl() {
 // Yahoo Finance 가 돌려준 meta 에서 지금 보여줄 값을 고른다.
 // 정규장 / 프리장 / 애프터장 값 중 '가장 최근 시각'의 값을 쓴다.
 // (장중인데 어제 애프터장 값이 남아 있어 그 값이 잡히는 경우를 막는다)
-function pickLatestYahooPrice(meta) {
+function pickLatestYahooQuote(meta) {
     if (!meta || typeof meta !== "object") return null;
 
     const candidates = [
@@ -197,7 +197,7 @@ function pickLatestYahooPrice(meta) {
     }
 
     // 이전 종가 chartPreviousClose / previousClose 는 쓰지 않는다.
-    return picked ? picked.price : null;
+    return picked ? { price: picked.price, time: picked.time } : null;
 }
 
 function parseYahooChartMeta(data) {
@@ -243,13 +243,14 @@ async function fetchYahooPrice(proxyUrl) {
         let data;
         try { data = await res.json(); } catch (e) { return null; }
 
-        return pickLatestYahooPrice(parseYahooChartMeta(data));
+        return pickLatestYahooQuote(parseYahooChartMeta(data));
     } catch (e) {
         return null;
     }
 }
 
-// 여러 프록시를 동시에 던지고 가장 먼저 성공한 값을 쓴다. 한 번 더 시도한다.
+// 여러 프록시를 동시에 던지고, 응답 중 '가장 최근 시각'의 값을 쓴다. 한 번 더 시도한다.
+// (프록시가 오래된 값을 캐시해 돌려주면 그 값이 먼저 도착해도 밀려나게 하기 위함)
 // 모두 실패하면 1분 동안은 프록시 호출을 쉬어(과도한 요청으로 막히지 않게) live.json 값을 유지한다.
 let yahooRetryAfter = 0;
 let yahooLastPrice = { price: null, at: 0 };
@@ -262,28 +263,36 @@ async function fetchLiveMstrFromYahoo() {
     for (let round = 0; round < YAHOO_PROXY_ROUNDS; round++) {
         const urls = buildYahooProxyUrls(round);
 
-        const price = await new Promise(resolve => {
+        const quote = await new Promise(resolve => {
+            const quotes = [];
             let remaining = urls.length;
             let settled = false;
+            let graceTimer = null;
+
+            const freshest = () => quotes.reduce((best, q) => (!best || q.time > best.time ? q : best), null);
+            const finish = () => {
+                if (settled) return;
+                settled = true;
+                if (graceTimer) clearTimeout(graceTimer);
+                resolve(freshest());
+            };
 
             urls.forEach(url => {
-                fetchYahooPrice(url).then(p => {
-                    if (settled || !p) return;
-                    settled = true;
-                    resolve(p);
+                fetchYahooPrice(url).then(q => {
+                    if (settled || !q) return;
+                    quotes.push(q);
+                    // 첫 성공 후 1.2초만 더 기다려 더 새 값을 고른다.
+                    if (!graceTimer) graceTimer = setTimeout(finish, 1200);
                 }).catch(() => {}).finally(() => {
                     remaining -= 1;
-                    if (!settled && remaining === 0) {
-                        settled = true;
-                        resolve(null);
-                    }
+                    if (remaining === 0) finish();
                 });
             });
         });
 
-        if (price) {
-            yahooLastPrice = { price: price, at: Date.now() };
-            return price;
+        if (quote) {
+            yahooLastPrice = { price: quote.price, at: Date.now() };
+            return quote.price;
         }
     }
 
