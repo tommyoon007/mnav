@@ -634,8 +634,9 @@ function calculateMNAV() {
     grossBtcIds.forEach(id => setText(id, formattedGrossUsd));
 
     // 3. Net Assets Calculation (Strategy.com 기준)
-    // 주가 희석 구간 조건 판단 (주가 상승 시 Fully Diluted 적용)
-    const fdSharesForCalc = (mPrice > 143.4) ? fd : a;
+    // Strategy.com과 동일하게, Net BPS·mNAV는 주가와 관계없이 항상 FDSO(완전희석 주식수)로 나눈다.
+    // (Gross BTC/Share·Gross BTC Value는 위 1·2번처럼 ADSO 기준 그대로 유지)
+    const fdSharesForCalc = fd;
     const { usdAssetsUsdB, debtUsdB, preferredUsdB } = currentData;
     
     const btcValueUsdB = (h * bPrice) / 1e9;
