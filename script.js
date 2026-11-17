@@ -288,6 +288,11 @@ async function fetchLiveMstrFromYahoo() {
     }
 
     yahooRetryAfter = Date.now() + 60000;
+
+    // 이번에 실패해도 3분 안에 받아 둔 값이 있으면 그 값을 계속 쓴다
+    // (live.json 스냅샷이 더 오래된 경우가 많아서, 화면이 옛 값으로 되돌아가지 않게).
+    if (yahooLastPrice.price && Date.now() - yahooLastPrice.at < 180000) return yahooLastPrice.price;
+
     return null;
 }
 
