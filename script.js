@@ -221,14 +221,17 @@ const YAHOO_PROXY_ROUNDS = 2;
 
 function buildYahooProxyUrls(round) {
     const stamp = `${Date.now()}${round}`;
-    const q1 = encodeURIComponent(`https://query1.finance.yahoo.com${YAHOO_CHART_PATH}&_=${stamp}`);
-    const q2 = encodeURIComponent(`https://query2.finance.yahoo.com${YAHOO_CHART_PATH}&_=${stamp}`);
+    const q1Url = `https://query1.finance.yahoo.com${YAHOO_CHART_PATH}&_=${stamp}`;
+    const q2Url = `https://query2.finance.yahoo.com${YAHOO_CHART_PATH}&_=${stamp}`;
+    const q1 = encodeURIComponent(q1Url);
+    const q2 = encodeURIComponent(q2Url);
 
     return [
+        `https://proxy.cors.dev/${q1Url}`,      // 키 없이 600회/분
+        `https://cors.tools/proxy?url=${q2}`,   // 키 없이 GET
         `https://api.allorigins.win/raw?url=${q1}`,
         `https://api.allorigins.win/get?url=${q2}`,
-        `https://api.codetabs.com/v1/proxy?quest=${q1}`,
-        `https://api.cors.lol/?url=${q2}`
+        `https://api.cors.lol/?url=${q1}`
     ];
 }
 
