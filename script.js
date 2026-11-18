@@ -96,17 +96,11 @@ function loadInputsFromStorage() {
 
 // ── 기초지표(data.json) 자동 반영 ───────────────────────────────────────────
 // 워크플로가 Strategy의 주간 8-K 기준으로 data.json 을 갱신하면 앱은 시작할 때 그 값을 읽어
-// 현금·부채·우선주·BTC 보유량·주식수를 채운다. localStorage 에 옛 값이 남아 있어도
-// data.json 이 더 새것이면 그 값으로 덮어써서, 8-K 가 나오면 별도 조작 없이 최신
-// Net BPS·mNAV 가 화면에 보이게 한다.
-const FUNDAMENTALS_SYNC_KEY = "mstr_app_fundamentalsSync";      // 마지막으로 적용한 data.json 시각
-const FUNDAMENTALS_OVERRIDE_PREFIX = "mstr_app_override_";     // 사용자가 직접 고친 항목의 시각
-
-// key: data.json/currentData 키, input: 화면 입력칸 id (없으면 currentData 에만 반영)
+// 현금·부채·우선주 3개를 currentData 에 채운다. 이 3개만 data.json 을 따른다.
+// BTC 보유량(btcHoldings)·ADSO(assumedShares)·FDSO(fullyDilutedShares)는 사용자가 직접 확인해
+// 입력한 값이므로 data.json 의 updatedAt·동기화 여부와 관계없이 절대 건드리지 않는다
+// (localStorage mstr_app_* 값과 입력칸 값이 그대로 유지된다).
 const FUNDAMENTALS_FIELDS = [
-    { key: "btcHoldings", input: "btcHoldings" },
-    { key: "adso", input: "assumedShares" },
-    { key: "fdso", input: "fullyDilutedShares" },
     { key: "usdAssetsUsdB" },
     { key: "debtUsdB" },
     { key: "preferredUsdB" }
@@ -115,15 +109,6 @@ const FUNDAMENTALS_FIELDS = [
 function toFiniteNumber(value) {
     const num = typeof value === "number" ? value : parseFloat(String(value).replace(/[^0-9.-]+/g, ""));
     return Number.isFinite(num) ? num : null;
-}
-
-function stampValue(text) {
-    const parsed = Date.parse(String(text || "").trim());
-    return Number.isNaN(parsed) ? null : parsed;
-}
-
-function formatFundamental(key, value) {
-    return key === "btcHoldings" ? String(Math.round(value)) : String(value);
 }
 
 async function applyFundamentalsFromDataJson() {
@@ -140,49 +125,19 @@ function applyFundamentals(snapshot) {
     const incoming = {};
     for (const field of FUNDAMENTALS_FIELDS) {
         const value = toFiniteNumber(snapshot[field.key]);
-        if (value === null) return false;   // 6개 값이 다 있을 때만 반영한다
+        if (value === null) return false;   // 현금·부채·우선주 3개 값이 다 있을 때만 반영한다
         incoming[field.key] = value;
     }
-    if (!(incoming.btcHoldings > 0) || !(incoming.adso > 0) || !(incoming.fdso > 0)) return false;
 
-    const stamp = String(snapshot.updatedAt || snapshot.asOf || "").trim();
-    const stampMs = stampValue(stamp);
-    const lastSync = localStorage.getItem(FUNDAMENTALS_SYNC_KEY) || "";
-    const lastSyncMs = stampValue(lastSync);
-    const isFresh =
-        !lastSync ||
-        (stampMs !== null && (lastSyncMs === null || stampMs > lastSyncMs)) ||
-        (stampMs === null && stamp !== lastSync);
-
+    // 사용자가 입력한 BTC 보유량·ADSO·FDSO 는 여기서 다루지 않는다(입력칸·localStorage 그대로 유지).
     let changed = false;
     for (const field of FUNDAMENTALS_FIELDS) {
-        const overrideKey = FUNDAMENTALS_OVERRIDE_PREFIX + (field.input || field.key);
-        const overrideMs = stampValue(localStorage.getItem(overrideKey) || "");
-
-        // data.json 이 더 새것이면 반영하되, 그 데이터보다 나중에 사용자가 직접 고친 항목은 지킨다.
-        // data.json 이 그대로면, 마지막 동기화 뒤에 손대지 않은 항목만 반영한다.
-        const overriddenAfterData = overrideMs !== null && stampMs !== null && overrideMs > stampMs;
-        const overriddenSinceSync =
-            overrideMs !== null && (!lastSync || (lastSyncMs !== null && overrideMs > lastSyncMs));
-        if (isFresh ? overriddenAfterData : overriddenSinceSync) continue;
-
-        if (field.input) {
-            const el = document.getElementById(field.input);
-            if (el && document.activeElement !== el) {
-                const text = formatFundamental(field.key, incoming[field.key]);
-                if (el.value !== text) {
-                    el.value = text;
-                    changed = true;
-                }
-            }
-        }
         if (currentData[field.key] !== incoming[field.key]) {
             currentData[field.key] = incoming[field.key];
             changed = true;
         }
     }
 
-    if (stamp) localStorage.setItem(FUNDAMENTALS_SYNC_KEY, stamp);
     if (changed) recalculateOnly();
     return changed;
 }
@@ -942,15 +897,6 @@ document.querySelectorAll('input').forEach(input => {
 
 const syncToggle = document.getElementById("autoSyncToggle");
 if (syncToggle) syncToggle.addEventListener('change', toggleAutoSync);
-
-// 사용자가 기초지표를 직접 고치면 그 시각을 남겨, 같은 data.json 값으로 되돌리지 않게 한다.
-["btcHoldings", "assumedShares", "fullyDilutedShares"].forEach(id => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.addEventListener('input', () => {
-        try { localStorage.setItem(FUNDAMENTALS_OVERRIDE_PREFIX + id, new Date().toISOString()); } catch (e) {}
-    });
-});
 
 document.addEventListener("DOMContentLoaded", async () => {
     // 주소의 ?finnhub=키 는 시세 조회 전에 먼저 저장하고 주소창에서 지운다.
