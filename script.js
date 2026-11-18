@@ -226,8 +226,32 @@ function applyFinnhubKeyFromUrl() {
     } catch (e) {}
 }
 
+// 지금이 미국 동부 기준 주간거래(Overnight, Blue Ocean ATS) 시간대인지 확인한다.
+// 주간거래는 일~목요일 밤 20:00 ~ 04:00 (ET) 에만 열린다.
+function isUsOvernightSession(date = new Date()) {
+    try {
+        const parts = new Intl.DateTimeFormat("en-US", {
+            timeZone: "America/New_York",
+            weekday: "short",
+            hour: "2-digit",
+            hour12: false
+        }).formatToParts(date);
+        const pick = type => (parts.find(p => p.type === type) || {}).value;
+        const weekday = pick("weekday");
+        const hour = Number(pick("hour")) % 24;
+
+        // 20:00 이후 시작 — 일·월·화·수·목요일 밤
+        if (hour >= 20) return ["Sun", "Mon", "Tue", "Wed", "Thu"].includes(weekday);
+        // 04:00 이전 종료 — 월~금 새벽
+        if (hour < 4) return ["Mon", "Tue", "Wed", "Thu", "Fri"].includes(weekday);
+        return false;
+    } catch (e) {
+        return false;
+    }
+}
+
 // Yahoo Finance 가 돌려준 meta 에서 지금 보여줄 값을 고른다.
-// 정규장 / 프리장 / 애프터장 값 중 '가장 최근 시각'의 값을 쓴다.
+// 정규장 / 프리장 / 애프터장 / 주간거래 값 중 '가장 최근 시각'의 값을 쓴다.
 // (장중인데 어제 애프터장 값이 남아 있어 그 값이 잡히는 경우를 막는다)
 function pickLatestYahooQuote(meta) {
     if (!meta || typeof meta !== "object") return null;
@@ -237,6 +261,17 @@ function pickLatestYahooQuote(meta) {
         { price: Number(meta.postMarketPrice), time: Number(meta.postMarketTime) || 0 },
         { price: Number(meta.preMarketPrice), time: Number(meta.preMarketTime) || 0 }
     ];
+
+    // 주간거래 시간대에는 차트 API meta 의 fulldayPrice 가 주간거래(Blue Ocean) 최근
+    // 체결가를 담는다. (별도 페이지 파싱 없이 이미 받아 온 응답에서 바로 얻는다)
+    // 정규장·프리마켓·애프터마켓이 더 최신이면 아래 시각 비교에서 그 값이 우선한다.
+    if (isUsOvernightSession()) {
+        const overnightPrice = Number(meta.fulldayPrice);
+        const latestKnownTime = candidates.reduce((max, c) => Math.max(max, c.time), 0);
+        if (Number.isFinite(overnightPrice) && overnightPrice > 0) {
+            candidates.push({ price: overnightPrice, time: latestKnownTime + 1 });
+        }
+    }
 
     let picked = null;
     for (const c of candidates) {
