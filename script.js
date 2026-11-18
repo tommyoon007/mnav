@@ -270,32 +270,77 @@ function isUsRegularSession(date = new Date()) {
     }
 }
 
-// Yahoo Finance 가 돌려준 meta 에서 지금 보여줄 값을 고른다.
-// 정규장 / 프리장 / 애프터장 / 주간거래 값 중 '가장 최근 시각'의 값을 쓴다.
-// (장중인데 어제 애프터장 값이 남아 있어 그 값이 잡히는 경우를 막는다)
-function pickLatestYahooQuote(meta) {
+// 지금이 미국 동부 기준 어느 세션인지: regular / pre / post / overnight / closed
+// (프리마켓 04:00~09:30, 애프터마켓 16:00~20:00, 주간거래 20:00~04:00)
+function getUsSessionPhase(date = new Date()) {
+    if (isUsRegularSession(date)) return "regular";
+    if (isUsOvernightSession(date)) return "overnight";
+
+    try {
+        const parts = new Intl.DateTimeFormat("en-US", {
+            timeZone: "America/New_York",
+            weekday: "short",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false
+        }).formatToParts(date);
+        const pick = type => (parts.find(p => p.type === type) || {}).value;
+        if (!["Mon", "Tue", "Wed", "Thu", "Fri"].includes(pick("weekday"))) return "closed";
+
+        const minutes = (Number(pick("hour")) % 24) * 60 + Number(pick("minute"));
+        if (minutes >= 240 && minutes < 570) return "pre";
+        if (minutes >= 960 && minutes < 1200) return "post";
+        return "closed";
+    } catch (e) {
+        return "closed";
+    }
+}
+
+// Yahoo Finance 가 돌려준 meta(와 차트의 최신 1분봉)에서 지금 보여줄 값을 고른다.
+// 정규장 / 프리마켓 / 애프터마켓 / 주간거래 값 중 '가장 최근 시각'의 값을 쓴다.
+// (장중인데 어제 값이 남아 있어 그 값이 잡히는 경우를 막는다)
+function pickLatestYahooQuote(meta, lastBar = null, date = new Date()) {
     if (!meta || typeof meta !== "object") return null;
 
-    const candidates = [
-        { price: Number(meta.regularMarketPrice), time: Number(meta.regularMarketTime) || 0 },
-        { price: Number(meta.postMarketPrice), time: Number(meta.postMarketTime) || 0 },
-        { price: Number(meta.preMarketPrice), time: Number(meta.preMarketTime) || 0 }
-    ];
+    const toCandidate = (price, time) => {
+        const p = Number(price);
+        const t = Number(time) || 0;
+        return Number.isFinite(p) && p > 0 ? { price: p, time: t } : null;
+    };
 
-    // 주간거래 시간대에는 차트 API meta 의 fulldayPrice 가 주간거래(Blue Ocean) 최근
-    // 체결가를 담는다. (별도 페이지 파싱 없이 이미 받아 온 응답에서 바로 얻는다)
-    // 정규장·프리마켓·애프터마켓이 더 최신이면 아래 시각 비교에서 그 값이 우선한다.
-    if (isUsOvernightSession()) {
-        const overnightPrice = Number(meta.fulldayPrice);
-        const latestKnownTime = candidates.reduce((max, c) => Math.max(max, c.time), 0);
-        if (Number.isFinite(overnightPrice) && overnightPrice > 0) {
-            candidates.push({ price: overnightPrice, time: latestKnownTime + 1 });
-        }
+    const regular = toCandidate(meta.regularMarketPrice, meta.regularMarketTime);
+    const post = toCandidate(meta.postMarketPrice, meta.postMarketTime);
+    const pre = toCandidate(meta.preMarketPrice, meta.preMarketTime);
+    const bar = lastBar ? toCandidate(lastBar.price, lastBar.time) : null;
+    const phase = getUsSessionPhase(date);
+
+    // 정규장 중에는 정규장 체결가를 그대로 쓴다.
+    if (phase === "regular" && regular) return regular;
+
+    // 주말·휴장(장외 거래도 없는 때)에는 직전 정규장 종가를 그대로 쓴다.
+    // (남아 있는 장외 체결가로 화면 값이 흔들리지 않게)
+    if (phase === "closed") return regular || post || pre || bar;
+
+    const candidates = [regular, post, pre, bar].filter(Boolean);
+    const latestKnown = candidates.reduce((max, c) => Math.max(max, c.time), 0);
+
+    // 차트 API meta 의 fulldayPrice 는 장외(프리마켓·애프터마켓·주간거래)를 포함한
+    // 가장 최근 체결가다. 프리마켓·애프터마켓 값이 preMarketPrice/postMarketPrice 로
+    // 오지 않고 regularMarketPrice 가 직전 종가에 멈춰 있는 경우가 많아 이 값을 쓴다.
+    // 시각 필드가 없으므로, 오늘 장외 체결(최신 1분봉)이 확인될 때만 후보에 넣는다.
+    if (phase === "overnight" || bar) {
+        // 주간거래는 1분봉에 잡히지 않아 다른 후보보다 1초 뒤로 두어 최신값으로 쓴다.
+        const fullday = toCandidate(
+            meta.fulldayPrice,
+            phase === "overnight" ? latestKnown + 1 : (bar ? bar.time : latestKnown + 1)
+        );
+        if (fullday) candidates.push(fullday);
     }
 
+    // 시각이 같으면 앞에 있는(실제 체결 시각이 있는) 후보를 쓴다.
+    // fulldayPrice 는 시각이 없어 뒤에 두므로, 같은 분이면 1분봉 쪽 값을 쓴다.
     let picked = null;
     for (const c of candidates) {
-        if (!Number.isFinite(c.price) || c.price <= 0) continue;
         if (!picked || c.time > picked.time) picked = c;
     }
 
@@ -303,7 +348,7 @@ function pickLatestYahooQuote(meta) {
     return picked ? { price: picked.price, time: picked.time } : null;
 }
 
-function parseYahooChartMeta(data) {
+function parseYahooChartResult(data) {
     let body = data;
 
     // allorigins 의 /get 은 본문을 contents 문자열로 감싸서 준다.
@@ -313,8 +358,25 @@ function parseYahooChartMeta(data) {
         try { body = JSON.parse(body); } catch (e) { return null; }
     }
 
-    const meta = body && body.chart && body.chart.result && body.chart.result[0] && body.chart.result[0].meta;
-    return meta && typeof meta === "object" ? meta : null;
+    const result = body && body.chart && body.chart.result && body.chart.result[0];
+    return result && typeof result === "object" ? result : null;
+}
+
+// 차트 응답에서 가장 최근의 '유효한' 1분봉(시각 + 종가)을 꺼낸다.
+// 프리마켓·애프터마켓 체결가는 이 봉에만 시각과 함께 들어 있다.
+function parseYahooChartLastBar(result) {
+    if (!result || typeof result !== "object") return null;
+
+    const timestamps = result.timestamp;
+    const quote = result.indicators && result.indicators.quote && result.indicators.quote[0];
+    if (!Array.isArray(timestamps) || !quote || !Array.isArray(quote.close)) return null;
+
+    for (let i = timestamps.length - 1; i >= 0; i--) {
+        const price = Number(quote.close[i]);
+        const time = Number(timestamps[i]) || 0;
+        if (Number.isFinite(price) && price > 0 && time > 0) return { price, time };
+    }
+    return null;
 }
 
 // 무료 CORS 프록시는 수시로 막히므로, query1/query2 를 여러 프록시로 동시에 호출한다.
@@ -346,7 +408,10 @@ async function fetchYahooPrice(proxyUrl) {
         let data;
         try { data = await res.json(); } catch (e) { return null; }
 
-        return pickLatestYahooQuote(parseYahooChartMeta(data));
+        const result = parseYahooChartResult(data);
+        if (!result) return null;
+
+        return pickLatestYahooQuote(result.meta, parseYahooChartLastBar(result));
     } catch (e) {
         return null;
     }
