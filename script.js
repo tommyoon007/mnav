@@ -86,6 +86,8 @@ function saveInputsToStorage() {
 
 function loadInputsFromStorage() {
     USER_STORAGE_KEYS.forEach(id => {
+        // 첫 시세가 확정되기 전에는 저장된 가격(낡은 값)을 화면에 올리지 않는다.
+        if (pricePending && (id === "btcPrice" || id === "mstrPrice")) return;
         const saved = localStorage.getItem("mstr_app_" + id);
         const el = document.getElementById(id);
         if (saved !== null && saved.trim() !== "" && el) {
@@ -916,23 +918,89 @@ function generateScenarioTable(fdSharesForCalc) {
     tbody.innerHTML = html;
 }
 
+// ── 낡은 스냅샷 값이 화면에 스쳐 보이지 않게 ─────────────────────────────
+// live.json 은 서버 워크플로가 갱신해 두는 값이라 자주 낡아 있다.
+// 예전에는 이 값을 먼저 그리고 실시간 시세로 덮어써서, 화면 숫자가 한 번 바뀌어 보였다.
+// 이제는 실시간 시세를 먼저 받고, 첫 화면에서는 그것이 확정될 때까지 가격 자리를 비워 둔 뒤
+// 한 번에 그린다. 실시간을 못 받았을 때만(3초) live.json 스냅샷으로 폴백한다.
+const PRICE_PENDING_TEXT = "—";
+const LIVE_PRICE_WAIT_MS = 3000;
+let pricePending = false;          // 첫 시세 확정 전인지
+let pricePendingBackup = null;     // 확정 전까지 숨겨 둔 기존 입력값
+
+function setPricesPending() {
+    setVal("btcPrice", PRICE_PENDING_TEXT);
+    setVal("mstrPrice", PRICE_PENDING_TEXT);
+}
+
+// 첫 시세가 올 때까지 가격 자리를 비워 둔다 (HTML 기본값·저장된 낡은 값이 먼저 보이지 않게).
+function holdPricesForLive() {
+    if (pricePending) { setPricesPending(); return; }
+    const btcEl = document.getElementById("btcPrice");
+    const mstrEl = document.getElementById("mstrPrice");
+    pricePendingBackup = {
+        btcPrice: btcEl ? btcEl.value : "",
+        mstrPrice: mstrEl ? mstrEl.value : ""
+    };
+    pricePending = true;
+    setPricesPending();
+}
+
+// 비워 둔 자리를 원래 값으로 되돌린다 (받은 값은 이어서 채운다).
+function releasePrices() {
+    if (!pricePending) return;
+    pricePending = false;
+    const backup = pricePendingBackup || {};
+    ["btcPrice", "mstrPrice"].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el || el.value !== PRICE_PENDING_TEXT) return;
+        const saved = backup[id];
+        el.value = (saved && saved !== PRICE_PENDING_TEXT) ? saved : "";
+    });
+    pricePendingBackup = null;
+}
+
+// 기다리되 오래 잡고 있지 않는다 (넘으면 null).
+function waitAtMost(promise, ms) {
+    let timer = null;
+    const timeout = new Promise(resolve => { timer = setTimeout(() => resolve(null), ms); });
+    return Promise.race([Promise.resolve(promise).catch(() => null), timeout])
+        .finally(() => clearTimeout(timer));
+}
+
 // 대시보드 전체 업데이트
 async function updateDashboard(forceChartRefresh = false) {
     if (autoSyncEnabled) {
-        // 0) 저장소 live.json 스냅샷을 먼저 넣어 화면이 비지 않게 한다.
-        const repoLive = await fetchRepoLivePrices();
-        if (repoLive?.btcPrice) setVal("btcPrice", repoLive.btcPrice.toFixed(2));
-        if (repoLive?.mstrPrice) setVal("mstrPrice", repoLive.mstrPrice.toFixed(2));
-        // 스냅샷이 있으면 먼저 한 번 계산해 화면을 바로 채운다 (실시간 시도는 그 다음).
-        if (repoLive?.btcPrice || repoLive?.mstrPrice) recalculateOnly();
+        // 0) 실시간 시세를 먼저 받는다. 첫 화면에서는 가격 자리를 비워 둔 채 기다린다.
+        const livePromise = Promise.all([fetchLiveBtcPrice(), fetchLiveMstrPrice()]);
+        const live = (await waitAtMost(livePromise, LIVE_PRICE_WAIT_MS)) || [null, null];
+        const [liveBtc, liveMstr] = live;
 
-        // 1) 실시간 시세를 동시에 시도하고, 성공한 값만 덮어쓴다 (실패하면 위 스냅샷 값 유지).
-        const [liveBtc, liveMstr] = await Promise.all([
-            fetchLiveBtcPrice(),
-            fetchLiveMstrPrice()
-        ]);
-        if (liveBtc) setVal("btcPrice", liveBtc.toFixed(2));
-        if (liveMstr) setVal("mstrPrice", liveMstr.toFixed(2));
+        // 실시간이 3초를 넘겨 늦게 도착하면, 낡은 스냅샷 값을 오래 두지 않고 그때 한 번 갱신한다.
+        livePromise.then(late => {
+            const [lateBtc, lateMstr] = late || [null, null];
+            const btcUpdate = lateBtc && !liveBtc;
+            const mstrUpdate = lateMstr && !liveMstr;
+            if (btcUpdate) setVal("btcPrice", lateBtc.toFixed(2));
+            if (mstrUpdate) setVal("mstrPrice", lateMstr.toFixed(2));
+            if (btcUpdate || mstrUpdate) recalculateOnly();
+        }).catch(() => {});
+
+        // 1) 실시간 시세를 못 받은 항목만 저장소 live.json 스냅샷으로 폴백한다.
+        //    이미 실시간 값이 떠 있는 화면은 낡은 스냅샷으로 되돌리지 않는다
+        //    (자동 갱신 때마다 숫자가 바뀌어 보이던 원인).
+        const btcShown = getNum("btcPrice") > 0;
+        const mstrShown = getNum("mstrPrice") > 0;
+        const snapshot = ((!liveBtc && !btcShown) || (!liveMstr && !mstrShown))
+            ? await fetchRepoLivePrices()
+            : null;
+
+        const btcPrice = liveBtc || (btcShown ? null : (snapshot ? snapshot.btcPrice : null));
+        const mstrPrice = liveMstr || (mstrShown ? null : (snapshot ? snapshot.mstrPrice : null));
+
+        releasePrices();
+        if (btcPrice) setVal("btcPrice", btcPrice.toFixed(2));
+        if (mstrPrice) setVal("mstrPrice", mstrPrice.toFixed(2));
     }
 
     recalculateOnly();
@@ -970,6 +1038,8 @@ async function updateDashboard(forceChartRefresh = false) {
 }
 
 function recalculateOnly() {
+    // 첫 시세 확정 전에는 계산 결과도 건드리지 않는다 (빈 값으로 계산한 숫자가 스쳐 보이지 않게).
+    if (pricePending) return;
     const calc = calculateMNAV();
     if (calc && calc.fdSharesForCalc) {
         runSimulator(calc.fdSharesForCalc);
@@ -993,6 +1063,7 @@ function handleInput() {
 }
 
 function handlePriceInput() {
+    releasePrices();  // 사용자가 직접 값을 넣으면 첫 시세 대기 표시를 풀어 준다.
     if (autoSyncEnabled) {
         const toggle = document.getElementById("autoSyncToggle");
         if (toggle) toggle.checked = false;
@@ -1017,6 +1088,7 @@ function toggleAutoSync() {
         setText("dataStatus", "실시간 데이터 연동 중...");
         updateDashboard(false); 
     } else {
+        releasePrices();
         setText("autoSyncLabel", "자동 동기화 OFF");
         if (label) label.style.color = "#8b949e";
         setText("dataStatus", "사용자 직접 입력 (수동 모드)");
@@ -1034,6 +1106,9 @@ document.querySelectorAll('input').forEach(input => {
 
 const syncToggle = document.getElementById("autoSyncToggle");
 if (syncToggle) syncToggle.addEventListener('change', toggleAutoSync);
+
+// 첫 페인트 전에 가격 자리를 비워 둔다 (HTML 기본값·저장된 낡은 값이 스쳐 보이지 않게).
+holdPricesForLive();
 
 document.addEventListener("DOMContentLoaded", async () => {
     // 주소의 ?finnhub=키 는 시세 조회 전에 먼저 저장하고 주소창에서 지운다.
