@@ -250,6 +250,26 @@ function isUsOvernightSession(date = new Date()) {
     }
 }
 
+// 미국 정규장(평일 09:30~16:00 America/New_York) 판정 — 서머타임은 Intl 이 자동 반영.
+function isUsRegularSession(date = new Date()) {
+    try {
+        const parts = new Intl.DateTimeFormat("en-US", {
+            timeZone: "America/New_York",
+            weekday: "short",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false
+        }).formatToParts(date);
+        const pick = type => (parts.find(p => p.type === type) || {}).value;
+        const weekday = pick("weekday");
+        if (!["Mon", "Tue", "Wed", "Thu", "Fri"].includes(weekday)) return false;
+        const minutes = (Number(pick("hour")) % 24) * 60 + Number(pick("minute"));
+        return minutes >= 570 && minutes < 960;
+    } catch (e) {
+        return false;
+    }
+}
+
 // Yahoo Finance 가 돌려준 meta 에서 지금 보여줄 값을 고른다.
 // 정규장 / 프리장 / 애프터장 / 주간거래 값 중 '가장 최근 시각'의 값을 쓴다.
 // (장중인데 어제 애프터장 값이 남아 있어 그 값이 잡히는 경우를 막는다)
@@ -389,12 +409,16 @@ async function fetchLiveMstrFromYahoo() {
 }
 
 // 실시간 MSTR 주가
-// 1차: (선택) 사용자가 자기 브라우저에만 저장해 둔 Finnhub 키
-// 2차: Yahoo Finance (CORS 프록시 여러 개를 동시에 경유)
+// 정규장(평일 09:30~16:00 ET)에는 1차: (선택) 사용자가 자기 브라우저에만 저장해 둔 Finnhub 키
+//                             2차: Yahoo Finance (CORS 프록시 여러 개를 동시에 경유)
+// 정규장 외(프리마켓·애프터마켓·주간거래·주말)에는 1차: Yahoo Finance, 2차: 저장된 Finnhub 키
+// (Finnhub quote 는 정규장 체결가만 주므로 장외 시세를 놓친다)
 // 모두 실패하면 null → 저장소 live.json 값이 그대로 표시됩니다.
 async function fetchLiveMstrPrice() {
     const userKey = getUserFinnhubKey();
-    if (userKey) {
+
+    const fromFinnhub = async () => {
+        if (!userKey) return null;
         try {
             const finnhubUrl =
                 `https://finnhub.io/api/v1/quote?symbol=MSTR&token=${encodeURIComponent(userKey)}&_=${Date.now()}`;
@@ -412,11 +436,24 @@ async function fetchLiveMstrPrice() {
                 }
             }
         } catch (e) {}
-    }
+        return null;
+    };
 
-    // 2차: Yahoo Finance (프록시 동시 호출)
-    const yahooPrice = await fetchLiveMstrFromYahoo();
-    if (yahooPrice) return yahooPrice;
+    // 정규장 중: 저장된 Finnhub 키 우선 → 실패 시 Yahoo
+    if (isUsRegularSession()) {
+        const finnhubPrice = await fromFinnhub();
+        if (finnhubPrice) return finnhubPrice;
+
+        const yahooPrice = await fetchLiveMstrFromYahoo();
+        if (yahooPrice) return yahooPrice;
+    } else {
+        // 정규장 외: Yahoo(장외 시세) 우선 → 실패 시 저장된 Finnhub 키
+        const yahooPrice = await fetchLiveMstrFromYahoo();
+        if (yahooPrice) return yahooPrice;
+
+        const finnhubPrice = await fromFinnhub();
+        if (finnhubPrice) return finnhubPrice;
+    }
 
     // 모든 경로 실패 시 null 반환 → 화면은 live.json 스냅샷 값을 유지
     return null;
