@@ -1,9 +1,9 @@
 {
-  "btcPrice": 63200.435,
-  "mstrPrice": 88.93,
-  "updatedAt": "2026-11-19T18:31:12.274085+00:00",
+  "btcPrice": 62518.575,
+  "mstrPrice": 87.415,
+  "updatedAt": "2026-11-19T19:47:34.811953+00:00",
   "btcSource": "Coinbase",
   "mstrSource": "Yahoo Finance (v8)",
   "mstrSession": "정규장",
-  "mstrQuoteTime": "2026-11-19T18:31:08+00:00"
+  "mstrQuoteTime": "2026-11-19T19:47:32+00:00"
 }
