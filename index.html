@@ -35,17 +35,39 @@
         .toggle-label { display: flex; align-items: center; cursor: pointer; user-select: none; }
         .toggle-input { margin-right: 6px; cursor: pointer; }
         .toggle-text { font-weight: bold; font-size: 12px; color: #ff9f0a; }
+
+        /* ── 📊 이동평균선 카드 전용 (ma- 접두사만 사용, 기존 스타일은 그대로) ── */
+        .ma-head-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+        .ma-head-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+        .ma-head-tags .badge { text-decoration: none; }
+        .ma-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(288px, 1fr)); gap: 16px; }
+        .ma-block { min-width: 0; }
+        .ma-sym-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+        .ma-sym-name { font-size: 13px; font-weight: bold; color: #fff; }
+        .ma-sym-price { font-size: 20px; font-weight: bold; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
+        .ma-sym-sub { font-size: 10px; color: #8b949e; margin: 2px 0 8px; min-height: 13px; }
+        .ma-tag { font-size: 10px; padding: 2px 6px; border: 1px solid #30363d; border-radius: 6px; color: #8b949e; font-weight: bold; margin-left: 2px; white-space: nowrap; }
+        .ma-tag.on { color: #3fb950; border-color: #238636; }
+        .ma-tag.off { color: #ff9f0a; border-color: #7a4a00; }
+        .ma-table { margin-top: 0; font-size: 12px; }
+        .ma-table th, .ma-table td { padding: 5px 6px; }
+        .ma-table .ma-l { text-align: left; }
+        .ma-table .ma-r { text-align: right; }
+        .ma-row td { font-variant-numeric: tabular-nums; }
+        .ma-row .ma-price { font-weight: bold; color: #e6edf3; }
+        .ma-group td { background: #161b22; color: #8b949e; font-size: 10px; font-weight: bold; text-align: left; letter-spacing: 0.4px; padding: 4px 6px; }
+        .ma-group span { float: right; font-weight: normal; opacity: 0.85; }
+        .ma-up { color: #3fb950; font-weight: bold; }
+        .ma-down { color: #ff4d4d; font-weight: bold; }
+        .ma-flat { color: #8b949e; }
+        .ma-loading { color: #8b949e; font-size: 11px; }
+        .ma-note { font-size: 10px; color: #8b949e; line-height: 1.6; margin-top: 10px; }
     </style>
 </head>
 <body>
     <div class="card">
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; flex-wrap:wrap;">
-            <div>
-                <h2 style="margin:0 0 8px 0; letter-spacing: -0.5px;">₿ MSTR mNAV & BTC Futures</h2>
-                <p style="margin:0; font-size:13px; color:#aaa;">Strategy.com 동기화 다중 지표 대시보드</p>
-            </div>
-            <a class="tf-btn" href="ma.html" target="_blank" rel="noopener" style="text-decoration: none;">📊 이동평균선</a>
-        </div>
+        <h2 style="margin:0 0 8px 0; letter-spacing: -0.5px;">₿ MSTR mNAV & BTC Futures</h2>
+        <p style="margin:0; font-size:13px; color:#aaa;">Strategy.com 동기화 다중 지표 대시보드</p>
     </div>
 
     <div class="card">
@@ -174,6 +196,54 @@
         </div>
     </div>
 
+    <div class="card" id="maCard">
+        <div class="ma-head-row">
+            <div class="card-title" style="margin-bottom:0;">📊 이동평균선 (BTC · MSTR)</div>
+            <div class="ma-head-tags">
+                <span class="badge" id="maUpdatedBadge">ma.json 확인 중…</span>
+                <a class="badge" href="ma.html" target="_blank" rel="noopener">전체 화면 ↗</a>
+            </div>
+        </div>
+
+        <div class="ma-grid">
+            <div class="ma-block">
+                <div class="ma-sym-row">
+                    <div class="ma-sym-name">₿ BTC-USD <span class="ma-tag" id="maBtcSource">연결 중</span></div>
+                    <div class="ma-sym-price" id="maBtcPrice">—</div>
+                </div>
+                <div class="ma-sym-sub" id="maBtcSub">실시간 시세를 기다리는 중입니다.</div>
+                <table class="ma-table">
+                    <thead>
+                        <tr><th class="ma-l">기간</th><th>이평선</th><th class="ma-r">이격도</th></tr>
+                    </thead>
+                    <tbody id="maBtcBody">
+                        <tr><td colspan="3" class="ma-loading">불러오는 중…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="ma-block">
+                <div class="ma-sym-row">
+                    <div class="ma-sym-name">🏢 MSTR <span class="ma-tag" id="maMstrSource">확인 중</span></div>
+                    <div class="ma-sym-price" id="maMstrPrice">—</div>
+                </div>
+                <div class="ma-sym-sub" id="maMstrSub">시세를 확인하는 중입니다.</div>
+                <table class="ma-table">
+                    <thead>
+                        <tr><th class="ma-l">기간</th><th>이평선</th><th class="ma-r">이격도</th></tr>
+                    </thead>
+                    <tbody id="maMstrBody">
+                        <tr><td colspan="3" class="ma-loading">불러오는 중…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="ma-note">
+            이평선 = (확정 종가 N-1개 합 + 현재가) ÷ N · 이격도 = (현재가 − 이평선) ÷ 이평선 × 100 · 일봉은 오늘 봉, 주봉은 이번 주 봉을 빼고 현재가로 계산 · ma.json은 매일, BTC 현재가는 5초마다 갱신
+        </div>
+    </div>
+
     <div class="card">
         <div class="card-title">📈 BTC 가격별 mNAV 시나리오 표 ($30k ~ $500k)</div>
         <div style="overflow-x:auto;">
@@ -195,5 +265,6 @@
     </div>
 
     <script src="script.js"></script>
+    <script src="ma-widget.js"></script>
 </body>
 </html>
