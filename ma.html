@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#121212">
+    <title>이동평균선 (BTC · MSTR) | mnav</title>
+    <style>
+        * { -webkit-tap-highlight-color: transparent; }
+        body { background-color: #121212; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 16px; }
+        .card { background-color: #1e1e1e; border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid #2a2a2a; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .card-title { font-size: 14px; color: #ff9f0a; font-weight: bold; margin-bottom: 12px; }
+        .header-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
+        .tf-btn { background: #161b22; border: 1px solid #30363d; color: #8b949e; padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; transition: 0.2s; text-decoration: none; display: inline-block; line-height: 1.5; }
+        .tf-btn:hover { background: #2a2a2a; color: #fff; }
+        .status-box { font-size: 12px; color: #aaa; line-height: 1.7; }
+        .status-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: #8b949e; display: inline-block; flex: none; }
+        .dot.on { background: #3fb950; box-shadow: 0 0 6px rgba(63,185,80,0.7); }
+        .dot.off { background: #ff4d4d; }
+        .dot.wait { background: #ff9f0a; }
+        .warn { color: #ff9f0a; }
+        .muted { color: #8b949e; }
+        .price-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+        .price-main { font-size: 28px; font-weight: bold; letter-spacing: -0.5px; }
+        .price-sub { font-size: 11px; color: #8b949e; }
+        .price-tag { font-size: 10px; padding: 2px 7px; border: 1px solid #30363d; border-radius: 6px; color: #8b949e; font-weight: bold; }
+        .tf-title { font-size: 12px; font-weight: bold; color: #ff9f0a; margin: 14px 0 6px; padding-bottom: 4px; border-bottom: 1px solid #2a2a2a; display: flex; justify-content: space-between; align-items: baseline; }
+        .tf-title .tf-sub { font-size: 10px; font-weight: normal; color: #8b949e; }
+        .ma-head, .ma-row { display: grid; grid-template-columns: 52px 1fr 84px; align-items: center; gap: 6px; }
+        .ma-head { font-size: 10px; color: #8b949e; font-weight: bold; padding: 4px 6px; }
+        .ma-head .r { text-align: right; }
+        .ma-row { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 7px 8px; margin-bottom: 5px; font-size: 13px; }
+        .ma-period { font-size: 12px; font-weight: bold; color: #fff; }
+        .ma-value { display: flex; flex-direction: column; line-height: 1.25; }
+        .ma-price { font-weight: bold; font-variant-numeric: tabular-nums; }
+        .ma-closed { font-size: 9px; color: #8b949e; font-variant-numeric: tabular-nums; }
+        .ma-gap { text-align: right; font-weight: bold; font-size: 13px; font-variant-numeric: tabular-nums; }
+        .up { color: #3fb950; }
+        .down { color: #ff4d4d; }
+        .flat { color: #8b949e; }
+        .note { font-size: 11px; color: #8b949e; line-height: 1.6; margin-top: 10px; }
+        .loading { font-size: 12px; color: #8b949e; padding: 8px 2px; }
+        @media (max-width: 360px) {
+            .ma-head, .ma-row { grid-template-columns: 44px 1fr 76px; }
+            .price-main { font-size: 24px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="header-row">
+            <div>
+                <h2 style="margin:0 0 6px 0; letter-spacing: -0.5px;">📊 이동평균선</h2>
+                <p style="margin:0; font-size:13px; color:#aaa;">BTC · MSTR 일봉/주봉 SMA와 이격도</p>
+            </div>
+            <div style="display:flex; gap:6px;">
+                <button class="tf-btn" id="refreshBtn" onclick="refreshAll()">🔄 새로고침</button>
+                <a class="tf-btn" href="index.html">← 대시보드</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">🔗 데이터 상태</div>
+        <div class="status-box">
+            <div class="status-line"><span id="maStatus">ma.json 불러오는 중...</span></div>
+            <div class="status-line">
+                <span class="dot wait" id="btcDot"></span>
+                <span id="btcStatus">BTC 실시간 시세 연결 중...</span>
+            </div>
+            <div class="status-line">
+                <span class="dot wait" id="mstrDot"></span>
+                <span id="mstrStatus">MSTR 시세 확인 중...</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">₿ 비트코인 (BTC-USD)</div>
+        <div class="price-row">
+            <span class="price-main" id="btcPrice">—</span>
+            <span class="price-tag" id="btcSourceTag">연결 중</span>
+        </div>
+        <div class="price-sub" id="btcPriceSub">실시간 시세를 기다리는 중입니다.</div>
+
+        <div class="tf-title">일봉 SMA <span class="tf-sub">실시간가 반영</span></div>
+        <div class="ma-head"><span>기간</span><span>이평선 가격</span><span class="r">이격도</span></div>
+        <div id="btcDaily"><div class="loading">불러오는 중...</div></div>
+
+        <div class="tf-title">주봉 SMA <span class="tf-sub">주 마감 종가 기준</span></div>
+        <div class="ma-head"><span>기간</span><span>이평선 가격</span><span class="r">이격도</span></div>
+        <div id="btcWeekly"><div class="loading">불러오는 중...</div></div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">🏢 MSTR (Strategy)</div>
+        <div class="price-row">
+            <span class="price-main" id="mstrPrice">—</span>
+            <span class="price-tag" id="mstrSourceTag">연결 중</span>
+        </div>
+        <div class="price-sub" id="mstrPriceSub">시세를 기다리는 중입니다.</div>
+
+        <div class="tf-title">일봉 SMA <span class="tf-sub">실시간가 반영</span></div>
+        <div class="ma-head"><span>기간</span><span>이평선 가격</span><span class="r">이격도</span></div>
+        <div id="mstrDaily"><div class="loading">불러오는 중...</div></div>
+
+        <div class="tf-title">주봉 SMA <span class="tf-sub">주 마감 종가 기준</span></div>
+        <div class="ma-head"><span>기간</span><span>이평선 가격</span><span class="r">이격도</span></div>
+        <div id="mstrWeekly"><div class="loading">불러오는 중...</div></div>
+    </div>
+
+    <div class="card">
+        <div class="note" id="methodNote">
+            · 이평선 가격 = (확정 종가 N-1개 합 + 현재가) ÷ N · 이격도 = (현재가 − 이평선) ÷ 이평선 × 100<br>
+            · 일봉은 오늘 진행 중인 봉, 주봉은 이번 주 진행 중인 봉을 빼고 그 자리에 현재가를 넣어 계산합니다.<br>
+            · 주봉은 ISO 주(월~일) 마지막 거래일 종가를 그 주의 종가로 씁니다.
+        </div>
+    </div>
+
+    <script>
+        // ── 설정 ────────────────────────────────────────────────
+        // 과거 마감 종가 합은 ma.json(워크플로가 매일 갱신), 현재가는 브라우저가 직접 받아온다.
+        const PERIODS = {
+            daily: [20, 50, 120, 200, 300, 365],
+            weekly: [50, 100, 120, 200, 300, 365]
+        };
+        const BTC_POLL_MS = 5000;       // BTC 실시간 시세 주기
+        const MSTR_POLL_MS = 60000;     // MSTR(live.json) 확인 주기
+        const MA_RELOAD_MS = 600000;    // ma.json 다시 읽는 주기 (10분)
+        const STALE_HOURS = 48;
+
+        const state = {
+            ma: null,
+            maError: null,
+            btcPrice: null,
+            btcSource: null,
+            btcAt: null,
+            btcFailures: 0,
+            live: null,
+            mstrPrice: null,
+            mstrAt: null
+        };
+
+        // ── 유틸 ────────────────────────────────────────────────
+        function fetchWithTimeout(url, ms) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), ms);
+            return fetch(url, { signal: controller.signal, cache: "no-store" })
+                .finally(() => clearTimeout(timer));
+        }
+
+        function fmtPrice(value) {
+            if (!Number.isFinite(value)) return "—";
+            const digits = Math.abs(value) >= 1000 ? 0 : 2;
+            return "$" + value.toLocaleString("en-US", {
+                minimumFractionDigits: digits,
+                maximumFractionDigits: digits
+            });
+        }
+
+        function fmtGap(value) {
+            if (!Number.isFinite(value)) return "—";
+            const sign = value > 0 ? "+" : "";
+            return sign + value.toFixed(2) + "%";
+        }
+
+        function gapClass(value) {
+            if (!Number.isFinite(value)) return "flat";
+            if (value > 0.0001) return "up";
+            if (value < -0.0001) return "down";
+            return "flat";
+        }
+
+        function fmtKst(isoString, withDate) {
+            if (!isoString) return "—";
+            const date = new Date(isoString);
+            if (isNaN(date.getTime())) return "—";
+            const options = withDate
+                ? { timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }
+                : { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false };
+            return new Intl.DateTimeFormat("ko-KR", options).format(date);
+        }
+
+        function hoursSince(isoString) {
+            if (!isoString) return null;
+            const time = new Date(isoString).getTime();
+            if (!Number.isFinite(time)) return null;
+            return (Date.now() - time) / 3600000;
+        }
+
+        // ── ma.json ────────────────────────────────────────────
+        async function loadMa() {
+            try {
+                const res = await fetchWithTimeout("ma.json?_=" + Date.now(), 12000);
+                if (!res.ok) throw new Error("HTTP " + res.status);
+                const data = await res.json();
+                if (!data || !data.symbols) throw new Error("형식 오류");
+                state.ma = data;
+                state.maError = null;
+            } catch (error) {
+                state.maError = error;
+                if (!state.ma) {
+                    document.getElementById("maStatus").innerHTML =
+                        '<span class="down">ma.json 을 불러오지 못했습니다.</span> 잠시 후 새로고침해 주세요.';
+                    return;
+                }
+            }
+            renderMaStatus();
+            renderSymbol("BTC-USD", "btc");
+            renderSymbol("MSTR", "mstr");
+        }
+
+        function renderMaStatus() {
+            const el = document.getElementById("maStatus");
+            if (!state.ma) return;
+            const data = state.ma;
+            const age = hoursSince(data.updatedAt);
+            const stale = age !== null && age > STALE_HOURS;
+            const btcLast = data.symbols["BTC-USD"] || {};
+            const mstrLast = data.symbols["MSTR"] || {};
+
+            el.innerHTML =
+                '<span class="muted">ma.json 갱신</span> ' + fmtKst(data.updatedAt, true) + " KST" +
+                (age !== null ? ' <span class="muted">(' + Math.round(age) + '시간 전)</span>' : "") +
+                ' · <span class="muted">마지막 확정 일봉</span> BTC ' + (btcLast.lastDailyDate || "—") +
+                " / MSTR " + (mstrLast.lastDailyDate || "—") +
+                (stale ? ' <span class="warn">⚠️ 2일 이상 경과 — 워크플로 확인 필요</span>' : "") +
+                (state.maError ? ' <span class="warn">(새 데이터 갱신 실패)</span>' : "");
+        }
+
+        // ── 렌더링 ─────────────────────────────────────────────
+        function symbolData(key) {
+            return state.ma && state.ma.symbols ? state.ma.symbols[key] : null;
+        }
+
+        function rowsHtml(symbolKey, kind, price) {
+            const data = symbolData(symbolKey);
+            if (!data) return '<div class="loading">ma.json 에 데이터가 없습니다.</div>';
+            const block = data[kind] || {};
+            const unit = kind === "daily" ? "일" : "주";
+
+            return PERIODS[kind].map(function (period) {
+                const cell = block[String(period)];
+                if (!cell || !cell.available) {
+                    return '<div class="ma-row"><div class="ma-period">' + period + unit + '</div>' +
+                        '<div class="ma-value"><span class="ma-price flat">데이터 부족</span></div>' +
+                        '<div class="ma-gap flat">—</div></div>';
+                }
+                const liveSma = (cell.prevSum + price) / period;
+                const gap = ((price - liveSma) / liveSma) * 100;
+                return '<div class="ma-row">' +
+                    '<div class="ma-period">' + period + unit + '</div>' +
+                    '<div class="ma-value">' +
+                        '<span class="ma-price">' + fmtPrice(liveSma) + '</span>' +
+                        '<span class="ma-closed">확정 ' + fmtPrice(cell.closedSma) + '</span>' +
+                    '</div>' +
+                    '<div class="ma-gap ' + gapClass(gap) + '">' + fmtGap(gap) + '</div>' +
+                '</div>';
+            }).join("");
+        }
+
+        function renderSymbol(symbolKey, prefix) {
+            const data = symbolData(symbolKey);
+            if (!data) return;
+
+            const isBtc = prefix === "btc";
+            const livePrice = isBtc ? state.btcPrice : state.mstrPrice;
+            const price = Number.isFinite(livePrice) && livePrice > 0 ? livePrice : data.lastPrice;
+
+            document.getElementById(prefix + "Price").textContent = fmtPrice(price);
+            document.getElementById(prefix + "Daily").innerHTML = rowsHtml(symbolKey, "daily", price);
+            document.getElementById(prefix + "Weekly").innerHTML = rowsHtml(symbolKey, "weekly", price);
+
+            if (isBtc) renderBtcLabels(price, data);
+            else renderMstrLabels(price, data);
+        }
+
+        function renderBtcLabels(price, data) {
+            const tag = document.getElementById("btcSourceTag");
+            const sub = document.getElementById("btcPriceSub");
+            if (Number.isFinite(state.btcPrice) && state.btcSource !== "live.json") {
+                tag.textContent = state.btcSource || "실시간";
+                sub.textContent = "실시간 시세 · " + fmtKst(state.btcAt) + " KST 갱신 (5초마다)";
+            } else if (Number.isFinite(state.btcPrice)) {
+                tag.textContent = "live.json";
+                sub.textContent = "실시간 연결 끊김 · live.json " + fmtKst(state.btcAt, true) + " KST 값";
+            } else {
+                tag.textContent = "마지막 확정 종가";
+                sub.textContent = "실시간 시세 연결 전 · " + (data.lastDailyDate || "") + " 종가 기준";
+            }
+        }
+
+        function renderMstrLabels(price, data) {
+            const tag = document.getElementById("mstrSourceTag");
+            const sub = document.getElementById("mstrPriceSub");
+            const live = state.live || {};
+            const session = live.mstrSession ? " · " + live.mstrSession : "";
+            const quoteAt = live.mstrQuoteTime ? " · 시세 " + fmtKst(live.mstrQuoteTime, true) + " KST" : "";
+            if (Number.isFinite(state.mstrPrice)) {
+                tag.textContent = "live.json";
+                sub.textContent = "live.json " + fmtKst(state.mstrAt, true) + " KST 갱신" + session + quoteAt;
+            } else {
+                tag.textContent = "마지막 확정 종가";
+                sub.textContent = (data.lastDailyDate || "") + " 종가 기준";
+            }
+        }
+
+        // ── BTC 실시간 시세 (Coinbase → Binance → CoinGecko) ─────
+        async function fetchBtcFromCoinbase() {
+            const res = await fetchWithTimeout("https://api.coinbase.com/v2/prices/spot?currency=USD", 3500);
+            if (!res.ok) throw new Error("coinbase " + res.status);
+            const data = await res.json();
+            const value = parseFloat(data && data.data && data.data.amount);
+            if (!(value > 0)) throw new Error("coinbase 값 없음");
+            return { price: value, source: "Coinbase" };
+        }
+
+        async function fetchBtcFromBinance() {
+            const res = await fetchWithTimeout("https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT", 3500);
+            if (!res.ok) throw new Error("binance " + res.status);
+            const data = await res.json();
+            const value = parseFloat(data && data.price);
+            if (!(value > 0)) throw new Error("binance 값 없음");
+            return { price: value, source: "Binance" };
+        }
+
+        async function fetchBtcFromGecko() {
+            const res = await fetchWithTimeout("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd", 3500);
+            if (!res.ok) throw new Error("coingecko " + res.status);
+            const data = await res.json();
+            const value = parseFloat(data && data.bitcoin && data.bitcoin.usd);
+            if (!(value > 0)) throw new Error("coingecko 값 없음");
+            return { price: value, source: "CoinGecko" };
+        }
+
+        async function pollBtc() {
+            const sources = [fetchBtcFromCoinbase, fetchBtcFromBinance, fetchBtcFromGecko];
+            for (let i = 0; i < sources.length; i++) {
+                try {
+                    const result = await sources[i]();
+                    state.btcPrice = result.price;
+                    state.btcSource = result.source;
+                    state.btcAt = new Date().toISOString();
+                    state.btcFailures = 0;
+                    setBtcDot("on", true);
+                    renderSymbol("BTC-USD", "btc");
+                    return;
+                } catch (error) { /* 다음 소스로 */ }
+            }
+
+            state.btcFailures += 1;
+            // 3회 연속 실패하면 live.json 값으로 대체하고 상태를 끊김으로 표시한다.
+            if (state.btcFailures >= 3) {
+                if (state.live && Number.isFinite(state.live.btcPrice)) {
+                    state.btcPrice = state.live.btcPrice;
+                    state.btcSource = "live.json";
+                    state.btcAt = state.live.updatedAt || null;
+                    renderSymbol("BTC-USD", "btc");
+                }
+                setBtcDot("off", false);
+            }
+        }
+
+        function setBtcDot(mode, streaming) {
+            const dot = document.getElementById("btcDot");
+            const text = document.getElementById("btcStatus");
+            dot.className = "dot " + (mode === "on" ? "on" : mode === "off" ? "off" : "wait");
+
+            if (streaming && Number.isFinite(state.btcPrice)) {
+                text.innerHTML = "BTC 실시간 수신 중 · " + (state.btcSource || "") +
+                    ' <span class="muted">(' + fmtKst(state.btcAt) + ' KST · ' + (BTC_POLL_MS / 1000) + '초 간격)</span>';
+                return;
+            }
+            if (mode === "off") {
+                const fallback = state.live && Number.isFinite(state.live.btcPrice)
+                    ? "live.json 값(" + fmtPrice(state.live.btcPrice) + ") 사용 중"
+                    : "ma.json 마지막 종가 사용 중";
+                text.innerHTML = '<span class="warn">BTC 실시간 연결 끊김</span> <span class="muted">· ' + fallback + "</span>";
+                return;
+            }
+            text.innerHTML = "BTC 실시간 수신 중 · " + (state.btcSource || "");
+        }
+
+        // ── live.json (MSTR 현재가 · BTC 백업) ───────────────────
+        async function loadLive() {
+            try {
+                const res = await fetchWithTimeout("live.json?_=" + Date.now(), 6000);
+                if (!res.ok) throw new Error("HTTP " + res.status);
+                const data = await res.json();
+                state.live = data || null;
+
+                const mstr = parseFloat(data && data.mstrPrice);
+                if (mstr > 0) {
+                    state.mstrPrice = mstr;
+                    state.mstrAt = data.updatedAt || new Date().toISOString();
+                    document.getElementById("mstrDot").className = "dot on";
+                    document.getElementById("mstrStatus").innerHTML =
+                        "MSTR live.json " + fmtKst(state.mstrAt, true) + " KST 갱신" +
+                        (data.mstrSession ? ' <span class="muted">· ' + data.mstrSession + "</span>" : "") +
+                        (data.mstrSource ? ' <span class="muted">· ' + data.mstrSource + "</span>" : "");
+                } else {
+                    document.getElementById("mstrDot").className = "dot off";
+                    document.getElementById("mstrStatus").innerHTML =
+                        '<span class="warn">MSTR 시세(live.json) 없음</span> <span class="muted">· ma.json 마지막 종가 사용</span>';
+                }
+                renderSymbol("MSTR", "mstr");
+            } catch (error) {
+                document.getElementById("mstrDot").className = "dot off";
+                document.getElementById("mstrStatus").innerHTML =
+                    '<span class="warn">live.json 을 읽지 못했습니다</span> <span class="muted">· ma.json 마지막 종가 사용</span>';
+                renderSymbol("MSTR", "mstr");
+            }
+        }
+
+        // ── 주기 실행 ──────────────────────────────────────────
+        function startTimers() {
+            setInterval(function () {
+                if (document.hidden) return;
+                pollBtc();
+            }, BTC_POLL_MS);
+
+            setInterval(function () {
+                if (document.hidden) return;
+                loadLive();
+            }, MSTR_POLL_MS);
+
+            setInterval(function () {
+                if (document.hidden) return;
+                loadMa();
+            }, MA_RELOAD_MS);
+
+            document.addEventListener("visibilitychange", function () {
+                if (!document.hidden) {
+                    pollBtc();
+                    loadLive();
+                }
+            });
+        }
+
+        async function refreshAll() {
+            const button = document.getElementById("refreshBtn");
+            button.textContent = "⏳ 갱신 중";
+            await loadMa();
+            await Promise.all([pollBtc(), loadLive()]);
+            button.textContent = "🔄 새로고침";
+        }
+
+        async function init() {
+            await loadMa();
+            await Promise.all([pollBtc(), loadLive()]);
+            // ma.json 보다 live.json 이 먼저 도착하는 경우를 한 번 더 반영한다.
+            renderSymbol("BTC-USD", "btc");
+            renderSymbol("MSTR", "mstr");
+            startTimers();
+        }
+
+        init();
+    </script>
+</body>
+</html>
