@@ -176,10 +176,29 @@
             if (!isoString) return "—";
             const date = new Date(isoString);
             if (isNaN(date.getTime())) return "—";
-            const options = withDate
-                ? { timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }
-                : { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false };
-            return new Intl.DateTimeFormat("ko-KR", options).format(date);
+            const parts = new Intl.DateTimeFormat("ko-KR", {
+                timeZone: "Asia/Seoul",
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                hourCycle: "h23"
+            }).formatToParts(date).reduce(function (acc, part) {
+                acc[part.type] = part.value;
+                return acc;
+            }, {});
+
+            const clock = parts.hour + ":" + parts.minute + (withDate ? "" : ":" + parts.second);
+            return withDate ? parts.month + "-" + parts.day + " " + clock : clock;
+        }
+
+        function fmtAge(hours) {
+            if (hours === null) return "";
+            if (hours < 1) return "방금 전";
+            if (hours < 48) return Math.round(hours) + "시간 전";
+            return Math.round(hours / 24) + "일 전";
         }
 
         function hoursSince(isoString) {
@@ -222,7 +241,7 @@
 
             el.innerHTML =
                 '<span class="muted">ma.json 갱신</span> ' + fmtKst(data.updatedAt, true) + " KST" +
-                (age !== null ? ' <span class="muted">(' + Math.round(age) + '시간 전)</span>' : "") +
+                (age !== null ? ' <span class="muted">(' + fmtAge(age) + ')</span>' : "") +
                 ' · <span class="muted">마지막 확정 일봉</span> BTC ' + (btcLast.lastDailyDate || "—") +
                 " / MSTR " + (mstrLast.lastDailyDate || "—") +
                 (stale ? ' <span class="warn">⚠️ 2일 이상 경과 — 워크플로 확인 필요</span>' : "") +
