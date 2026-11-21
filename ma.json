@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-21T16:30:38+00:00",
+  "updatedAt": "2026-11-21T16:33:37+00:00",
   "source": "Yahoo Finance chart API (1d / 1wk, 10년)",
   "note": "prevSum = 확정 봉 N-1개 종가 합. 실시간 SMA = (prevSum + 실시간가) / N. 진행 중인 오늘 일봉·이번 주 주봉은 확정 봉에서 제외.",
   "periods": {
