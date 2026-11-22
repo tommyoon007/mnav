@@ -13,8 +13,8 @@
     var card = document.getElementById("maCard");
     if (!card) return;
 
-    var DAILY_PERIODS = [20, 50, 120, 200, 300, 365];
-    var WEEKLY_PERIODS = [50, 100, 120, 200, 300, 365];
+    var DAILY_PERIODS = [20, 50, 120, 150, 200, 300, 365];
+    var WEEKLY_PERIODS = [50, 100, 120, 150, 200, 300, 365];
     var BTC_POLL_MS = 5000;        // BTC 실시간 시세 주기
     var LIVE_POLL_MS = 60000;      // live.json(MSTR 백업 · BTC 폴백) 확인 주기
     var MA_RELOAD_MS = 600000;     // ma.json 다시 읽는 주기 (10분)
