@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-21T16:33:37+00:00",
+  "updatedAt": "2026-11-22T07:15:56+00:00",
   "source": "Yahoo Finance chart API (1d / 1wk, 10년)",
   "note": "prevSum = 확정 봉 N-1개 종가 합. 실시간 SMA = (prevSum + 실시간가) / N. 진행 중인 오늘 일봉·이번 주 주봉은 확정 봉에서 제외.",
   "periods": {
@@ -24,53 +24,53 @@
     "BTC-USD": {
       "name": "비트코인 (BTC-USD)",
       "currency": "USD",
-      "lastPrice": 58798.9805,
-      "lastDailyDate": "2026-11-20",
+      "lastPrice": 60094.0898,
+      "lastDailyDate": "2026-11-21",
       "lastWeeklyDate": "2026-11-09",
-      "dailyBars": 3652,
+      "dailyBars": 3653,
       "weeklyBars": 521,
       "daily": {
         "20": {
           "available": true,
-          "closedSma": 71003.4156,
-          "prevSum": 1341819.859375,
-          "from": "2026-11-01",
-          "to": "2026-11-20"
+          "closedSma": 70095.6975,
+          "prevSum": 1325236.652344,
+          "from": "2026-11-02",
+          "to": "2026-11-21"
         },
         "50": {
           "available": true,
-          "closedSma": 77624.0172,
-          "prevSum": 3796703.648438,
-          "from": "2026-10-02",
-          "to": "2026-11-20"
+          "closedSma": 77135.9548,
+          "prevSum": 3772034.160156,
+          "from": "2026-10-03",
+          "to": "2026-11-21"
         },
         "120": {
           "available": true,
-          "closedSma": 75393.011,
-          "prevSum": 8983062.824219,
-          "from": "2026-07-24",
-          "to": "2026-11-20"
+          "closedSma": 75359.641,
+          "prevSum": 8978845.101562,
+          "from": "2026-07-25",
+          "to": "2026-11-21"
         },
         "200": {
           "available": true,
-          "closedSma": 72531.5728,
-          "prevSum": 14425387.5,
-          "from": "2026-05-05",
-          "to": "2026-11-20"
+          "closedSma": 72427.4079,
+          "prevSum": 14404054.058594,
+          "from": "2026-05-06",
+          "to": "2026-11-21"
         },
         "300": {
           "available": true,
-          "closedSma": 72383.4286,
-          "prevSum": 21628456.371094,
-          "from": "2026-01-25",
-          "to": "2026-11-20"
+          "closedSma": 72295.1682,
+          "prevSum": 21600283.320312,
+          "from": "2026-01-26",
+          "to": "2026-11-21"
         },
         "365": {
           "available": true,
-          "closedSma": 75511.8265,
-          "prevSum": 27476725.988281,
-          "from": "2025-11-21",
-          "to": "2026-11-20"
+          "closedSma": 75443.3427,
+          "prevSum": 27452171.71875,
+          "from": "2025-11-22",
+          "to": "2026-11-21"
         }
       },
       "weekly": {
