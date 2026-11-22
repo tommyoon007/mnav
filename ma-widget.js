@@ -327,6 +327,152 @@
         }
     }
 
+    // ── 🟠 MVRV Z-Score 카드 ────────────────────────────────
+    // ma.json 의 mvrvZ(확정치·기울기)에 위 이동평균선 카드가 쓰는 5초짜리 BTC 현재가를 얹어 추정한다.
+    var MVRV_ZONES = [
+        { max: 0, label: "역사적 바닥", cls: "mv-zone-floor", color: "#3fb950" },
+        { max: 1, label: "저평가", cls: "mv-zone-low", color: "#58a6ff" },
+        { max: 3, label: "중립", cls: "mv-zone-mid", color: "#8b949e" },
+        { max: Infinity, label: "과열", cls: "mv-zone-hot", color: "#ff4d4d" }
+    ];
+    var MVRV_DEFAULT_SLOPE = 3.0e-5;
+
+    function mvrvZone(value) {
+        if (!Number.isFinite(value)) return null;
+        for (var i = 0; i < MVRV_ZONES.length; i++) {
+            if (value < MVRV_ZONES[i].max) return MVRV_ZONES[i];
+        }
+        return MVRV_ZONES[MVRV_ZONES.length - 1];
+    }
+
+    function fmtZ(value) {
+        if (!Number.isFinite(value)) return "—";
+        return (value > 0 ? "+" : "") + value.toFixed(3);
+    }
+
+    function fmtSignedPrice(delta) {
+        if (!Number.isFinite(delta)) return "—";
+        return (delta >= 0 ? "+" : "-") + fmtPrice(Math.abs(delta));
+    }
+
+    function renderMvrv() {
+        if (!el("mvrvCard")) return;
+
+        var zValueEl = el("mvrvZValue");
+        var zSubEl = el("mvrvZSub");
+        var dateBadge = el("mvrvDateBadge");
+        var zoneBadge = el("mvrvZoneBadge");
+        var confirmedEl = el("mvrvConfirmed");
+        var confirmedSubEl = el("mvrvConfirmedSub");
+        var realizedEl = el("mvrvRealized");
+        var realizedSubEl = el("mvrvRealizedSub");
+        var lowsEl = el("mvrvLows");
+
+        var mvrv = state.ma && state.ma.mvrvZ;
+        var zScore = mvrv ? Number(mvrv.zScore) : NaN;
+        var btcClose = mvrv ? Number(mvrv.btcClose) : NaN;
+
+        if (!mvrv || !Number.isFinite(zScore) || !Number.isFinite(btcClose)) {
+            var message = state.maError
+                ? "ma.json 을 불러오지 못했습니다."
+                : state.ma ? "ma.json 에 mvrvZ 데이터가 없습니다." : "실시간 BTC 가격을 기다리는 중입니다.";
+            if (dateBadge) {
+                dateBadge.textContent = state.maError ? "ma.json 불러오기 실패" : (state.ma ? "mvrvZ 없음" : "ma.json 확인 중…");
+                dateBadge.style.color = state.maError ? "#ff4d4d" : "";
+            }
+            if (zoneBadge) { zoneBadge.textContent = "—"; zoneBadge.className = "badge"; zoneBadge.style.color = ""; }
+            if (zValueEl) zValueEl.textContent = "—";
+            if (zSubEl) zSubEl.textContent = message;
+            if (confirmedEl) confirmedEl.textContent = "—";
+            if (confirmedSubEl) confirmedSubEl.textContent = "—";
+            if (realizedEl) realizedEl.textContent = "—";
+            if (realizedSubEl) realizedSubEl.textContent = "BTC가 이 가격이면 Z-Score 0";
+            if (lowsEl) lowsEl.innerHTML = '<span class="mv-dot">—</span>';
+            return;
+        }
+
+        var slope = Number(mvrv.slope);
+        var usableSlope = Number.isFinite(slope) && slope > 0;
+        var realizedPrice = Number(mvrv.realizedPrice);
+        var date = mvrv.date || "—";
+
+        // 확정치 (카드 하단 고정값)
+        if (dateBadge) {
+            dateBadge.textContent = "확정 " + date + " · live 5초 추정" + (mvrv.carriedOver ? " ⚠️" : "");
+            dateBadge.style.color = mvrv.carriedOver ? "#ff9f0a" : "";
+            dateBadge.title = "mvrvZ 기준일 · 기울기 " + (mvrv.slopeBasis || (usableSlope ? "회귀" : "—"));
+        }
+        if (confirmedEl) confirmedEl.textContent = fmtZ(zScore);
+        if (confirmedSubEl) {
+            confirmedSubEl.textContent = "@ " + fmtPrice(btcClose) + " · " + date + " 종가 기준";
+        }
+
+        // 실시간 추정치
+        var quote = quoteFor("BTC-USD", "btc");
+        var livePrice = Number.isFinite(quote.price) && quote.price > 0 ? quote.price : null;
+        var liveUsable = livePrice !== null && (quote.kind === "live" || quote.kind === "manual");
+        var effectiveSlope = usableSlope ? slope : MVRV_DEFAULT_SLOPE;
+        var zEst = zScore;
+        if (liveUsable) {
+            zEst = zScore + effectiveSlope * (livePrice - btcClose);
+        }
+
+        var zone = mvrvZone(zEst);
+        if (zValueEl) {
+            zValueEl.textContent = fmtZ(zEst);
+            zValueEl.style.color = !zone ? "#ff9f0a"
+                : zEst < 0 ? "#3fb950"
+                : zEst < 1 ? "#58a6ff"
+                : zEst < 3 ? "#e6edf3" : "#ff4d4d";
+        }
+        if (zoneBadge) {
+            zoneBadge.textContent = zone ? zone.label : "—";
+            zoneBadge.className = "badge" + (zone ? " " + zone.cls : "");
+            zoneBadge.style.color = zone ? zone.color : "";
+            zoneBadge.title = "< 0 역사적 바닥 · 0~1 저평가 · 1~3 중립 · 3 이상 과열";
+        }
+        if (zSubEl) {
+            if (liveUsable) {
+                zSubEl.textContent = quote.source + " " + fmtPrice(livePrice) +
+                    " (확정가 " + fmtPrice(btcClose) + " 대비 " + fmtSignedPrice(livePrice - btcClose) + ")" +
+                    " · 기울기 " + (usableSlope ? effectiveSlope.toExponential(2) : "기본값") + "/$ · 5초마다 갱신";
+            } else if (livePrice !== null) {
+                zSubEl.textContent = "실시간 가격 연결 끊김 · live.json " + fmtPrice(livePrice) + " 은 추정에 쓰지 않았습니다";
+            } else {
+                zSubEl.textContent = "실시간 가격 연결 전 · 확정치 " + date + " 기준으로 표시";
+            }
+        }
+
+        // 추정 평균 매수단가 (Z = 0 이 되는 BTC 가격)
+        if (realizedEl) realizedEl.textContent = Number.isFinite(realizedPrice) ? fmtPrice(realizedPrice) : "—";
+        if (realizedSubEl) {
+            if (Number.isFinite(realizedPrice) && livePrice !== null && realizedPrice > 0) {
+                var above = ((livePrice - realizedPrice) / realizedPrice) * 100;
+                realizedSubEl.textContent = "현재가가 이보다 " + (above >= 0 ? "+" : "-") + Math.abs(above).toFixed(1) + "% " +
+                    (above >= 0 ? "위" : "아래") + " · Z=0 기준";
+            } else {
+                realizedSubEl.textContent = "BTC가 이 가격이면 Z-Score 0";
+            }
+        }
+
+        // 역대 바닥 비교
+        if (lowsEl) {
+            var lows = Array.isArray(mvrv.historyLows) && mvrv.historyLows.length ? mvrv.historyLows : [
+                { label: "2015", z: -0.57 }, { label: "2018", z: -0.47 }, { label: "2022", z: -0.34 }
+            ];
+            lowsEl.textContent = "";
+            lows.forEach(function (low) {
+                var lowZ = Number(low.z);
+                var dot = document.createElement("span");
+                var near = Number.isFinite(lowZ) && Math.abs(zEst - lowZ) < 0.25;
+                dot.className = "mv-dot" + (near ? " mv-zone-floor" : "");
+                dot.textContent = (low.label || "—") + " " + (Number.isFinite(lowZ) ? lowZ.toFixed(2) : "—");
+                dot.title = (low.label || "—") + " 저점 Z-Score";
+                lowsEl.appendChild(dot);
+            });
+        }
+    }
+
     function renderBadge() {
         var badge = el("maUpdatedBadge");
         if (!badge) return;
@@ -353,11 +499,13 @@
             var message = state.maError ? "ma.json 을 불러오지 못했습니다." : "불러오는 중…";
             if (btcBody) btcBody.innerHTML = '<tr><td colspan="3" class="ma-loading">' + message + '</td></tr>';
             if (mstrBody) mstrBody.innerHTML = '<tr><td colspan="3" class="ma-loading">' + message + '</td></tr>';
+            renderMvrv();
             return;
         }
         renderBadge();
         renderSymbol("BTC-USD", "btc");
         renderSymbol("MSTR", "mstr");
+        renderMvrv();
     }
 
     // ── 주기 실행 ──────────────────────────────────────────

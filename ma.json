@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-22T07:15:56+00:00",
+  "updatedAt": "2026-11-22T08:00:44+00:00",
   "source": "Yahoo Finance chart API (1d / 1wk, 10년)",
   "note": "prevSum = 확정 봉 N-1개 종가 합. 실시간 SMA = (prevSum + 실시간가) / N. 진행 중인 오늘 일봉·이번 주 주봉은 확정 봉에서 제외.",
   "periods": {
@@ -215,5 +215,28 @@
         }
       }
     }
+  },
+  "mvrvZ": {
+    "date": "2026-11-20",
+    "zScore": 0.1771,
+    "btcClose": 58813.83,
+    "slope": 3.01503e-05,
+    "slopeBasis": "최근 5일 회귀",
+    "realizedPrice": 52939.79,
+    "historyLows": [
+      {
+        "label": "2015",
+        "z": -0.57
+      },
+      {
+        "label": "2018",
+        "z": -0.47
+      },
+      {
+        "label": "2022",
+        "z": -0.34
+      }
+    ],
+    "source": "Explore21 (CC BY 4.0)"
   }
 }

@@ -38,6 +38,17 @@ RANGE_YEARS = 10
 TIMEOUT = 30
 RETRIES = 3
 
+# MVRV Z-Score (Explore21 공개 API, CC BY 4.0) — 실패해도 이평선 갱신은 계속한다.
+MVRV_URL = "https://data.explore21.com/v1/metrics/bitcoin-mvrv-z-score"
+MVRV_TIMEOUT = 20
+MVRV_SLOPE_DAYS = 5
+MVRV_DEFAULT_SLOPE = 3.0e-5
+MVRV_HISTORY_LOWS = [
+    {"label": "2015", "z": -0.57},
+    {"label": "2018", "z": -0.47},
+    {"label": "2022", "z": -0.34},
+]
+
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -205,6 +216,101 @@ def build_symbol(symbol, name):
     }
 
 
+# =========================================================
+# MVRV Z-SCORE
+# =========================================================
+
+def estimate_mvrv_slope(rows, days=MVRV_SLOPE_DAYS):
+    """최근 days일의 (BTC 종가, Z-Score)로 dZ/dBTC 기울기를 단순 선형회귀로 구한다.
+
+    브라우저가 실시간 BTC 가격만큼 Z-Score 를 밀어 볼 때 쓰는 값이라,
+    가격이 오르면 Z 도 오르는 정상 방향의 기울기만 인정한다.
+    """
+    points = []
+    for row in rows[-days:]:
+        try:
+            price = float(row.get("btc_close_usd"))
+            z_score = float(row.get("mvrv_z_score"))
+        except (TypeError, ValueError):
+            continue
+        if price > 0:
+            points.append((price, z_score))
+
+    if len(points) < 2:
+        return None
+
+    count = len(points)
+    mean_x = sum(point[0] for point in points) / count
+    mean_y = sum(point[1] for point in points) / count
+    var_x = sum((point[0] - mean_x) ** 2 for point in points)
+    if var_x <= 0:
+        return None
+
+    cov = sum((point[0] - mean_x) * (point[1] - mean_y) for point in points)
+    slope = cov / var_x
+    if not slope > 0:
+        return None
+    return slope
+
+
+def previous_mvrv():
+    """기존 ma.json 의 mvrvZ 를 읽어 둔다 (API 장애 시 마지막 정상값 유지용)."""
+    try:
+        data = json.loads(MA_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    value = data.get("mvrvZ")
+    return value if isinstance(value, dict) and value.get("zScore") is not None else None
+
+
+def build_mvrv():
+    """Explore21 MVRV Z-Score 로 mvrvZ 객체를 만든다. 실패하면 None."""
+    last_error = None
+
+    for attempt in range(1, RETRIES + 1):
+        try:
+            res = SESSION.get(MVRV_URL, timeout=MVRV_TIMEOUT)
+            res.raise_for_status()
+            payload = res.json()
+
+            rows = [
+                row for row in (payload.get("data") or [])
+                if row.get("mvrv_z_score") is not None and row.get("btc_close_usd")
+            ]
+            if len(rows) < 2:
+                raise RuntimeError("MVRV Z-Score 행이 부족합니다")
+
+            rows.sort(key=lambda row: str(row.get("date")))
+            latest = rows[-1]
+            z_score = float(latest["mvrv_z_score"])
+            btc_close = float(latest["btc_close_usd"])
+
+            slope = estimate_mvrv_slope(rows)
+            used_default = slope is None
+            if used_default:
+                slope = MVRV_DEFAULT_SLOPE
+
+            return {
+                "date": str(latest["date"]),
+                "zScore": round(z_score, 4),
+                "btcClose": round(btc_close, 2),
+                # 실시간 BTC 가격 1달러당 Z-Score 변화량 (dZ/dBTC)
+                "slope": float(f"{slope:.6g}"),
+                "slopeBasis": "기본값" if used_default else f"최근 {MVRV_SLOPE_DAYS}일 회귀",
+                # Z = 0 이 되는 가격 = 추정 평균 매수단가(실현가격)
+                "realizedPrice": round(btc_close - z_score / slope, 2),
+                "historyLows": MVRV_HISTORY_LOWS,
+                "source": "Explore21 (CC BY 4.0)",
+            }
+        except Exception as error:  # noqa: BLE001 - 어떤 실패든 이평선 갱신은 계속한다
+            last_error = error
+            print(f"  WARNING: MVRV Z-Score 실패 ({attempt}/{RETRIES}): {error}")
+            time.sleep(1.0 + attempt)
+
+    print(f"  WARNING: MVRV Z-Score 를 받지 못했습니다: {last_error}")
+    return None
+
+
 def main():
     generated_at = datetime.now(timezone.utc)
     symbols = {}
@@ -212,6 +318,15 @@ def main():
     for symbol, name in SYMBOLS:
         print(f"== {symbol} ({name})")
         symbols[symbol] = build_symbol(symbol, name)
+
+    print("== MVRV Z-Score")
+    mvrv = build_mvrv()
+    if mvrv is None:
+        # 일시적인 API 장애로 카드가 비지 않도록 마지막 정상값을 그대로 쓴다.
+        mvrv = previous_mvrv()
+        if mvrv:
+            mvrv = dict(mvrv, carriedOver=True)
+            print("  기존 ma.json 의 MVRV Z-Score 값을 유지합니다.")
 
     payload = {
         "updatedAt": generated_at.isoformat(timespec="seconds"),
@@ -227,6 +342,9 @@ def main():
         "symbols": symbols,
     }
 
+    if mvrv:
+        payload["mvrvZ"] = mvrv
+
     MA_FILE.write_text(
         json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
@@ -241,6 +359,16 @@ def main():
             f"SMA365D ${sample.get('closedSma', float('nan')):,.2f} / "
             f"SMA365W ${weekly_sample.get('closedSma', float('nan')):,.2f}"
         )
+
+    if mvrv:
+        try:
+            summary = (
+                f"  MVRV Z: {mvrv.get('date')} {mvrv.get('zScore')} @ ${float(mvrv.get('btcClose')):,.2f} / "
+                f"slope {mvrv.get('slope')} / 실현가격 ${float(mvrv.get('realizedPrice')):,.2f}"
+            )
+        except (TypeError, ValueError):
+            summary = f"  MVRV Z: {mvrv.get('date')} {mvrv.get('zScore')}"
+        print(summary)
 
 
 if __name__ == "__main__":

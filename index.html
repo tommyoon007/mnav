@@ -64,6 +64,22 @@
         .ma-flat { color: #8b949e; }
         .ma-loading { color: #8b949e; font-size: 11px; }
         .ma-note { font-size: 10px; color: #8b949e; line-height: 1.6; margin-top: 10px; }
+
+        /* ── 🟠 MVRV Z-Score 카드 전용 (mv- 접두사만 사용, 기존 스타일은 그대로) ── */
+        .mv-main { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; }
+        .mv-z { font-size: 34px; font-weight: bold; letter-spacing: -1px; font-variant-numeric: tabular-nums; line-height: 1.1; }
+        .mv-z-sub { font-size: 11px; color: #8b949e; line-height: 1.4; }
+        .mv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+        .mv-item { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 10px 12px; min-width: 0; }
+        .mv-label { font-size: 11px; color: #8b949e; font-weight: bold; }
+        .mv-val { font-size: 16px; font-weight: bold; margin-top: 4px; font-variant-numeric: tabular-nums; }
+        .mv-sub { font-size: 10px; color: #8b949e; margin-top: 3px; line-height: 1.5; }
+        .mv-dots { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+        .mv-dot { font-size: 10px; padding: 2px 6px; border-radius: 6px; border: 1px solid #30363d; background: #0d1117; color: #8b949e; font-weight: bold; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .mv-zone-floor { color: #3fb950; border-color: #238636; }
+        .mv-zone-low { color: #58a6ff; border-color: #1f4f7a; }
+        .mv-zone-mid { color: #8b949e; border-color: #30363d; }
+        .mv-zone-hot { color: #ff4d4d; border-color: #7a1f1f; }
     </style>
 </head>
 <body>
@@ -243,6 +259,43 @@
 
         <div class="ma-note">
             이평선 = (확정 종가 N-1개 합 + 현재가) ÷ N · 이격도 = (현재가 − 이평선) ÷ 이평선 × 100 · 일봉은 오늘 봉, 주봉은 이번 주 봉을 빼고 현재가로 계산 · ma.json은 매일, BTC 현재가는 5초마다 갱신
+        </div>
+    </div>
+
+    <div class="card" id="mvrvCard">
+        <div class="ma-head-row">
+            <div class="card-title" style="margin-bottom:0;">🟠 비트코인 MVRV Z-Score</div>
+            <div class="ma-head-tags">
+                <span class="badge" id="mvrvDateBadge">ma.json 확인 중…</span>
+                <span class="badge" id="mvrvZoneBadge">—</span>
+            </div>
+        </div>
+
+        <div class="mv-main">
+            <div class="mv-z" id="mvrvZValue" style="color:#ff9f0a;">—</div>
+            <div class="mv-z-sub" id="mvrvZSub">실시간 BTC 가격을 기다리는 중입니다.</div>
+        </div>
+
+        <div class="mv-grid">
+            <div class="mv-item">
+                <div class="mv-label">전일 확정치</div>
+                <div class="mv-val" id="mvrvConfirmed" style="color:#e6edf3;">—</div>
+                <div class="mv-sub" id="mvrvConfirmedSub">—</div>
+            </div>
+            <div class="mv-item">
+                <div class="mv-label">추정 평균 매수단가 (Z=0)</div>
+                <div class="mv-val" id="mvrvRealized" style="color:#58a6ff;">—</div>
+                <div class="mv-sub" id="mvrvRealizedSub">BTC가 이 가격이면 Z-Score 0</div>
+            </div>
+            <div class="mv-item">
+                <div class="mv-label">역대 바닥 비교</div>
+                <div class="mv-dots" id="mvrvLows">—</div>
+                <div class="mv-sub" id="mvrvLowsSub">2015 · 2018 · 2022 저점의 Z-Score</div>
+            </div>
+        </div>
+
+        <div class="ma-note">
+            Z-Score = (시가총액 − 실현시총액) ÷ 시가총액 표준편차 · 실시간 추정치 = 확정 Z + 기울기 × (실시간가 − 확정가) · 기울기 = 최근 5일 회귀(dZ/dBTC) · 데이터 Explore21 (CC BY 4.0) · ma.json은 매일, BTC 현재가는 5초마다 갱신
         </div>
     </div>
 
