@@ -1,10 +1,20 @@
 {
   "btcHoldings": 850849,
   "adso": 457.244,
-  "fdso": 303.986,
+  "fdso": 431.633,
   "usdAssetsUsdB": 4.9,
   "debtUsdB": 6.714,
   "preferredUsdB": 12.709,
-  "source": "SEC XBRL API Fallback",
-  "asOf": "2026-11-23"
+  "usdReserveUsdB": 4.749,
+  "usdCashUsdB": 0.151,
+  "asOf": "2026-11-16",
+  "updatedAt": "2026-11-23T07:11:22.381669+00:00",
+  "dataVersion": 2,
+  "source": "Strategy.com API + SEC 8-K",
+  "last8K": {
+    "filingDate": "2026-11-16",
+    "accession": "0001193125-26-462151",
+    "document": "mstr-20261116.htm"
+  },
+  "notes": "btcHoldings / ADSO / FDSO / USD Assets / Debt / Preferred 는 Strategy.com 대시보드 (주간 8-K 로 갱신) 기준. USD Assets = USD Reserve + USD Cash."
 }
