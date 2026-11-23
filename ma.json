@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-23T07:59:15+00:00",
+  "updatedAt": "2026-11-23T12:15:59+00:00",
   "source": "Yahoo Finance chart API (1d / 1wk, 10년)",
   "note": "prevSum = 확정 봉 N-1개 종가 합. 실시간 SMA = (prevSum + 실시간가) / N. 진행 중인 오늘 일봉·이번 주 주봉은 확정 봉에서 제외.",
   "periods": {
@@ -10,6 +10,7 @@
       150,
       200,
       300,
+      333,
       365
     ],
     "weekly": [
@@ -19,6 +20,7 @@
       150,
       200,
       300,
+      333,
       365
     ]
   },
@@ -29,7 +31,7 @@
       "lastPrice": 61161.9102,
       "lastDailyDate": "2026-11-22",
       "lastWeeklyDate": "2026-11-16",
-      "dailyBars": 3653,
+      "dailyBars": 3652,
       "weeklyBars": 522,
       "daily": {
         "20": {
@@ -72,6 +74,13 @@
           "closedSma": 72204.8174,
           "prevSum": 21572342.660156,
           "from": "2026-01-27",
+          "to": "2026-11-22"
+        },
+        "333": {
+          "available": true,
+          "closedSma": 74034.4639,
+          "prevSum": 24566241.730469,
+          "from": "2025-12-25",
           "to": "2026-11-22"
         },
         "365": {
@@ -125,6 +134,13 @@
           "from": "2021-02-22",
           "to": "2026-11-16"
         },
+        "333": {
+          "available": true,
+          "closedSma": 54050.1933,
+          "prevSum": 17989437.868164,
+          "from": "2020-07-06",
+          "to": "2026-11-16"
+        },
         "365": {
           "available": true,
           "closedSma": 50034.8109,
@@ -140,7 +156,7 @@
       "lastPrice": 77.8,
       "lastDailyDate": "2026-11-20",
       "lastWeeklyDate": "2026-11-16",
-      "dailyBars": 2513,
+      "dailyBars": 2512,
       "weeklyBars": 522,
       "daily": {
         "20": {
@@ -183,6 +199,13 @@
           "closedSma": 162.5788,
           "prevSum": 48445.849991,
           "from": "2025-09-15",
+          "to": "2026-11-20"
+        },
+        "333": {
+          "available": true,
+          "closedSma": 182.0681,
+          "prevSum": 60234.020004,
+          "from": "2025-07-29",
           "to": "2026-11-20"
         },
         "365": {
@@ -236,6 +259,13 @@
           "from": "2021-02-22",
           "to": "2026-11-16"
         },
+        "333": {
+          "available": true,
+          "closedSma": 117.6073,
+          "prevSum": 39151.449065,
+          "from": "2020-07-06",
+          "to": "2026-11-16"
+        },
         "365": {
           "available": true,
           "closedSma": 108.4473,
@@ -247,12 +277,12 @@
     }
   },
   "mvrvZ": {
-    "date": "2026-11-20",
-    "zScore": 0.1771,
-    "btcClose": 58813.83,
-    "slope": 3.01503e-05,
+    "date": "2026-11-22",
+    "zScore": 0.2539,
+    "btcClose": 61169.55,
+    "slope": 3.00202e-05,
     "slopeBasis": "최근 5일 회귀",
-    "realizedPrice": 52939.79,
+    "realizedPrice": 52711.94,
     "historyLows": [
       {
         "label": "2015",
