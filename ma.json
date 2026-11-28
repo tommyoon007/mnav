@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-27T08:55:05+00:00",
+  "updatedAt": "2026-11-28T08:16:03+00:00",
   "source": "Yahoo Finance chart API (1d / 1wk, 10년)",
   "note": "prevSum = 확정 봉 N-1개 종가 합. 실시간 SMA = (prevSum + 실시간가) / N. 진행 중인 오늘 일봉·이번 주 주봉은 확정 봉에서 제외.",
   "periods": {
@@ -30,74 +30,74 @@
     "BTC-USD": {
       "name": "비트코인 (BTC-USD)",
       "currency": "USD",
-      "lastPrice": 60494.7109,
-      "lastDailyDate": "2026-11-26",
+      "lastPrice": 59866.3711,
+      "lastDailyDate": "2026-11-27",
       "lastWeeklyDate": "2026-11-16",
       "dailyBars": 3653,
       "weeklyBars": 522,
       "daily": {
         "20": {
           "available": true,
-          "closedSma": 65939.5416,
-          "prevSum": 1243043.253906,
-          "from": "2026-11-07",
-          "to": "2026-11-26"
+          "closedSma": 65145.4812,
+          "prevSum": 1228324.976562,
+          "from": "2026-11-08",
+          "to": "2026-11-27"
         },
         "50": {
           "available": true,
-          "closedSma": 74678.5468,
-          "prevSum": 3652251.003906,
-          "from": "2026-10-08",
-          "to": "2026-11-26"
+          "closedSma": 74242.3475,
+          "prevSum": 3629571.054688,
+          "from": "2026-10-09",
+          "to": "2026-11-27"
         },
         "120": {
           "available": true,
-          "closedSma": 75208.2828,
-          "prevSum": 8960268.632812,
-          "from": "2026-07-30",
-          "to": "2026-11-26"
+          "closedSma": 75167.7917,
+          "prevSum": 8957321.257812,
+          "from": "2026-07-31",
+          "to": "2026-11-27"
         },
         "150": {
           "available": true,
-          "closedSma": 72905.8155,
-          "prevSum": 10877313.464844,
-          "from": "2026-06-30",
-          "to": "2026-11-26"
+          "closedSma": 72914.5322,
+          "prevSum": 10877176.078125,
+          "from": "2026-07-01",
+          "to": "2026-11-27"
         },
         "200": {
           "available": true,
-          "closedSma": 71920.2379,
-          "prevSum": 14302319.277344,
-          "from": "2026-05-11",
-          "to": "2026-11-26"
+          "closedSma": 71810.9282,
+          "prevSum": 14281708.15625,
+          "from": "2026-05-12",
+          "to": "2026-11-27"
         },
         "300": {
           "available": true,
-          "closedSma": 71854.3317,
-          "prevSum": 21477678.390625,
-          "from": "2026-01-31",
-          "to": "2026-11-26"
+          "closedSma": 71791.8159,
+          "prevSum": 21460570.316406,
+          "from": "2026-02-01",
+          "to": "2026-11-27"
         },
         "333": {
           "available": true,
-          "closedSma": 73709.111,
-          "prevSum": 24457995.828125,
-          "from": "2025-12-29",
-          "to": "2026-11-26"
+          "closedSma": 73627.2138,
+          "prevSum": 24429432.066406,
+          "from": "2025-12-30",
+          "to": "2026-11-27"
         },
         "350": {
           "available": true,
-          "closedSma": 74395.7359,
-          "prevSum": 25948237.164062,
-          "from": "2025-12-12",
-          "to": "2026-11-26"
+          "closedSma": 74308.8672,
+          "prevSum": 25917804.824219,
+          "from": "2025-12-13",
+          "to": "2026-11-27"
         },
         "365": {
           "available": true,
-          "closedSma": 75074.6013,
-          "prevSum": 27310944.085938,
-          "from": "2025-11-27",
-          "to": "2026-11-26"
+          "closedSma": 74988.5218,
+          "prevSum": 27279891.191406,
+          "from": "2025-11-28",
+          "to": "2026-11-27"
         }
       },
       "weekly": {
@@ -169,74 +169,74 @@
     "MSTR": {
       "name": "MSTR (Strategy)",
       "currency": "USD",
-      "lastPrice": 79.96,
-      "lastDailyDate": "2026-11-25",
+      "lastPrice": 81.62,
+      "lastDailyDate": "2026-11-27",
       "lastWeeklyDate": "2026-11-16",
-      "dailyBars": 2513,
+      "dailyBars": 2514,
       "weeklyBars": 521,
       "daily": {
         "20": {
           "available": true,
-          "closedSma": 111.501,
-          "prevSum": 2088.399986,
-          "from": "2026-10-29",
-          "to": "2026-11-25"
+          "closedSma": 108.501,
+          "prevSum": 2039.509995,
+          "from": "2026-10-30",
+          "to": "2026-11-27"
         },
         "50": {
           "available": true,
-          "closedSma": 135.8928,
-          "prevSum": 6662.389946,
-          "from": "2026-09-17",
-          "to": "2026-11-25"
+          "closedSma": 134.8802,
+          "prevSum": 6590.089951,
+          "from": "2026-09-18",
+          "to": "2026-11-27"
         },
         "120": {
           "available": true,
-          "closedSma": 119.7557,
-          "prevSum": 14243.489937,
-          "from": "2026-06-08",
-          "to": "2026-11-25"
+          "closedSma": 119.3759,
+          "prevSum": 14208.089943,
+          "from": "2026-06-09",
+          "to": "2026-11-27"
         },
         "150": {
           "available": true,
-          "closedSma": 128.8937,
-          "prevSum": 19163.02993,
-          "from": "2026-04-24",
-          "to": "2026-11-25"
+          "closedSma": 128.2977,
+          "prevSum": 19075.449936,
+          "from": "2026-04-27",
+          "to": "2026-11-27"
         },
         "200": {
           "available": true,
-          "closedSma": 130.9367,
-          "prevSum": 26061.269928,
-          "from": "2026-02-11",
-          "to": "2026-11-25"
+          "closedSma": 130.7144,
+          "prevSum": 26019.889931,
+          "from": "2026-02-12",
+          "to": "2026-11-27"
         },
         "300": {
           "available": true,
-          "closedSma": 160.0765,
-          "prevSum": 47673.840012,
-          "from": "2025-09-18",
-          "to": "2026-11-25"
+          "closedSma": 159.1849,
+          "prevSum": 47410.710014,
+          "from": "2025-09-19",
+          "to": "2026-11-27"
         },
         "333": {
           "available": true,
-          "closedSma": 179.2163,
-          "prevSum": 59312.400009,
-          "from": "2025-08-01",
-          "to": "2026-11-25"
+          "closedSma": 178.3604,
+          "prevSum": 59004.780022,
+          "from": "2025-08-04",
+          "to": "2026-11-27"
         },
         "350": {
           "available": true,
-          "closedSma": 191.0173,
-          "prevSum": 66440.659988,
-          "from": "2025-07-09",
-          "to": "2026-11-25"
+          "closedSma": 190.0637,
+          "prevSum": 66100.540001,
+          "from": "2025-07-10",
+          "to": "2026-11-27"
         },
         "365": {
           "available": true,
-          "closedSma": 198.9913,
-          "prevSum": 72249.580002,
-          "from": "2025-06-16",
-          "to": "2026-11-25"
+          "closedSma": 198.1677,
+          "prevSum": 71956.020012,
+          "from": "2025-06-17",
+          "to": "2026-11-27"
         }
       },
       "weekly": {
@@ -307,12 +307,12 @@
     }
   },
   "mvrvZ": {
-    "date": "2026-11-26",
-    "zScore": 0.2378,
-    "btcClose": 60492.37,
-    "slope": 2.94582e-05,
+    "date": "2026-11-27",
+    "zScore": 0.2199,
+    "btcClose": 59872.5,
+    "slope": 2.97025e-05,
     "slopeBasis": "최근 5일 회귀",
-    "realizedPrice": 52420.03,
+    "realizedPrice": 52469.82,
     "historyLows": [
       {
         "label": "2015",
